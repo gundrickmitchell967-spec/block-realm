@@ -100,6 +100,8 @@
   /* the catalog and the fridge become a sheet across the bottom, so the game stays visible above it */
   body.touch #inv,body.touch #fridge{align-items:flex-end;padding:0;background:transparent;pointer-events:none}
   body.touch #invbox,body.touch #fridgebox{pointer-events:auto;width:100%;max-width:none;max-height:none;height:64vh;height:64dvh;box-sizing:border-box;padding:10px 10px calc(12px + env(safe-area-inset-bottom));gap:6px;border-width:3px 0 0;background:rgba(22,27,38,.97);align-items:stretch;overflow:hidden}
+  body.touch #invbox{height:100vh;height:100dvh;border-width:0;padding:calc(10px + env(safe-area-inset-top)) 10px calc(12px + env(safe-area-inset-bottom));background:#161b26}
+  body.touch #inv{padding:0;background:#161b26}
   body.touch #invbox h2,body.touch #fridgebox h2{font-size:16px;text-align:center}
   body.touch #invbox .hint,body.touch #fridgebox .hint{display:none}
   body.touch #invbox .lbl{align-self:center;font-size:11px}
@@ -143,6 +145,7 @@
     <div id="mainbtns">
       <button class="btn" id="play">PLAY</button>
       <button class="btn" id="resume" hidden>RESUME</button>
+      <button class="btn" id="mmic" type="button" hidden>MIC: OFF</button>
       <button class="btn" id="multi">MULTIPLAYER</button>
       <button class="btn" id="leave" hidden>LEAVE SERVER</button>
       <button class="btn" id="settings">SETTINGS</button>
@@ -2791,10 +2794,11 @@ stick.addEventListener('pointerdown', e => {
   const r = stick.getBoundingClientRect(); stickOrigin = {x: r.left + r.width/2, y: r.top + r.height/2};
   stickMove(e);
 });
-stick.addEventListener('pointermove', e => { if(e.pointerId === stickPtr) stickMove(e); });
+// moves and releases are followed on the window, so the stick keeps working even if the finger leaves it or capture is refused
+window.addEventListener('pointermove', e => { if(e.pointerId === stickPtr) stickMove(e); });
 const stickEnd = e => { if(e.pointerId !== stickPtr) return; stickPtr = null; knob.style.transform = ''; setMove(0, 0); };
-stick.addEventListener('pointerup', stickEnd);
-stick.addEventListener('pointercancel', stickEnd);
+window.addEventListener('pointerup', stickEnd);
+window.addEventListener('pointercancel', stickEnd);
 // runs act (placing or breaking) as if the camera were aimed at a point on the screen, then puts the view back.
 // tapFace keeps the way you really face, so new furniture and beds still turn toward you
 let tapFace = null;
@@ -2826,7 +2830,7 @@ look.addEventListener('pointerdown', e => {
   clearTimeout(lookTimer);
   lookTimer = setTimeout(() => { if(lookPtr !== null && !lookMoved){ lookDone = true; tapBreakAt(lookStart.x, lookStart.y); } }, 480);
 });
-look.addEventListener('pointermove', e => {
+window.addEventListener('pointermove', e => {
   if(e.pointerId !== lookPtr || !lookLast || !playing || invOpen || fridgeOpen || codeOpen) return;
   const dx = e.clientX - lookLast.x, dy = e.clientY - lookLast.y;
   lookLast = {x: e.clientX, y: e.clientY};
@@ -2844,8 +2848,8 @@ const lookEnd = e => {
   if(e.type === 'pointerup' && !lookMoved && !lookDone && quick) tapPlaceAt(lookStart.x, lookStart.y);
   lookPtr = null;
 };
-look.addEventListener('pointerup', lookEnd);
-look.addEventListener('pointercancel', lookEnd);
+window.addEventListener('pointerup', lookEnd);
+window.addEventListener('pointercancel', lookEnd);
 // a round button: onDown when pressed, onUp when let go
 // keeps a pointer on its element when it moves off it; some browsers refuse, and that must not stop the game
 function capture(el, id){ try{ el.setPointerCapture(id); }catch(e){} }
@@ -2913,11 +2917,11 @@ function pause(){
   if(codeOpen){ codeOpen=false; $('codebox').hidden=true; }
   playing=false; for(const k in keys) keys[k]=false;
   musicStop();
-  setMic(false);
   saveAll();
   menuState();
   showMain();
   $('menu').hidden=false;
+  $('mmic').hidden = !mpMode;
   if(document.pointerLockElement){ try{ document.exitPointerLock(); }catch(e){} }
 }
 $('settings').addEventListener('click',()=>{ sfx.init(); showSettings(); });
@@ -2931,6 +2935,7 @@ $('drawbtn').addEventListener('click',()=>{
 });
 $('play').addEventListener('click',start);
 $('resume').addEventListener('click',start);
+$('mmic').addEventListener('click',()=>{ if(voice.on){ setMic(false); } else toggleMic(); });
 $('multi').addEventListener('click',showMP);
 $('mpback').addEventListener('click',showMain);
 $('mpgo').addEventListener('click',connectMP);
@@ -3124,16 +3129,18 @@ function voiceSend(to, data){ mpSend({type:'rtc', to, data}); }
 function setMic(on){
   voice.on = on;
   if(!on && voice.stream){ for(const t of voice.stream.getTracks()) t.stop(); voice.stream = null; voice.track = null; }
-  for(const p of voice.peers.values()) p.sender.replaceTrack(voice.track).catch(()=>{});
+  for(const p of voice.peers.values()) if(p.sender) p.sender.replaceTrack(voice.track).catch(()=>{});
+  $('mmic').textContent = 'MIC: ' + (on ? 'ON' : 'OFF');
 }
 async function toggleMic(){
-  if(!playing || !mpMode) return;
+  if(!mpMode) return;
+  sfx.init();                                    // a click is what lets the sound on this page start
   if(voice.on){ setMic(false); flashHud('MIC OFF'); return; }
   if(player.invisible){ flashHud('INVISIBLE: YOU CANNOT TALK'); return; }
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ flashHud('NO MICROPHONE IN THIS BROWSER'); return; }
   try{
     const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true, noiseSuppression:true, autoGainControl:true}, video:false});
-    if(!playing || !mpMode){ for(const t of stream.getTracks()) t.stop(); return; }
+    if(!mpMode){ for(const t of stream.getTracks()) t.stop(); return; }
     voice.stream = stream; voice.track = stream.getAudioTracks()[0];
     setMic(true);
     flashHud('MIC ON: PLAYERS CLOSE BY CAN HEAR YOU');
@@ -3143,13 +3150,16 @@ async function toggleMic(){
 function voicePeer(id, initiator){
   const old = voice.peers.get(id); if(old) return old;
   const pc = new RTCPeerConnection(RTC_CONFIG);
-  const tr = pc.addTransceiver('audio', {direction:'sendrecv'});
-  const p = {pc, sender:tr.sender, gain:null, src:null, pending:[], ready:false};
+  const p = {pc, sender:null, gain:null, src:null, pending:[], ready:false};
   voice.peers.set(id, p);
-  if(voice.track) tr.sender.replaceTrack(voice.track).catch(()=>{});
+  if(initiator){                                 // the offering side makes the audio channel itself
+    const tr = pc.addTransceiver('audio', {direction:'sendrecv'});
+    p.sender = tr.sender;
+    if(voice.track) tr.sender.replaceTrack(voice.track).catch(()=>{});
+  }
   pc.onicecandidate = e => { if(e.candidate) voiceSend(id, {ice:e.candidate}); };
   pc.ontrack = e => {
-    const ctx = sfx.ctx; if(!ctx) return;
+    sfx.init(); const ctx = sfx.ctx; if(!ctx) return;
     if(p.src){ try{ p.src.disconnect(); }catch(err){} }
     p.src = ctx.createMediaStreamSource(new MediaStream([e.track]));
     if(!p.gain){ p.gain = ctx.createGain(); p.gain.gain.value = 0; p.gain.connect(ctx.destination); }
@@ -3180,6 +3190,9 @@ async function voiceSignal(from, data){
       p.ready = true;
       for(const c of p.pending.splice(0)) await pc.addIceCandidate(c).catch(()=>{});
       if(data.sdp.type === 'offer'){
+        // the transceiver the offer made: send our microphone on it too, as well as receive theirs
+        const tr = pc.getTransceivers().find(t => t.receiver && t.receiver.track && t.receiver.track.kind === 'audio');
+        if(tr){ tr.direction = 'sendrecv'; p.sender = tr.sender; if(voice.track) tr.sender.replaceTrack(voice.track).catch(()=>{}); }
         await pc.setLocalDescription(await pc.createAnswer());
         voiceSend(from, {sdp:pc.localDescription});
       }
