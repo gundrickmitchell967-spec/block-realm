@@ -118,6 +118,8 @@
     </div>
     <div id="codeok" hidden>
       <button class="btn" id="invisbtn" type="button">INVISIBLE: OFF</button>
+      <button class="btn" id="wallbtn" type="button">WALL HACKS: OFF</button>
+      <p class="hint">Wall hacks let you see other players through walls and blocks.</p>
       <p class="hint">While you are invisible, other players cannot see you or your name, and you do not appear on their screens.</p>
     </div>
     <p id="codemsg" role="status"></p>
@@ -391,12 +393,18 @@ function doorThinZ(wx,y,wz){ return isSolidId(getBlock(wx-1,y,wz)) || isSolidId(
 // a bed is two blocks in a row: the foot (16) and the head (17). Its parts are given along the bed (u runs
 // 0 at the foot to 2 at the head) and across it (v runs 0 to 1). Each cell draws only the part of them that lies inside it.
 // x and z are chunk-local, as in buildMesh; wx and wz are world positions, used to look at the neighbouring cell.
-function emitBed(V,I,nv,x,y,z,wx,wz,isHead,gl){
-  let dx=0, dz=0;
-  const want = isHead ? BED_FOOT_ID : BED_HEAD_ID;
+// the direction a bed runs in, from its foot to its head, as seen from the bed block at (wx,y,wz); [0,0] when it has no partner
+function bedDir(wx,y,wz,id){
+  const want = id===BED_FOOT_ID ? BED_HEAD_ID : BED_FOOT_ID;
   for(const [ax,az] of [[1,0],[-1,0],[0,1],[0,-1]]){
-    if(getBlock(wx+ax,y,wz+az)===want){ dx = isHead ? -ax : ax; dz = isHead ? -az : az; break; }   // foot to head
+    if(getBlock(wx+ax,y,wz+az)===want) return id===BED_FOOT_ID ? [ax,az] : [-ax,-az];
   }
+  return [0,0];
+}
+// the same for whichever bed block is at this position; null if there is no bed there
+function bedDirAt(wx,y,wz){ const b=getBlock(wx,y,wz); return (b===BED_FOOT_ID||b===BED_HEAD_ID) ? bedDir(wx,y,wz,b) : null; }
+function emitBed(V,I,nv,x,y,z,wx,wz,isHead,gl){
+  const [dx,dz] = bedDir(wx,y,wz,isHead ? BED_HEAD_ID : BED_FOOT_ID);
   if(!dx && !dz) return emitBox(V,I,nv, [x,y,z],[x+1,y+0.5625,z+1], {top:22,side:23,bot:8}, gl);   // no partner: a low block
   const footX = isHead ? x-dx : x, footZ = isHead ? z-dz : z;
   const k = isHead ? 1 : 0;                                  // the half of the bed this cell is
@@ -420,6 +428,17 @@ function emitBed(V,I,nv,x,y,z,wx,wz,isHead,gl){
   part(0,0.08,  0.02,0.98,0.25,0.56, WOOD);  // footboard at the foot end
   part(1.92,2,  0,1,     0.25,0.95, WOOD);   // headboard at the head end
   part(1.42,1.9,0.14,0.86,0.5,0.66, WHITE);  // pillow, tucked in against the headboard
+  // another bed right above this one makes a bunk bed: four posts hold the top bed up
+  const topDir = bedDirAt(wx,y+1,wz), botDir = bedDirAt(wx,y-1,wz);
+  if(botDir && botDir[0]===dx && botDir[1]===dz){
+    part(0,0.06,0,0.06,-0.75,0,WOOD);    part(0,0.06,0.94,1,-0.75,0,WOOD);
+    part(1.94,2,0,0.06,-0.75,0,WOOD);    part(1.94,2,0.94,1,-0.75,0,WOOD);
+  }
+  // the bottom bunk has a ladder at its foot end, up to the top bunk
+  if(!isHead && topDir && topDir[0]===dx && topDir[1]===dz){
+    part(0.1,0.14,0.24,0.28,0.5,1.0,WOOD); part(0.1,0.14,0.72,0.76,0.5,1.0,WOOD);
+    for(const yr of [0.6,0.75,0.9]) part(0.1,0.14,0.28,0.72,yr,yr+0.03,WOOD);
+  }
   return n;
 }
 // vertex layout: position (3), texture coordinates (2), tile (1), shade (1), glow (1) = 8 floats
@@ -649,8 +668,7 @@ function makeAtlasCanvas(){
   tile(20,(px,py)=>{ const n=rnd2(px,py,56); if(rnd2(px>>1,py>>1,57)<0.22) return [28,28,32];                    // coal ore
                     return [g(n,126,44),g(n,126,44),g(n,130,44)]; });
   tile(21,(px,py)=>{ const n=rnd2(px,py,58); return [g(n,238,22),g(n,236,22),g(n,230,22)]; });                  // wool
-  tile(22,(px,py)=>{ const n=rnd2(px,py,59); if(py<10 && px>=3 && px<=12) return [240,240,236];                   // bed sheet (pillow at the top)
-                    return [g(n,184,20),g(n,44,14),g(n,44,14)]; });
+  tile(22,(px,py)=>{ const n=rnd2(px,py,59); return [g(n,184,20),g(n,44,14),g(n,44,14)]; });   // red blanket (the pillow is its own white block)
   tile(23,(px,py)=>{ const n=rnd2(px,py,60); if(py>=10 && py<=14) return [g(n,184,16),g(n,44,12),g(n,44,12)];      // bed side: blanket band
                     return [g(n,150,20),g(n,104,16),g(n,60,12)]; });
   return c;
@@ -735,7 +753,7 @@ function mul(a,b){
 }
 
 /* ---------- player, physics and controls ---------- */
-const player = {x:8.5, y:40, z:8.5, vx:0, vy:0, vz:0, yaw:0, pitch:0, onGround:false, fly:false, lastSpace:0, sleeping:false, invisible:false};
+const player = {x:8.5, y:40, z:8.5, vx:0, vy:0, vz:0, yaw:0, pitch:0, onGround:false, fly:false, lastSpace:0, sleeping:false, invisible:false, bed:null};
 let playing=false, sel=0, target=null, worldTime=DAY_LEN*0.3;
 const keys = {};
 function camDir(){
@@ -852,7 +870,7 @@ function toggleDoor(h){
   flashHud(open ? 'DOOR CLOSED' : 'DOOR OPEN');
 }
 // puts an item down at (x,y,z); a door takes two blocks standing up, a bed takes two blocks side by side
-function placeItem(id,x,y,z){
+function placeItem(id,x,y,z,dir){
   if(id===DOOR_ID){
     if(getBlock(x,y,z)!==0 || getBlock(x,y+1,z)!==0) return false;
     if(overlapsPlayer(x,y,z) || overlapsPlayer(x,y+1,z)) return false;
@@ -867,10 +885,15 @@ function placeItem(id,x,y,z){
     return true;
   }
   if(id===BED_FOOT_ID){
-    // the bed runs away from the player, along the axis the player is looking along
-    const dx=-Math.sin(player.yaw), dz=-Math.cos(player.yaw);
-    const alongX = Math.abs(dx) > Math.abs(dz);
-    const hx = alongX ? x+Math.sign(dx) : x, hz = alongX ? z : z+Math.sign(dz);
+    // the bed runs away from the player, along the axis the player is looking along; a bunk bed is given its direction
+    let dx, dz;
+    if(dir){ dx=dir[0]; dz=dir[1]; }
+    else {
+      const lx=-Math.sin(player.yaw), lz=-Math.cos(player.yaw);
+      const alongX = Math.abs(lx) > Math.abs(lz);
+      dx = alongX ? Math.sign(lx) : 0; dz = alongX ? 0 : Math.sign(lz);
+    }
+    const hx = x+dx, hz = z+dz;
     if(getBlock(x,y,z)!==0 || getBlock(hx,y,hz)!==0) return false;
     if(overlapsPlayer(x,y,z) || overlapsPlayer(hx,y,hz)) return false;
     placeCell(x,y,z,BED_FOOT_ID); placeCell(hx,y,hz,BED_HEAD_ID);
@@ -886,15 +909,35 @@ function isNight(){ return daylight() < 0.25; }
 function skipNight(){
   const base = Math.floor(worldTime/DAY_LEN)*DAY_LEN;
   let t = base + DAY_LEN*MORNING; if(t <= worldTime) t += DAY_LEN;
+  if(player.sleeping) leaveBed();
   worldTime = t;
-  player.sleeping = false;
   flashHud('GOOD MORNING');
 }
-function trySleep(){
+// gets out of bed: stands up beside the bed on the floor if there is room, otherwise on top of it
+function leaveBed(){
+  const b = player.bed; player.bed = null; player.sleeping = false;
+  if(!b) return;
+  const spots = [[b.x+1.5,b.z+0.5],[b.x-0.5,b.z+0.5],[b.x+0.5,b.z+1.5],[b.x+0.5,b.z-0.5]];
+  let spot = null;
+  outer: for(const [sx,sz] of spots) for(const sy of [b.y+0.01, b.y+1.02]){
+    if(!collides(sx,sy,sz) && collides(sx,sy-0.05,sz)){ spot=[sx,sy,sz]; break outer; }
+  }
+  if(spot){ player.x=spot[0]; player.y=spot[1]; player.z=spot[2]; }
+  else player.y = b.y + 1.02;
+  player.vx = player.vy = player.vz = 0;
+}
+// lies down in the bed that was clicked (on a server, the player is moved onto it; alone, the night just passes)
+function trySleep(cell){
   if(player.sleeping) return;
   if(!isNight()){ flashHud('YOU CAN ONLY SLEEP AT NIGHT'); return; }
   for(const k in keys) keys[k]=false;
   player.sleeping = true;
+  player.bed = null;
+  if(cell && mpMode){
+    player.bed = {x:cell.x, y:cell.y, z:cell.z};
+    player.x = cell.x+0.5; player.z = cell.z+0.5; player.y = cell.y+0.5;
+    player.vx = player.vy = player.vz = 0;
+  }
   sfx.bed();
   mpSend({type:'sleep', on:true});
   if(mpMode) flashHud('ASLEEP. The night passes once everyone is in a bed. Space to get up.');
@@ -902,14 +945,27 @@ function trySleep(){
 }
 function wakeUp(){
   if(!player.sleeping) return;
-  player.sleeping = false;
+  leaveBed();
   mpSend({type:'sleep', on:false});
   flashHud('YOU GOT UP');
+}
+// puts a bed on top of a bed, lined up with it, to make a bunk bed
+function placeBunk(h){
+  const dir = bedDir(h.x,h.y,h.z,h.id);
+  if(!dir[0] && !dir[1]){ flashHud('NO ROOM HERE'); return; }
+  const fx = h.id===BED_HEAD_ID ? h.x-dir[0] : h.x, fz = h.id===BED_HEAD_ID ? h.z-dir[1] : h.z;
+  if(!placeItem(BED_FOOT_ID, fx, h.y+1, fz, dir)){ flashHud('NO ROOM FOR A BUNK BED'); return; }
+  sfx.placeBlock(BED_FOOT_ID);
+  flashHud('BUNK BED: THE TOP BUNK IS READY');
 }
 function doPlace(){
   const h=raycast(6); if(!h) return;
   if(isDoorId(h.id)){ toggleDoor(h); return; }
-  if(h.id===BED_FOOT_ID || h.id===BED_HEAD_ID){ trySleep(); return; }
+  if(h.id===BED_FOOT_ID || h.id===BED_HEAD_ID){
+    // holding a bed and aiming at the top of a bed stacks another bed on it; otherwise you lie down to sleep
+    if(HOTBAR[sel]===BED_FOOT_ID && h.ny===1){ placeBunk(h); return; }
+    trySleep(h); return;
+  }
   const id=HOTBAR[sel];
   if(id==null){ flashHud('EMPTY SLOT: press E to choose a block'); return; }
   const x=h.x+h.nx, y=h.y+h.ny, z=h.z+h.nz;
@@ -1036,7 +1092,11 @@ $('invclose').addEventListener('click', closeInv);
 // the code is checked in the browser only; it keeps casual visitors out of the panel, it is not a real lock
 const PRIVATE_CODE = '0702';
 let codeOpen = false, codeUnlocked = false;
-function syncInvisBtn(){ $('invisbtn').textContent = 'INVISIBLE: ' + (player.invisible ? 'ON' : 'OFF'); }
+let wallHacks = false;                    // true: other players are drawn through walls
+function syncInvisBtn(){
+  $('invisbtn').textContent = 'INVISIBLE: ' + (player.invisible ? 'ON' : 'OFF');
+  $('wallbtn').textContent = 'WALL HACKS: ' + (wallHacks ? 'ON' : 'OFF');
+}
 function openCode(){
   if(!playing || chatOpen || invOpen || codeOpen || player.sleeping) return;
   codeOpen = true;
@@ -1079,6 +1139,11 @@ $('codein').addEventListener('keydown', e=>{
   else if(e.key === 'Escape'){ e.preventDefault(); closeCode(); }
 });
 $('invisbtn').addEventListener('click', ()=> setInvisible(!player.invisible));
+$('wallbtn').addEventListener('click', ()=>{
+  wallHacks = !wallHacks;
+  syncInvisBtn();
+  flashHud(wallHacks ? 'WALL HACKS ON: other players show through walls' : 'WALL HACKS OFF');
+});
 $('codeclose').addEventListener('click', closeCode);
 let flashT=0;
 function flashHud(text){ $('tm').textContent=text; flashT=2.0; }
@@ -1212,26 +1277,26 @@ function toggleSound(){
 const music = { on:true, timer:null, nextT:0, step:0, bus:null };
 try{ music.on = localStorage.getItem('blockrealm_music_v1') !== '0'; }catch(e){}
 const midiHz = m => 440*Math.pow(2,(m-69)/12);
-// four bars, A minor, F, C, G: the pad chord (MIDI notes) and the bass note of each bar
+// a slow loop of four bars, about four seconds each: soft chords and a few long notes, over a long echo
 const PROG = [
-  {pad:[57,60,64], bass:45},
-  {pad:[53,57,60], bass:41},
-  {pad:[48,52,55], bass:36},
-  {pad:[55,59,62], bass:43}
+  {pad:[57,60,64,67], bass:45},   // Am7
+  {pad:[53,57,60,64], bass:41},   // Fmaj7
+  {pad:[48,52,55,59], bass:36},   // Cmaj7
+  {pad:[55,59,62,66], bass:43}    // G7
 ];
-// the melody: one note per eighth note, 8 per bar; null is a rest
+// the melody: one slot per half second, 8 per bar; a number starts a note that rings on, null is silence
 const TUNE = [
-  [69,null,72,74, 76,null,74,72],
-  [72,null,70,69, 65,null,69,null],
-  [72,76,79,76, 72,null,67,null],
-  [71,null,74,71, 67,69,71,null]
+  [69,null,null,null, 72,null,null,null],
+  [72,null,null,69, null,null,null,null],
+  [67,null,null,null, 64,null,null,null],
+  [71,null,null,74, null,null,null,null]
 ];
-function musicNote(m, t, dur, type, vol){
+function musicNote(m, t, dur, type, vol, att=0.02){
   const c = sfx.ctx;
   const o = c.createOscillator(), g = c.createGain();
   o.type = type; o.frequency.value = midiHz(m);
   g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(vol, t+0.02);
+  g.gain.exponentialRampToValueAtTime(vol, t+att);
   g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
   o.connect(g); g.connect(music.bus);
   o.start(t); o.stop(t+dur+0.05);
@@ -1240,15 +1305,27 @@ function musicNote(m, t, dur, type, vol){
 function musicStep(){
   const c = sfx.ctx;
   if(!c || !music.bus) return;
-  while(music.nextT < c.currentTime + 0.25){
+  while(music.nextT < c.currentTime + 0.4){
     const s = music.step, bar = Math.floor(s/8) % 4, i = s % 8, t = music.nextT, ch = PROG[bar];
-    if(i === 0) for(const p of ch.pad) musicNote(p, t, 2.0, 'sine', 0.035);       // soft pad at the start of each bar
-    if(i % 4 === 0) musicNote(ch.bass, t, 0.5, 'triangle', 0.10);                 // bass on the beat
-    musicNote(ch.pad[i % 3] + 12, t, 0.2, 'triangle', 0.03);                      // a gentle arpeggio
+    if(i === 0){
+      // each chord swells in slowly and fades out under the next one; notes are doubled a hair apart so they sound wide
+      for(const p of ch.pad){ musicNote(p, t, 4.6, 'sine', 0.022, 1.2); musicNote(p, t+0.01, 4.6, 'sine', 0.012, 1.2); }
+      musicNote(ch.bass, t, 4.0, 'sine', 0.07, 0.6);
+    }
+    if(i === 4) musicNote(ch.pad[3] + 12, t, 2.6, 'sine', 0.018, 0.3);             // a soft high bell, halfway through the bar
     const mel = TUNE[bar][i];
-    if(mel != null) musicNote(mel, t, 0.3, 'triangle', 0.08);                     // the tune
-    music.nextT += 0.25; music.step++;
+    if(mel != null) musicNote(mel, t, 2.8, 'triangle', 0.045, 0.2);               // the melody rings on
+    music.nextT += 0.5; music.step++;
   }
+}
+// a 4-second impulse of decaying noise: the convolver turns it into a soft room echo
+function roomImpulse(c){
+  const len = Math.floor(c.sampleRate * 4), buf = c.createBuffer(2, len, c.sampleRate);
+  for(let ch = 0; ch < 2; ch++){
+    const d = buf.getChannelData(ch);
+    for(let i = 0; i < len; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 3);
+  }
+  return buf;
 }
 function musicStart(){
   sfx.init();
@@ -1257,21 +1334,27 @@ function musicStart(){
   if(c.state === 'suspended') c.resume();
   music.bus = c.createGain();
   music.bus.gain.setValueAtTime(0.0001, c.currentTime);
-  music.bus.gain.exponentialRampToValueAtTime(0.6, c.currentTime + 1.5);   // fades in over a second and a half
-  music.bus.connect(c.destination);
+  music.bus.gain.exponentialRampToValueAtTime(0.7, c.currentTime + 3);     // fades in slowly
+  // the dry sound, plus a wet copy through the room echo
+  const dry = c.createGain(); dry.gain.value = 0.55;
+  const conv = c.createConvolver(); conv.buffer = roomImpulse(c);
+  const wet = c.createGain(); wet.gain.value = 0.7;
+  music.bus.connect(dry); dry.connect(c.destination);
+  music.bus.connect(conv); conv.connect(wet); wet.connect(c.destination);
+  music.nodes = [dry, conv, wet];
   music.nextT = c.currentTime + 0.1; music.step = 0;
   music.timer = setInterval(musicStep, 60);
   musicStep();
 }
 function musicStop(){
   if(music.timer){ clearInterval(music.timer); music.timer = null; }
-  const b = music.bus; music.bus = null;
+  const b = music.bus, nodes = music.nodes || []; music.bus = null; music.nodes = null;
   if(b && sfx.ctx){
     const t = sfx.ctx.currentTime;
     b.gain.cancelScheduledValues(t);
     b.gain.setValueAtTime(Math.max(0.0001, b.gain.value), t);
-    b.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);   // fades out, then is disconnected
-    setTimeout(()=>{ try{ b.disconnect(); }catch(e){} }, 500);
+    b.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);   // fades out, then the parts are disconnected
+    setTimeout(()=>{ for(const n of [b, ...nodes]){ try{ n.disconnect(); }catch(e){} } }, 800);
   }
 }
 function musicSet(on){
@@ -1377,6 +1460,7 @@ function connectMP(){
 }
 function enterWorld(m){
   mpMode = true; mp.id = m.id;
+  if(typeof m.time==='number') worldTime = m.time;   // start at the server's time of day
   for(const k in edits) delete edits[k];
   for(const [x,y,z,t] of m.edits) setBlock(x,y,z,t);
   for(const ch of chunks.values()) disposeChunk(ch);
@@ -1410,9 +1494,15 @@ function onServerMessage(m){
     if(!o.hidden){ o.tx=o.x=m.x; o.ty=o.y=m.y; o.tz=o.z=m.z; o.tyaw=o.yaw=m.yaw; }
   }
   else if(m.type==='morning'){
-    // everyone is in bed: the night passes for the whole server
+    // everyone is in bed: the night passes for the whole server, and the clock jumps to the morning
     for(const o of mp.others.values()){ o.sleeping=false; tagText(o); }
-    skipNight();
+    if(player.sleeping) leaveBed();
+    if(typeof m.time==='number') worldTime = m.time;
+    flashHud('GOOD MORNING');
+  }
+  else if(m.type==='time'){
+    // the server's clock: everyone shares the same time of day
+    if(typeof m.time==='number') worldTime = m.time;
   }
   else if(m.type==='edit'){
     if(m.by===mp.id) return;                       // already applied locally
@@ -1604,8 +1694,8 @@ function render(){
   gl.clearColor(sky[0],sky[1],sky[2],1);
   gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
-  // asleep, the camera sinks down into the bed
-  const eye=[player.x, player.y+EYE-(player.sleeping?1.0:0), player.z];
+  // asleep, the camera sits low, as if lying on the mattress
+  const eye=[player.x, player.y+(player.sleeping?0.42:EYE), player.z];
   const d=camDir();
   const V=lookAt(eye,[eye[0]+d[0],eye[1]+d[1],eye[2]+d[2]],[0,1,0]);
   const Pm=perspective(70*Math.PI/180, cv.width/cv.height, 0.05, 600);
@@ -1652,6 +1742,7 @@ function render(){
   // other players
   if(mpMode && mp.others.size){
     gl.disable(gl.CULL_FACE);
+    if(wallHacks) gl.disable(gl.DEPTH_TEST);     // wall hacks: players are drawn over anything in front of them
     gl.useProgram(solid);
     gl.uniformMatrix4fv(SU.uVP,false,new Float32Array(VP));
     gl.uniform1f(SU.uLight,0.25+0.75*dl);
@@ -1666,6 +1757,7 @@ function render(){
       }
     }
     gl.enable(gl.CULL_FACE);
+    if(wallHacks) gl.enable(gl.DEPTH_TEST);
     // name tags sit above each head
     for(const o of mp.others.values()){
       const p = o.hidden ? null : projectPoint(VP, o.x, o.y+2.05, o.z);
@@ -1712,7 +1804,7 @@ function frame(now){
   const dt=Math.min(0.05,(now-lastT)/1000); lastT=now;
   if(playing){
     worldTime+=dt;
-    physics(dt);
+    if(!player.sleeping) physics(dt);      // asleep, the player lies still in the bed
     target=raycast(6);
   } else target=null;
   if(playing && mpMode){
@@ -1771,6 +1863,7 @@ window.VOX = {
   BED_FOOT_ID, BED_HEAD_ID, LAMP_TOP_ID, toggleDoor, overlapsPlayer, solidAt, isSolidId, isOpaqueId, lightAt, relightLamps,
   addChatLine, skipNight, trySleep, wakeUp,
   openCode, closeCode, tryCode, setInvisible, music, musicSet, musicStart, musicStop, PRIVATE_CODE,
+  get wallHacks(){ return wallHacks; }, placeBunk, leaveBed, bedDirAt,
   get codeOpen(){ return codeOpen; }, get codeUnlocked(){ return codeUnlocked; },
   openInv, closeInv, addToInv, removeFromInv, get invOpen(){ return invOpen; },
   get sel(){ return sel; }, get selLabel(){ return $('selname').textContent; },

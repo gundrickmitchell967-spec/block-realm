@@ -18,6 +18,13 @@ const CH = 64;                  // world height in blocks
 const REACH = 12;               // a block change must be this close to the player's last reported position
 const MAX_BLOCK_ID = 26;        // highest block id a player may place (see BLOCKS in index.html)
 const COLORS = ['#e6594b', '#4b9be6', '#58c25a', '#e6c44b', '#b35ae6', '#4be6d6', '#e6894b', '#e64b9b'];
+const DAY_LEN = 480;            // seconds for one full day (the same as in index.html)
+
+// one clock for the whole server, so everyone sees the same time of day.
+// the world time is "clock.t" at the moment "clock.at"; it then runs on in real time.
+let clock = { t: DAY_LEN * 0.3, at: Date.now() };
+function worldTime() { return clock.t + (Date.now() - clock.at) / 1000; }
+function setWorldTime(t) { clock = { t, at: Date.now() }; }
 
 // shared edits: "x,y,z" -> block id (0 is air, so a broken block is stored as 0)
 const edits = new Map();
@@ -84,7 +91,11 @@ function checkMorning() {
   const joined = [...players.values()].filter(q => q.joined);
   if (joined.length && joined.every(q => q.sleeping)) {
     for (const q of joined) q.sleeping = false;
-    broadcast({ type: 'morning' });
+    // the night passes: the shared clock jumps to the next morning
+    const now = worldTime(), base = Math.floor(now / DAY_LEN) * DAY_LEN;
+    let t = base + DAY_LEN * 0.27; if (t <= now) t += DAY_LEN;
+    setWorldTime(t);
+    broadcast({ type: 'morning', time: t });
   }
 }
 // simple rate limit: each player has a bucket of 60 messages, refilled at 40 per second
@@ -117,7 +128,7 @@ wss.on('connection', (ws) => {
       for (const [oid, o] of players) if (oid !== id && o.joined) list.push({ id: oid, name: o.name, color: o.color, x: o.x, y: o.y, z: o.z, yaw: o.yaw, sleeping: o.sleeping, hidden: o.hidden });
       const all = [];
       for (const [k, v] of edits) { const [x, y, z] = k.split(',').map(Number); all.push([x, y, z, v]); }
-      sendTo(p, { type: 'welcome', id, edits: all, players: list });
+      sendTo(p, { type: 'welcome', id, edits: all, players: list, time: worldTime() });
       broadcast({ type: 'join', id, name: p.name, color: p.color, x: p.x, y: p.y, z: p.z, yaw: p.yaw }, id);
       broadcast({ type: 'system', text: p.name + ' joined' }, id);
       return;
@@ -178,6 +189,9 @@ wss.on('connection', (ws) => {
   });
   ws.on('error', () => {});
 });
+
+// everyone's clock is corrected every five seconds
+setInterval(() => broadcast({ type: 'time', time: worldTime() }), 5000);
 
 server.listen(PORT, HOST, () => {
   console.log(`Block Realm server on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}  (game page and ws://.../ws)`);
