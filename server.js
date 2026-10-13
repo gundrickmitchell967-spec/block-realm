@@ -111,7 +111,7 @@ function shutDecodedDoor(w, lo, lock) {
 // the plot a block position is in, if any (plots never overlap)
 function plotAt(w, x, z) { return w.plots.find(pl => x >= pl.x0 && x <= pl.x1 && z >= pl.z0 && z <= pl.z1) || null; }
 function plotsOverlap(a, b) { return a.x0 <= b.x1 && b.x0 <= a.x1 && a.z0 <= b.z1 && b.z0 <= a.z1; }
-function plotsMsg(w, q) { return { type: 'plots', list: w.plots.map(pl => ({ x0: pl.x0, z0: pl.z0, x1: pl.x1, z1: pl.z1, mine: pl.owner === q.pid })) }; }
+function plotsMsg(w, q) { return { type: 'plots', list: w.plots.map(pl => ({ x0: pl.x0, z0: pl.z0, x1: pl.x1, z1: pl.z1, mine: pl.owner === q.pid, who: pl.ownerName || 'SOMEONE', refund: pl.owner === q.pid ? Math.floor((pl.price || 0) / 2) : 0 })) }; }
 function announcePlots(w) { for (const q of players.values()) if (q.world === w && q.joined) sendTo(q, plotsMsg(w, q)); }
 // a transaction goes in the world's log (the latest 300 are kept)
 function logTxn(w, e) {
@@ -131,6 +131,7 @@ function cashLogFor(w, p) {
     else if (e.kind === 'take' && e.from === p.pid) { dir = '-'; text = 'The game creator took ' + e.amount; }
     else if (e.kind === 'buy' && e.from === p.pid) { dir = '-'; text = 'Bought ' + e.what + ' for ' + e.amount; }
     else if (e.kind === 'plot' && e.from === p.pid) { dir = '-'; text = 'Bought a plot of ' + e.what + ' for ' + e.amount; }
+    else if (e.kind === 'plotsale' && e.to === p.pid) { dir = '+'; text = 'Sold a plot of ' + e.what + ' for ' + e.amount; }
     if (dir) out.push({ t: e.t, dir, text, amount: e.amount });
   }
   return out.slice(-40).reverse();
@@ -683,18 +684,44 @@ wss.on('connection', (ws) => {
       for (const [k, v] of w.edits) {
         if (v === 0) continue;
         const [x, , z] = k.split(',').map(Number);
-        if (x >= pl.x0 && x <= pl.x1 && z >= pl.z0 && z <= pl.z1) return fail('SOMEONE HAS BUILT ON THAT LAND');
+        // only another player's blocks stop a sale: your own blocks, and old blocks nobody recorded, are fine
+        const o = w.owners.get(k);
+        if (o !== undefined && o !== p.pid && x >= pl.x0 && x <= pl.x1 && z >= pl.z0 && z <= pl.z1) return fail('ANOTHER PLAYER HAS BUILT ON THAT LAND');
       }
       const price = sw * sd * PLOT_RATE;
       const cash = w.coins.get(p.pid) || 0;
       if (cash < price) return fail('NOT ENOUGH CASH. THE PLOT COSTS ' + price);
       w.coins.set(p.pid, cash - price);
-      w.plots.push(Object.assign(pl, { owner: p.pid, price }));
+      w.plots.push(Object.assign(pl, { owner: p.pid, ownerName: p.name, price }));
       logTxn(w, { kind: 'plot', amount: price, from: p.pid, fromName: p.name, what: sw + ' x ' + sd + ' blocks' });
       scheduleSave(w);
       announcePlots(w);
       sendTo(p, walletMsg(w, p));
       return fail('YOUR PLOT IS READY: ' + sw + ' x ' + sd + ' BLOCKS. BUILD INSIDE IT');
+    }
+    if (m.type === 'plotsell') {
+      // a player sells their own plot: every block on it is deleted and half the price comes back as cash
+      const fail = text => sendTo(p, { type: 'notice', text });
+      if (![m.x0, m.z0, m.x1, m.z1].every(Number.isInteger)) return fail('CHOOSE A PLOT TO SELL');
+      const i = w.plots.findIndex(o => o.owner === p.pid && o.x0 === m.x0 && o.z0 === m.z0 && o.x1 === m.x1 && o.z1 === m.z1);
+      if (i < 0) return fail('THAT IS NOT YOUR PLOT');
+      const pl = w.plots[i];
+      w.plots.splice(i, 1);
+      const cleared = [];
+      for (const k of [...w.edits.keys()]) {
+        const [x, y, z] = k.split(',').map(Number);
+        if (x < pl.x0 || x > pl.x1 || z < pl.z0 || z > pl.z1) continue;
+        w.edits.delete(k); w.owners.delete(k); dropLock(w, k);
+        cleared.push([x, y, z]);
+      }
+      const refund = Math.floor((pl.price || 0) / 2);
+      w.coins.set(p.pid, (w.coins.get(p.pid) || 0) + refund);
+      logTxn(w, { kind: 'plotsale', amount: refund, to: p.pid, toName: p.name, what: (pl.x1 - pl.x0 + 1) + ' x ' + (pl.z1 - pl.z0 + 1) + ' blocks' });
+      scheduleSave(w);
+      if (cleared.length) broadcast(w, { type: 'plotclear', blocks: cleared });
+      announcePlots(w);
+      sendTo(p, walletMsg(w, p));
+      return fail('PLOT SOLD. YOU GOT ' + refund + ' CASH BACK');
     }
     if (m.type === 'cashlog') return sendTo(p, { type: 'cashlog', entries: cashLogFor(w, p) });
     if (m.type === 'edit') {
