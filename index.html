@@ -2808,10 +2808,63 @@ function actAtScreen(sx, sy, act){
 }
 function tapPlaceAt(sx, sy){ actAtScreen(sx, sy, () => doPlace()); }
 function tapBreakAt(sx, sy){ actAtScreen(sx, sy, () => doBreak()); }
-// ---- touch controls. Every finger is read by where it lands on the screen, not by which element the browser picked,
-// so the stick, the buttons and the look-and-place area cannot swap places on a phone ----
-const tPtr = new Map();                              // finger id -> what that finger is doing
+// ---- touch controls. Each control listens for its own touches (a finger keeps reporting to the element it started on),
+// so they work in every phone browser, including the built-in browsers inside apps ----
 let breakTimer = 0;
+const tTouch = new Map();                          // touch id -> what that finger started on
+const touchesOf = e => [...e.changedTouches];
+function touchPlay(){ return isTouch && playing && !invOpen && !fridgeOpen && !codeOpen && !chatOpen; }
+// the joystick
+stick.addEventListener('touchstart', e => {
+  if(!touchPlay()) return;
+  e.preventDefault();
+  const r = stick.getBoundingClientRect(); stickOrigin = {x: r.left + r.width/2, y: r.top + r.height/2};
+  for(const t of touchesOf(e)){ tTouch.set(t.identifier, {kind:'stick'}); stickMove(t); }
+}, {passive:false});
+stick.addEventListener('touchmove', e => {
+  for(const t of touchesOf(e)){ const s = tTouch.get(t.identifier); if(s && s.kind === 'stick'){ e.preventDefault(); stickMove(t); } }
+}, {passive:false});
+const stickEnd = e => {
+  for(const t of touchesOf(e)){
+    const s = tTouch.get(t.identifier);
+    if(s && s.kind === 'stick'){ tTouch.delete(t.identifier); knob.style.transform = ''; setMove(0, 0); }
+  }
+};
+stick.addEventListener('touchend', stickEnd);
+stick.addEventListener('touchcancel', stickEnd);
+// the look-and-place area: a drag turns you; a quick tap places the selected block where you tapped; holding still breaks it
+const look = $('touchlook');
+look.addEventListener('touchstart', e => {
+  if(!touchPlay()) return;
+  e.preventDefault();
+  for(const t of touchesOf(e)){
+    const s = {kind:'look', sx:t.clientX, sy:t.clientY, lx:t.clientX, ly:t.clientY, t:performance.now(), moved:false, done:false, timer:0};
+    s.timer = setTimeout(() => { if(!s.moved && tTouch.get(t.identifier) === s){ s.done = true; tapBreakAt(s.sx, s.sy); } }, 480);
+    tTouch.set(t.identifier, s);
+  }
+}, {passive:false});
+look.addEventListener('touchmove', e => {
+  for(const t of touchesOf(e)){
+    const s = tTouch.get(t.identifier); if(!s || s.kind !== 'look') continue;
+    e.preventDefault();
+    if(!touchPlay()) continue;
+    const dx = t.clientX - s.lx, dy = t.clientY - s.ly;
+    s.lx = t.clientX; s.ly = t.clientY;
+    if(!s.moved){ if(Math.hypot(t.clientX - s.sx, t.clientY - s.sy) <= 12) continue; s.moved = true; clearTimeout(s.timer); }   // small wobbles are still a tap
+    player.yaw -= dx * 0.0042;
+    player.pitch = clamp(player.pitch - dy * 0.0042, -1.55, 1.55);
+  }
+}, {passive:false});
+const lookEnd = e => {
+  for(const t of touchesOf(e)){
+    const s = tTouch.get(t.identifier); if(!s || s.kind !== 'look') continue;
+    tTouch.delete(t.identifier); clearTimeout(s.timer);
+    if(e.type === 'touchend' && !s.moved && !s.done && performance.now() - s.t < 480) tapPlaceAt(s.sx, s.sy);
+  }
+};
+look.addEventListener('touchend', lookEnd);
+look.addEventListener('touchcancel', lookEnd);
+// the round buttons: pressed while you play, released when the finger lifts (even if a panel has opened since)
 const tBtns = [
   {el:$('tbreak'), down:() => { doBreak(); breakTimer = setInterval(() => { if(touchPlay()) doBreak(); }, 280); }, up:() => { clearInterval(breakTimer); breakTimer = 0; }},
   {el:$('tjump'), down:() => tapKey('Space', true), up:() => tapKey('Space', false)},
@@ -2821,55 +2874,21 @@ const tBtns = [
   {el:$('tmic'), down:() => tapKey('KeyV', true)},
   {el:$('tmenu'), down:() => pause()},
 ];
-function touchPlay(){ return isTouch && playing && !invOpen && !fridgeOpen && !codeOpen && !chatOpen; }
-function buttonAt(x, y){
-  for(const b of tBtns){
-    if(b.el.hidden) continue;
-    const r = b.el.getBoundingClientRect(), m = 8;
-    if(x >= r.left - m && x <= r.right + m && y >= r.top - m && y <= r.bottom + m) return b;
-  }
-  return null;
-}
-function stickAt(x, y){
-  const r = stick.getBoundingClientRect();
-  return Math.hypot(x - (r.left + r.width/2), y - (r.top + r.height/2)) <= r.width/2 * 1.4;
-}
-window.addEventListener('pointerdown', e => {
-  if(e.pointerType === 'mouse' || !touchPlay()) return;
-  const x = e.clientX, y = e.clientY, b = buttonAt(x, y);
-  if(b){ e.preventDefault(); tPtr.set(e.pointerId, {kind:'btn', b}); b.el.classList.add('down'); b.down(); return; }
-  if(stickAt(x, y)){
+for(const b of tBtns){
+  b.el.addEventListener('touchstart', e => {
+    if(!touchPlay()) return;
     e.preventDefault();
-    const r = stick.getBoundingClientRect(); stickOrigin = {x: r.left + r.width/2, y: r.top + r.height/2};
-    tPtr.set(e.pointerId, {kind:'stick'}); stickMove(e); return;
-  }
-  if(e.target.closest && e.target.closest('#hotbar, #menu, #inv, #fridge, #codebox, #chatin, button, input')) return;
-  e.preventDefault();
-  const t = {kind:'look', sx:x, sy:y, lx:x, ly:y, t:performance.now(), moved:false, done:false, timer:0};
-  t.timer = setTimeout(() => { if(!t.moved && tPtr.get(e.pointerId) === t){ t.done = true; tapBreakAt(t.sx, t.sy); } }, 480);
-  tPtr.set(e.pointerId, t);
-});
-window.addEventListener('pointermove', e => {
-  const t = tPtr.get(e.pointerId); if(!t) return;
-  if(t.kind === 'stick'){ stickMove(e); return; }
-  if(t.kind !== 'look' || !touchPlay()) return;
-  const dx = e.clientX - t.lx, dy = e.clientY - t.ly;
-  t.lx = e.clientX; t.ly = e.clientY;
-  if(!t.moved){ if(Math.hypot(e.clientX - t.sx, e.clientY - t.sy) <= 12) return; t.moved = true; clearTimeout(t.timer); }   // small wobbles are still a tap
-  player.yaw -= dx * 0.0042;
-  player.pitch = clamp(player.pitch - dy * 0.0042, -1.55, 1.55);
-});
-const tRelease = e => {
-  const t = tPtr.get(e.pointerId); if(!t) return;
-  tPtr.delete(e.pointerId);
-  if(t.kind === 'stick'){ knob.style.transform = ''; setMove(0, 0); return; }
-  if(t.kind === 'btn'){ t.b.el.classList.remove('down'); if(t.b.up) t.b.up(); return; }
-  clearTimeout(t.timer);
-  // a quick tap places the selected block where the finger lifted; a hold that did not move breaks the block (see the timer above)
-  if(e.type === 'pointerup' && !t.moved && !t.done && performance.now() - t.t < 480) tapPlaceAt(t.sx, t.sy);
-};
-window.addEventListener('pointerup', tRelease);
-window.addEventListener('pointercancel', tRelease);
+    for(const t of touchesOf(e)){ tTouch.set(t.identifier, {kind:'btn', b}); b.el.classList.add('down'); b.down(); }
+  }, {passive:false});
+  const bEnd = e => {
+    for(const t of touchesOf(e)){
+      const s = tTouch.get(t.identifier);
+      if(s && s.kind === 'btn'){ tTouch.delete(t.identifier); b.el.classList.remove('down'); if(b.up) b.up(); }
+    }
+  };
+  b.el.addEventListener('touchend', bEnd);
+  b.el.addEventListener('touchcancel', bEnd);
+}
 // while you play, a finger never scrolls or zooms the page, and a long press never opens the phone's menu
 document.addEventListener('touchmove', e => { if(touchPlay()) e.preventDefault(); }, {passive:false});
 document.addEventListener('contextmenu', e => { if(isTouch) e.preventDefault(); });
