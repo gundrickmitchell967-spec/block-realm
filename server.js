@@ -110,9 +110,17 @@ wss.on('connection', (ws) => {
       for (const [k, v] of edits) { const [x, y, z] = k.split(',').map(Number); all.push([x, y, z, v]); }
       sendTo(p, { type: 'welcome', id, edits: all, players: list });
       broadcast({ type: 'join', id, name: p.name, color: p.color, x: p.x, y: p.y, z: p.z, yaw: p.yaw }, id);
+      broadcast({ type: 'system', text: p.name + ' joined' }, id);
       return;
     }
     if (!p.joined) return;
+
+    if (m.type === 'chat') {
+      // chat goes to everyone, including the sender; text is cleaned and limited to 120 characters
+      const text = typeof m.text === 'string' ? m.text.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 120) : '';
+      if (text) broadcast({ type: 'chat', name: p.name, text });
+      return;
+    }
 
     if (m.type === 'move') {
       if (!isNum(m.x) || !isNum(m.y) || !isNum(m.z) || !isNum(m.yaw) || !isNum(m.pitch)) return;
@@ -139,7 +147,10 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     players.delete(id);
-    if (p.joined) broadcast({ type: 'leave', id });
+    if (p.joined) {
+      broadcast({ type: 'leave', id });
+      broadcast({ type: 'system', text: p.name + ' left' });
+    }
   });
   ws.on('error', () => {});
 });

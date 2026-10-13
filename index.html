@@ -26,6 +26,11 @@
   #mpbox input{font:14px 'Courier New',monospace;width:100%;box-sizing:border-box;padding:10px;background:#11151f;color:#fff;border:2px solid #5b6578}
   #mpstatus{min-height:1.5em;color:#ffb3a7;font-size:13px;margin:0}
   .tag{position:fixed;left:0;top:0;transform:translate(-50%,-100%);font-size:12px;background:rgba(0,0,0,.55);padding:2px 6px;white-space:nowrap;pointer-events:none;text-shadow:1px 1px 0 #000}
+  #chatlog{position:fixed;left:12px;bottom:80px;width:min(440px,70vw);max-height:260px;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;pointer-events:none;font-size:13px;line-height:1.35;text-shadow:1px 1px 0 #000;overflow:hidden}
+  .cl{background:rgba(0,0,0,.35);padding:2px 6px;word-break:break-word}
+  .cl.sys{color:#c9d1e0;font-style:italic}
+  .cl b{color:#ffe066;font-weight:bold}
+  #chatin{position:fixed;left:12px;bottom:80px;width:min(440px,70vw);box-sizing:border-box;font:14px 'Courier New',monospace;padding:8px;background:rgba(10,12,18,.9);color:#fff;border:2px solid #ffe066}
   [hidden]{display:none!important}
 </style>
 </head>
@@ -34,6 +39,8 @@
 <div id="cross"></div>
 <div id="hud"><div id="fps"></div><div id="pos"></div><div id="tgt"></div><div id="tm"></div><div id="mp"></div></div>
 <div id="tags"></div>
+<div id="chatlog" aria-live="polite"></div>
+<input id="chatin" maxlength="120" hidden aria-label="Chat message" placeholder="Type a message, Enter to send, Esc to cancel">
 <div id="hotbar"></div>
 <div id="menu">
   <h1>BLOCK REALM</h1>
@@ -54,7 +61,8 @@
   </div>
   <p>Mouse: look &middot; WASD: move &middot; Space: jump &middot; Shift: run<br>
      Left click: break a block &middot; Right click: place the selected block<br>
-     1-9 or mouse wheel: choose a block &middot; M: sound on or off &middot; Esc: pause and save</p>
+     1-9 or mouse wheel: choose a block &middot; M: sound on or off &middot; Esc: pause and save<br>
+     Double-tap Space: fly (Space up, Shift down) &middot; T: chat with other players (multiplayer)</p>
 </div>
 
 <script>
@@ -416,7 +424,7 @@ function mul(a,b){
 }
 
 /* ---------- player, physics and controls ---------- */
-const player = {x:8.5, y:40, z:8.5, vx:0, vy:0, vz:0, yaw:0, pitch:0, onGround:false};
+const player = {x:8.5, y:40, z:8.5, vx:0, vy:0, vz:0, yaw:0, pitch:0, onGround:false, fly:false, lastSpace:0};
 let playing=false, sel=0, target=null, worldTime=DAY_LEN*0.3;
 const keys = {};
 function camDir(){
@@ -446,15 +454,20 @@ function moveAxis(axis,d){
 function physics(dt){
   const P=player;
   let fw=(keys.KeyW?1:0)-(keys.KeyS?1:0), rt=(keys.KeyD?1:0)-(keys.KeyA?1:0);
-  const sp = (keys.ShiftLeft||keys.ShiftRight) ? 6.0 : 4.3;
+  // flying: no gravity, Space rises, Shift descends, and you move faster; blocks still stop you
+  const sp = P.fly ? 9.0 : ((keys.ShiftLeft||keys.ShiftRight) ? 6.0 : 4.3);
   P.vx=0; P.vz=0;
   if(fw||rt){
     const len=Math.hypot(fw,rt); fw/=len; rt/=len;
     P.vx=(-Math.sin(P.yaw)*fw + Math.cos(P.yaw)*rt)*sp;
     P.vz=(-Math.cos(P.yaw)*fw - Math.sin(P.yaw)*rt)*sp;
   }
-  P.vy-=26*dt; if(P.vy<-40) P.vy=-40;
-  if(keys.Space && P.onGround){ P.vy=8.6; sfx.jump(); }
+  if(P.fly){
+    P.vy = ((keys.Space?1:0) - ((keys.ShiftLeft||keys.ShiftRight)?1:0)) * 8;
+  } else {
+    P.vy-=26*dt; if(P.vy<-40) P.vy=-40;
+    if(keys.Space && P.onGround){ P.vy=8.6; sfx.jump(); }
+  }
   P.onGround=false;
   moveAxis(0,P.vx*dt);
   moveAxis(2,P.vz*dt);
@@ -525,10 +538,21 @@ let flashT=0;
 function flashHud(text){ $('tm').textContent=text; flashT=2.0; }
 
 addEventListener('keydown',e=>{
+  if(chatOpen) return;                          // while typing in chat, keys belong to the chat box
   if(e.code==='Space') e.preventDefault();
   if(e.code==='KeyM' && !e.repeat && !(document.activeElement && document.activeElement.tagName==='INPUT')){ toggleSound(); return; }
+  if(e.code==='KeyT' && playing && mpMode && !e.repeat){ e.preventDefault(); openChat(); return; }
   if(!playing){ if(e.code==='Escape') pause(); return; }
   if(e.code==='Escape'){ pause(); return; }
+  if(e.code==='Space' && !e.repeat){
+    // two quick taps of Space switch flying on or off
+    const now=performance.now();
+    if(now - player.lastSpace < 350){
+      player.fly = !player.fly; player.vy = 0;
+      flashHud(player.fly ? 'FLYING ON  (Space up, Shift down)' : 'FLYING OFF');
+    }
+    player.lastSpace = now;
+  }
   keys[e.code]=true;
   if(e.code.startsWith('Digit')){ const n=+e.code.slice(5); if(n>=1&&n<=9) selectSlot(n-1); }
 });
@@ -551,7 +575,7 @@ cv.addEventListener('mousedown',e=>{
 });
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('pointerlockchange',()=>{
-  if(!document.pointerLockElement && playing) pause();
+  if(!document.pointerLockElement && playing && !chatOpen) pause();   // releasing the mouse to type in chat is not a pause
 });
 
 /* ---------- sound: every effect is synthesised with Web Audio, so there are no sound files to load ---------- */
@@ -714,6 +738,8 @@ function enterWorld(m){
 function onServerMessage(m){
   if(m.type==='join'){ removeRemote(m.id); addRemote(m); }
   else if(m.type==='leave'){ removeRemote(m.id); }
+  else if(m.type==='chat'){ addChatLine(String(m.name||'Player'), String(m.text||''), 'chat'); }
+  else if(m.type==='system'){ addChatLine('', String(m.text||''), 'system'); }
   else if(m.type==='move'){
     const o=mp.others.get(m.id); if(!o) return;
     o.tx=m.x; o.ty=m.y; o.tz=m.z; o.tyaw=m.yaw;
@@ -741,6 +767,42 @@ function leaveServer(){
   try{ if(mp.ws) mp.ws.close(); }catch(e){}
   location.reload();
 }
+
+/* ---------- chat: press T in multiplayer, type, press Enter ---------- */
+let chatOpen = false;
+function openChat(){
+  chatOpen = true;
+  for(const k in keys) keys[k] = false;
+  $('chatin').value = ''; $('chatin').hidden = false;
+  try{ document.exitPointerLock(); }catch(e){}
+  $('chatin').focus();
+}
+function closeChat(){
+  chatOpen = false;
+  $('chatin').hidden = true; $('chatin').blur();
+  lockPointer();
+}
+function sendChat(){
+  const text = $('chatin').value.replace(/[\u0000-\u001f]/g,'').trim().slice(0,120);
+  if(text) mpSend({type:'chat', text});
+  closeChat();
+}
+function addChatLine(name, text, kind){
+  const log = $('chatlog');
+  const line = document.createElement('div');
+  line.className = kind === 'system' ? 'cl sys' : 'cl';
+  if(kind !== 'system'){
+    const who = document.createElement('b'); who.textContent = name + ': '; line.appendChild(who);
+  }
+  line.appendChild(document.createTextNode(text));   // text is never treated as HTML
+  log.appendChild(line);
+  while(log.children.length > 12) log.removeChild(log.firstChild);
+}
+$('chatin').addEventListener('keydown', e=>{
+  e.stopPropagation();
+  if(e.key === 'Enter'){ e.preventDefault(); sendChat(); }
+  else if(e.key === 'Escape'){ e.preventDefault(); closeChat(); }
+});
 
 /* ---------- saving ---------- */
 function savePlayer(){
@@ -929,7 +991,7 @@ function hud(dt){
   hudT=0.15;
   const t=target? BLOCKS[target.id].name : '';
   $('fps').textContent='FPS '+fps+'   CHUNKS '+chunks.size;
-  $('pos').textContent='X '+player.x.toFixed(1)+'  Y '+player.y.toFixed(1)+'  Z '+player.z.toFixed(1);
+  $('pos').textContent='X '+player.x.toFixed(1)+'  Y '+player.y.toFixed(1)+'  Z '+player.z.toFixed(1)+(player.fly?'  FLYING':'');
   $('tgt').textContent=t?'LOOKING AT '+t.toUpperCase():'';
   $('mp').textContent = mpMode ? 'ONLINE: ' + (mp.others.size+1) + ' PLAYER' + (mp.others.size ? 'S' : '') + '  (you are ' + mp.id + ')' + (document.pointerLockElement ? '' : '   CLICK THE GAME TO LOOK AROUND') : '';
   const h=Math.floor(((worldTime/DAY_LEN)%1)*24);
