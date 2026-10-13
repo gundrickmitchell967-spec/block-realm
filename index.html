@@ -143,10 +143,6 @@
   @supports (height:100dvh){ html,body{height:100dvh} canvas#c{height:100dvh} }
   #hotbar{z-index:2}
   #menu{z-index:20}
-  .celestial{position:fixed;width:56px;height:56px;border-radius:50%;pointer-events:none;z-index:1;display:none}
-  #sun{background:radial-gradient(circle,#fffbe0 0%,#ffe27a 45%,#ffc23a 62%,rgba(255,190,60,0) 72%);box-shadow:0 0 46px 16px rgba(255,220,110,.45)}
-  #moon{background:radial-gradient(circle at 36% 36%,#ffffff,#dfe6f5 55%,#a9b5cc 100%);box-shadow:0 0 34px 8px rgba(200,215,255,.3)}
-  body.inmenu #sun,body.inmenu #moon{display:none!important}
   .sect{margin:10px 0 2px;font:bold 11px 'Courier New',monospace;letter-spacing:.22em;color:#8fa0c4;text-transform:uppercase;align-self:stretch;text-align:center;border-bottom:1px solid #2e3850;padding-bottom:4px}
   .pane{width:100%;display:flex;flex-direction:column;align-items:center;gap:8px}
   .pane[hidden],.cpane[hidden]{display:none!important}
@@ -155,6 +151,8 @@
   .shoprow{display:flex;justify-content:space-between;gap:8px;align-items:baseline;font-weight:bold}
   .shoprow span:last-child{color:#ffe066;font-size:12px}
   body.inmenu #hotbar,body.inmenu #hud,body.inmenu #cross,body.inmenu #selname,body.inmenu #cashhud,body.inmenu #landhud,body.inmenu #surveyhud,body.inmenu #hacktimer,body.inmenu #offerhud{display:none!important}
+  body.inmenu #feedhud{display:none!important}
+  #feedhud{position:fixed;top:156px;left:50%;transform:translateX(-50%);padding:4px 12px;font:bold 13px 'Courier New',monospace;color:#fff;background:rgba(160,20,20,.85);border:2px solid #ff8a7a;border-radius:6px;pointer-events:none;z-index:3;white-space:nowrap}
   #offerhud{position:fixed;top:118px;left:50%;transform:translateX(-50%);padding:4px 12px;font:bold 13px 'Courier New',monospace;color:#1a1200;background:#ffe066;border:2px solid #fff3a0;border-radius:6px;pointer-events:none;z-index:3;white-space:nowrap}
   #fsbtn{position:absolute;top:12px;right:12px;width:auto;padding:9px 12px;font-size:12px;letter-spacing:.06em;z-index:3}
   #fsmsg{position:absolute;top:58px;right:12px;max-width:280px;margin:0;font-size:12px;line-height:1.4;color:#ffe066;text-align:right;text-shadow:1px 1px 0 #000}
@@ -222,8 +220,7 @@
 <div id="hacktimer" hidden><span id="hacktimernum">0</span><small>SECONDS LEFT</small></div>
 <div id="landhud" hidden></div>
 <div id="offerhud" hidden></div>
-<div id="sun" class="celestial" aria-hidden="true"></div>
-<div id="moon" class="celestial" aria-hidden="true"></div>
+<div id="feedhud" hidden></div>
 <div id="surveyhud" hidden></div>
 <div id="cashhud" hidden><span class="coinicon" id="cashcoin"></span><span id="cashnum">0</span></div>
 <div id="hud"><div id="fps"></div><div id="pos"></div><div id="tgt"></div><div id="tm"></div><div id="mp"></div></div>
@@ -943,7 +940,11 @@ const isLampOn = b => b===LAMP_ID || b===LAMP_TOP_ID;
 const isLampTopId = b => b===LAMP_TOP_ID || b===LAMP_OFF_TOP_ID;
 const isLampBottomId = b => b===LAMP_ID || b===LAMP_OFF_ID;
 const lampId = (top, on) => top ? (on ? LAMP_TOP_ID : LAMP_OFF_TOP_ID) : (on ? LAMP_ID : LAMP_OFF_ID);
-const MAX_ID = Math.max(LAMP_OFF_TOP_ID, FURN_MAX);   // highest block id (matches the server)
+// the security camera and the view screen: blocks the shop sells (the server counts how many each player has)
+const CAMERA_ID = 260, SCREEN_ID = 261;
+BLOCKS[CAMERA_ID] = {name:'Security Camera', top:41, side:41, bot:41, sw:'#2a1a3a'};
+BLOCKS[SCREEN_ID] = {name:'View Screen', top:17, side:17, bot:17, sw:'#2a6fdb'};
+const MAX_ID = Math.max(LAMP_OFF_TOP_ID, FURN_MAX, SCREEN_ID);   // highest block id (matches the server)
 BLOCKS[LAMP_OFF_ID]     = {name:'Lamp (off)', top:76, side:76, bot:76, sw:'#8a8680'};
 BLOCKS[LAMP_OFF_TOP_ID] = {name:'Lamp (off)', top:76, side:76, bot:76, sw:'#8a8680'};
 const GLOWSTONE_ID = 47;                // a full block that gives light by itself
@@ -1003,7 +1004,8 @@ const CATS = [
   {name:'Light & Glass',ids:[10,11,47]},
   {name:'Furniture',    ids:[12,16,...FURN_BASES.filter((_, t) => !DECOR_T.has(t))]},
   {name:'Food',         ids:ITEM_IDS},
-  {name:'Gadgets',      ids:[REMOTE_ID, SURVEY_ID]}
+  {name:'Gadgets',      ids:[REMOTE_ID, SURVEY_ID]},
+  {name:'Security',     ids:[CAMERA_ID, SCREEN_ID]}
 ];
 const CATALOG = CATS.flatMap(c => c.ids);      // every block a player can carry
 // the rooms the Furniture tab can be filtered by
@@ -2122,6 +2124,53 @@ void main(){ o = uCol; }`);
 const U = {};
 for(const n of ['uVP','uOff','uCam','uLight','uSky','uFogStart','uFogEnd','uAtlas','uAlpha']) U[n]=gl.getUniformLocation(prog,n);
 const LU = {uVP:gl.getUniformLocation(line,'uVP'), uOff:gl.getUniformLocation(line,'uOff'), uCol:gl.getUniformLocation(line,'uCol')};
+// the sun and the moon: a glowing disc, placed far out in the sky (the same for everyone, on the world clock)
+const skyBody = program(`#version 300 es
+layout(location=0) in vec2 aCorner;
+uniform mat4 uVP; uniform vec3 uCenter; uniform float uSize; uniform float uAspect;
+out vec2 vUv;
+void main(){
+  vec4 c = uVP * vec4(uCenter, 1.0);
+  vUv = aCorner;
+  c.xy += vec2(aCorner.x / uAspect, aCorner.y) * uSize * c.w;
+  gl_Position = c;
+}`, `#version 300 es
+precision highp float;
+in vec2 vUv; uniform vec3 uColor; uniform float uGlow; uniform float uAlpha; out vec4 o;
+void main(){
+  float r = length(vUv);
+  float disc = 1.0 - smoothstep(0.8, 1.0, r);
+  float halo = exp(-r * r * uGlow) * 0.55;
+  o = vec4(uColor, clamp(disc + halo, 0.0, 1.0) * uAlpha);
+}`);
+const SKYU = {};
+for(const n of ['uVP','uCenter','uSize','uAspect','uColor','uGlow','uAlpha']) SKYU[n] = gl.getUniformLocation(skyBody, n);
+const skyVAO = gl.createVertexArray(); gl.bindVertexArray(skyVAO);
+const skyBuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, skyBuf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+gl.bindVertexArray(null);
+function drawSkyBody(VP, eye, dir, color, size, glow, alpha, aspect){
+  gl.useProgram(skyBody);
+  gl.uniformMatrix4fv(SKYU.uVP, false, new Float32Array(VP));
+  gl.uniform3f(SKYU.uCenter, eye[0] + dir[0]*340, eye[1] + dir[1]*340, eye[2] + dir[2]*340);
+  gl.uniform1f(SKYU.uSize, size); gl.uniform1f(SKYU.uAspect, aspect);
+  gl.uniform3f(SKYU.uColor, color[0], color[1], color[2]);
+  gl.uniform1f(SKYU.uGlow, glow); gl.uniform1f(SKYU.uAlpha, alpha);
+  gl.bindVertexArray(skyVAO); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+// the sun travels the same arc the light follows: up in the day, down at night, and the moon is opposite it
+function drawSkyBodies(VP, eye){
+  const a = 2 * Math.PI * ((worldTime / DAY_LEN) % 1) - Math.PI / 2;
+  const L = Math.hypot(Math.cos(a), Math.sin(a), 0.25);
+  const d = [Math.cos(a)/L, Math.sin(a)/L, 0.25/L];
+  const aspect = cv.width / cv.height;
+  const sunA = clamp((Math.sin(a) + 0.12) * 5, 0, 1), moonA = clamp((-Math.sin(a) + 0.12) * 5, 0, 1);
+  gl.disable(gl.CULL_FACE); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+  if(sunA > 0) drawSkyBody(VP, eye, d, [1, 0.93, 0.6], 0.075, 6, sunA, aspect);
+  if(moonA > 0) drawSkyBody(VP, eye, [-d[0], -d[1], -d[2]], [0.86, 0.9, 1.0], 0.05, 12, moonA, aspect);
+  gl.depthMask(true); gl.disable(gl.BLEND); gl.enable(gl.CULL_FACE);
+}
 
 // other players are drawn as plain shaded boxes: one program, one unit cube reused for every part
 const solid = program(`#version 300 es
@@ -2526,6 +2575,7 @@ function partnerOf(x,y,z,id){
   return null;
 }
 function doBreak(){
+  if(feedCam){ cycleFeed(); return; }
   const h=raycast(6);
   if(HOTBAR[sel]===REMOTE_ID){ remoteVolume(h, (keys.ShiftLeft||keys.ShiftRight) ? 1 : -1); return; }   // the remote: left-click turns the TV's volume down, Shift turns it up
   if(HOTBAR[sel]===HACK_TOOL_ID) return;   // the hacker tool breaks nothing
@@ -2668,11 +2718,13 @@ function tapVolume(){
   return best;
 }
 function doPlace(){
+  if(feedCam){ closeFeed(); return; }
   if(shopAim()){ openShop(); return; }   // right-click the shopkeeper: the shop opens
   if(HOTBAR[sel]===HACK_TOOL_ID){ hackDoor(raycast(6)); return; }   // the hacker tool: right-click a locked door to decode it
   if(HOTBAR[sel]===SURVEY_ID){ surveyCancel(); return; }            // the Land Surveyor: right-click cancels the measuring
   const h=raycast(6);
   if(HOTBAR[sel]===REMOTE_ID){ remotePress(h); return; }   // the remote in your hand: right-click starts or pauses the TV you aim at
+  if(h && h.id===SCREEN_ID){ openFeed(h); return; }   // a view screen: right-click watches the nearest camera
   // holding a glass of water: right-click drinks it, unless you are working a door, a light, the fridge or a bed
   if(HOTBAR[sel]===WATER_CUP_ID && !(h && (isDoorId(h.id) || isLampId(h.id) || isFurn(h.id) || h.id===BED_FOOT_ID || h.id===BED_HEAD_ID))){ drinkWater(); return; }
   if(!h) return;
@@ -2867,6 +2919,8 @@ function syncCash(){
   const lp = playing && mpMode ? plotAtClient(Math.floor(player.x), Math.floor(player.z)) : null;
   setText('landhud', lp ? (lp.name ? lp.name.toUpperCase() + ' - ' : '') + (lp.mine ? 'YOUR LAND' : (lp.who || 'SOMEONE').toUpperCase() + "'S LAND") : '');
   setText('surveyhud', playing && HOTBAR[sel]===SURVEY_ID ? surveyText() : '');
+  if(feedCam){ feedCam = camList.find(c => c.key === feedCam.key) || null; }   // the camera may have been broken
+  setText('feedhud', feedCam ? 'LIVE: ' + feedCam.name.toUpperCase() + "'S CAMERA  " + (camList.indexOf(feedCam)+1) + '/' + camList.length + '   TAP TO CHANGE CAMERA   RIGHT-CLICK TO LEAVE' : '');
 }
 function setText(id, t){ const el = $(id); if(el.textContent !== t) el.textContent = t; if(el.hidden !== !t) el.hidden = !t; }
 // the locked doors the server has told us about, keyed by the lower half of each door: { ok } (ok: this player may open it)
@@ -3137,12 +3191,17 @@ function shopAim(){
 // the items for sale (the server has the same prices)
 const SHOP_ITEMS = [
   {id:'hacktool', name:'HACKER TOOL', price:10000, art:'<svg width="220" height="150" viewBox="0 0 240 170" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="hf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f9a64"/><stop offset="1" stop-color="#1f5235"/></linearGradient><linearGradient id="ht" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#2f7d50"/><stop offset="1" stop-color="#6bc68c"/></linearGradient><linearGradient id="hs" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#173f28"/><stop offset="1" stop-color="#0e2a1a"/></linearGradient><linearGradient id="scr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0b2315"/><stop offset="1" stop-color="#06140c"/></linearGradient><radialGradient id="sh" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#000" stop-opacity="0.45"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient></defs><ellipse cx="122" cy="150" rx="92" ry="11" fill="url(#sh)"/><polygon points="172.0,86.0 206.0,60.0 206.0,110.0 172.0,136.0" fill="url(#hs)" stroke="#0a2014" stroke-width="1.5"/><polygon points="60.0,86.0 172.0,86.0 206.0,60.0 94.0,60.0" fill="url(#ht)" stroke="#0a2014" stroke-width="1.5"/><polygon points="60.0,86.0 172.0,86.0 172.0,136.0 60.0,136.0" fill="url(#hf)" stroke="#0a2014" stroke-width="1.5"/><line x1="60" y1="87" x2="172" y2="87" stroke="#9be8b5" stroke-opacity="0.6" stroke-width="1.5"/><polygon points="80.9,80.3 163.8,80.3 183.5,65.2 100.6,65.2" fill="url(#scr)" stroke="#7dffa8" stroke-width="1" stroke-opacity="0.8"/><line x1="90.4" y1="78.2" x2="139.6" y2="78.2" stroke="#7dffa8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.95"/><line x1="93.8" y1="75.6" x2="161.0" y2="75.6" stroke="#7dffa8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.95"/><line x1="97.2" y1="73.0" x2="133.0" y2="73.0" stroke="#7dffa8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.95"/><line x1="100.6" y1="70.4" x2="158.8" y2="70.4" stroke="#7dffa8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.95"/><line x1="104.0" y1="67.8" x2="146.5" y2="67.8" stroke="#7dffa8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.95"/><rect x="151.6" y="74.2" width="4" height="7" fill="#e8ff9a"/><circle cx="84.6" cy="112.0" r="7" fill="#e04b3c" stroke="#0a2014" stroke-width="1.2"/><circle cx="82.6" cy="109.5" r="2.2" fill="#ffffff" fill-opacity="0.55"/><circle cx="111.5" cy="112.0" r="7" fill="#f2c33c" stroke="#0a2014" stroke-width="1.2"/><circle cx="109.5" cy="109.5" r="2.2" fill="#ffffff" fill-opacity="0.55"/><circle cx="138.4" cy="112.0" r="7" fill="#4bd6e6" stroke="#0a2014" stroke-width="1.2"/><circle cx="136.4" cy="109.5" r="2.2" fill="#ffffff" fill-opacity="0.55"/><line x1="80.2" y1="126.0" x2="80.2" y2="132.0" stroke="#0a2014" stroke-width="2" stroke-linecap="round" stroke-opacity="0.7"/><line x1="88.0" y1="126.0" x2="88.0" y2="132.0" stroke="#0a2014" stroke-width="2" stroke-linecap="round" stroke-opacity="0.7"/><line x1="95.8" y1="126.0" x2="95.8" y2="132.0" stroke="#0a2014" stroke-width="2" stroke-linecap="round" stroke-opacity="0.7"/><line x1="103.7" y1="126.0" x2="103.7" y2="132.0" stroke="#0a2014" stroke-width="2" stroke-linecap="round" stroke-opacity="0.7"/><line x1="187.6" y1="62.1" x2="193.6" y2="16.1" stroke="#2b2f36" stroke-width="3" stroke-linecap="round"/><circle cx="193.6" cy="14.1" r="4.5" fill="#f2c33c" stroke="#0a2014" stroke-width="1"/></svg>',
-   text:'Use it once. Equip it in your inventory, then right-click a locked door. For 30 seconds that door opens for anyone, then its password lock comes back on. The tool is used up when you use it.'}
+   text:'Use it once. Equip it in your inventory, then right-click a locked door. For 30 seconds that door opens for anyone, then its password lock comes back on. The tool is used up when you use it.'},
+  {id:'camera', name:'SECURITY CAMERA', price:2000, text:'Place it like a block. You can buy as many as you like. A camera watches the way you were facing when you placed it. Breaking it gives it back to you. Only players with a View Screen can watch it.'},
+  {id:'screen', name:'VIEW SCREEN', price:1500, text:'Buying a view screen unlocks the security cameras for you. Place it, then right-click it to watch the nearest camera live. Tap the picture to change the camera, and right-click to leave.'}
 ];
 // the coin logo: a gold coin with a dollar sign
 const COIN_SVG = '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#f5c542" stroke="#8a5a00" stroke-width="1.5"/><circle cx="12" cy="12" r="8.2" fill="none" stroke="#c28a12" stroke-width="1"/><text x="12" y="16.6" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="13" fill="#7a4d00">$</text></svg>';
 $('givecoin').innerHTML = COIN_SVG;
 $('cashcoin').innerHTML = COIN_SVG;
+let myGear = {cam:0, camPlaced:0, scr:0, scrPlaced:0, licensed:false};   // your security cameras and view screens
+let camList = [];                                                          // the cameras you can watch (empty without a view screen)
+let feedCam = null, feedIdx = 0;                                           // the camera you are watching, and its place in the list
 let myCoins = 0;            // your cash in this world (the multiplayer server keeps it)
 let myTools = 0;           // how many hacker tools you own
 let shopOpen = false;
@@ -3221,11 +3280,34 @@ function buildPlotPreview(s){
   const wrap = document.createElement('div'); wrap.className = 'plotprev'; wrap.innerHTML = svg;
   return wrap;
 }
+// two plots can merge when they share a whole side, block to block (so the merged land is one rectangle)
+function canMerge(a, b){
+  return (a.x0 === b.x0 && a.x1 === b.x1 && (a.z1 + 1 === b.z0 || b.z1 + 1 === a.z0)) ||
+         (a.z0 === b.z0 && a.z1 === b.z1 && (a.x1 + 1 === b.x0 || b.x1 + 1 === a.x0));
+}
 function setShopTab(name){
   for(const b of document.querySelectorAll('#shoptabs .tab')) b.classList.toggle('on', b.dataset.tab === name);
   $('shopitems').hidden = name !== 'items'; $('shopplots').hidden = name !== 'plots'; $('shopland').hidden = name !== 'land';
 }
 for(const b of document.querySelectorAll('#shoptabs .tab')) b.addEventListener('click', () => setShopTab(b.dataset.tab));
+// the camera feed: right-click a view screen to watch the nearest camera; tap to switch, right-click to leave
+const FEED_PITCH = -0.12;
+function feedViewOf(c){
+  const cp = Math.cos(FEED_PITCH);
+  const dir = [-Math.sin(c.yaw)*cp, Math.sin(FEED_PITCH), -Math.cos(c.yaw)*cp];
+  return { dir, eye: [c.x + 0.5 + dir[0]*0.62, c.y + 0.5 + dir[1]*0.62, c.z + 0.5 + dir[2]*0.62] };
+}
+function openFeed(h){
+  if(!myGear.licensed){ flashHud('BUY A VIEW SCREEN IN THE SHOP TO WATCH THE CAMERAS'); return; }
+  if(!camList.length){ flashHud('NO SECURITY CAMERAS ARE PLACED YET'); return; }
+  let best = 0, bd = Infinity;
+  camList.forEach((c, i) => { const d = (c.x-h.x)**2 + (c.y-h.y)**2 + (c.z-h.z)**2; if(d < bd){ bd = d; best = i; } });
+  feedIdx = best; feedCam = camList[best];
+  for(const k in keys) keys[k] = false;
+  if(document.pointerLockElement){ try{ document.exitPointerLock(); }catch(e){} }
+}
+function cycleFeed(){ if(!camList.length){ feedCam = null; return; } feedIdx = (feedIdx + 1) % camList.length; feedCam = camList[feedIdx]; }
+function closeFeed(){ feedCam = null; }
 function renderShop(){
   const cl = $('shopcoins'); cl.textContent = '';
   cl.appendChild(coinSpan()); cl.appendChild(document.createTextNode(' YOUR CASH: ' + myCoins + (mpMode ? '' : '   (cash comes from the multiplayer server)')));
@@ -3287,8 +3369,33 @@ function renderShop(){
       mpSend({type:'plotsell', x0: pl.x0, z0: pl.z0, x1: pl.x1, z1: pl.z1});
       shopNote('SELLING...');
     });
-    row.appendChild(head); row.appendChild(txt); row.appendChild(sb); plotsPane.appendChild(row);
+    const mate = plotList.find(o => o.mine && o !== pl && canMerge(pl, o));
+    if(mate){
+      const mb = document.createElement('button'); mb.className = 'btn'; mb.type = 'button';
+      mb.textContent = 'MERGE WITH ' + (mate.name || 'PLOT').toUpperCase();
+      mb.disabled = !mpMode;
+      mb.addEventListener('click', () => mpSend({type:'plotmerge', a:[pl.x0, pl.z0, pl.x1, pl.z1], b:[mate.x0, mate.z0, mate.x1, mate.z1]}));
+      row.appendChild(head); row.appendChild(txt); row.appendChild(mb); row.appendChild(sb); plotsPane.appendChild(row);
+    } else {
+      row.appendChild(head); row.appendChild(txt); row.appendChild(sb); plotsPane.appendChild(row);
+    }
   }
+  // your security gear: how many you own, with SELL for a spare
+  const gearCard = document.createElement('div'); gearCard.className = 'shopcard';
+  const gh = document.createElement('div'); gh.className = 'shoprow';
+  const ghn = document.createElement('span'); ghn.textContent = 'YOUR SECURITY GEAR'; gh.appendChild(ghn); gearCard.appendChild(gh);
+  for(const [k, id] of [['cam','camera'], ['scr','screen']]){
+    const it = SHOP_ITEMS.find(x => x.id === id);
+    const row = document.createElement('div'); row.className = 'txn';
+    const txt = document.createElement('span');
+    txt.textContent = it.name + ': ' + (myGear[k] || 0) + ' spare, ' + (myGear[k + 'Placed'] || 0) + ' placed';
+    const sb = document.createElement('button'); sb.className = 'btn'; sb.type = 'button';
+    sb.textContent = 'SELL SPARE (' + Math.floor(it.price / 2) + ')';
+    sb.disabled = !mpMode || !((myGear[k] || 0) > 0);
+    sb.addEventListener('click', () => mpSend({type:'gearsell', kind: k}));
+    row.appendChild(txt); row.appendChild(sb); gearCard.appendChild(row);
+  }
+  list.appendChild(gearCard);
   $('shopland').replaceChildren(land);
   $('shopplots').replaceChildren(plotsPane);
 }
@@ -4031,7 +4138,7 @@ function connectMP(){
   ws.onclose = ()=>{
     clearTimeout(timer);
     mp.ws = null;
-    adminRole = null; spectate.id = null; adminBypass = false; doorLocks.clear(); myCoins = 0; myTools = 0; plotList = [];
+    adminRole = null; spectate.id = null; adminBypass = false; doorLocks.clear(); myCoins = 0; myTools = 0; myGear = {cam:0, camPlaced:0, scr:0, scrPlaced:0, licensed:false}; camList = []; feedCam = null; plotList = [];
     if(mpMode){ mpDropped(); }
     else { mpStatus(denied || 'Could not connect. Check the address and that the server is running.'); }
   };
@@ -4079,10 +4186,11 @@ function onServerMessage(m){
   else if(m.type==='lock'){ onDoorLock(m); }
   else if(m.type==='doorresult'){ onDoorResult(m); }
   else if(m.type==='wallet'){
-    myCoins = +m.cash || 0; myTools = +m.tools || 0; syncTool(); syncCash(); if(shopOpen) renderShop();
+    myCoins = +m.cash || 0; myTools = +m.tools || 0; myGear = m.gear || myGear; syncTool(); syncCash(); if(shopOpen) renderShop();
     if(cashVisible()){ renderCash(); mpSend({type:'cashlog'}); }
   }
   else if(m.type==='plots'){ plotList = m.list || []; if(shopOpen) renderShop(); }
+  else if(m.type==='devices'){ camList = m.list || []; }
   else if(m.type==='offers'){
     const before = new Set(offers.incoming.map(o => o.id));
     offers = {incoming: m.incoming || [], outgoing: m.outgoing || []};
@@ -4426,6 +4534,7 @@ function start(){
   lastT=performance.now();
 }
 function pause(){
+  feedCam = null;
   if(!playing && !$('menu').hidden) return;
   if(invOpen){ invOpen=false; $('inv').hidden=true; }
   if(codeOpen){ codeOpen=false; $('codebox').hidden=true; }
@@ -4515,21 +4624,6 @@ function remesh(){
 }
 
 /* ---------- sky and light ---------- */
-// the sun and the moon cross the sky on an arc: the sun is up in daytime, the moon at night
-function updateCelestials(){
-  const a = 2 * Math.PI * ((worldTime / DAY_LEN) % 1) - Math.PI / 2;
-  const W = innerWidth, H = innerHeight, cx = W / 2, hz = H * 0.8, rx = W * 0.46, ry = H * 0.7;
-  const place = (el, ang) => {
-    const alt = Math.sin(ang);
-    if(alt < -0.12){ el.style.display = 'none'; return; }
-    el.style.display = 'block';
-    el.style.left = (cx + rx * Math.cos(ang) - 28) + 'px';
-    el.style.top = (hz - ry * alt - 28) + 'px';
-    el.style.opacity = alt < 0 ? String(0.5 + alt * 2) : '1';
-  };
-  place($('sun'), a);
-  place($('moon'), a + Math.PI);
-}
 function daylight(){
   const t=(worldTime/DAY_LEN)%1, sun=-Math.cos(t*Math.PI*2);
   return clamp((sun+0.25)/0.45,0,1);
@@ -4568,8 +4662,10 @@ function render(){
   gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
   // asleep, the camera sits low, as if lying on the mattress
-  const eye=[player.x, player.y+eyeNow()+viewBob(), player.z];
-  const d=camDir();
+  // a camera feed takes over the view: the picture is seen from the camera
+  const fv = feedCam ? feedViewOf(feedCam) : null;
+  const eye=fv ? fv.eye : [player.x, player.y+eyeNow()+viewBob(), player.z];
+  const d=fv ? fv.dir : camDir();
   const V=lookAt(eye,[eye[0]+d[0],eye[1]+d[1],eye[2]+d[2]],[0,1,0]);
   const Pm=perspective(70*Math.PI/180, cv.width/cv.height, 0.05, 600);
   const VP=mul(Pm,V);
@@ -4626,6 +4722,7 @@ function render(){
     gl.bindVertexArray(null);
     gl.enable(gl.CULL_FACE);
   }
+  drawSkyBodies(VP, eye);
   // other players
   if(mpMode && mp.others.size){
     gl.disable(gl.CULL_FACE);
@@ -4990,8 +5087,8 @@ function frame(now){
     worldTime+=dt;
     if(music.on && !music.timer) musicStart();   // the tune keeps going while you play
     if(spectate.id!=null) followSpectate();
-    if(spectate.id==null) applyLook(dt);
-    if(!player.sleeping && !player.seat && spectate.id==null) physics(dt);      // asleep or sitting, the player stays where they are
+    if(spectate.id==null && !feedCam) applyLook(dt);
+    if(!player.sleeping && !player.seat && spectate.id==null && !feedCam) physics(dt);      // asleep or sitting, the player stays where they are
     target=raycast(6);
     cowUpdate(dt);
     tvUpdate();
@@ -5021,7 +5118,6 @@ function frame(now){
   syncTouch();
   syncCash();
   document.body.classList.toggle('inmenu', !$('menu').hidden);
-  updateCelestials();
   if(playing) { saveT=(saveT||0)+dt; if(saveT>10){ saveT=0; saveAll(); } }
   requestAnimationFrame(frame);
 }
