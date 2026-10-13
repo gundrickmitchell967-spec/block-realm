@@ -24,7 +24,7 @@ const COLORS = ['#e6594b', '#4b9be6', '#58c25a', '#e6c44b', '#b35ae6', '#4be6d6'
 const DAY_LEN = 480;            // seconds for one full day (the same as in index.html)
 const PLOT_RATE = 20, PLOT_MIN = 3, PLOT_MAX = 32;   // a plot costs this much cash per block; its sides are between these lengths
 const HACK_MS = (Number(process.env.HACK_SECONDS) || 30) * 1000;   // how long a decoded door stays open
-const SHOP_PRICES = { hacktool: { name: 'Hacker Tool', price: 10000 }, camera: { name: 'Security Camera', price: 2000 }, screen: { name: 'View Screen', price: 1500 } };   // the shop's items and prices (the client shows the same prices)
+const SHOP_PRICES = { hacktool: { name: 'Hacker Tool', price: 10000 } };   // the shop's items and prices (the client shows the same prices)
 const VOICE_RELAY_RANGE = 48;   // voice connections can only be set up between players this close (see VOICE_RANGE in index.html)
 
 // the two worlds. OUR WORLD keeps the world that was already saved in world.json; its password is checked here
@@ -79,7 +79,7 @@ function cleanPass(s) { return typeof s === 'string' ? s.replace(/[\u0000-\u001f
 // may this player open the lock: its owner, someone who typed the password, or the creator with BREAK ANY BLOCK on
 function lockOpenFor(p, lock) { return lock.owner === p.pid || lock.allowed.has(p.pid) || canBypass(p) || Date.now() < (lock.openUntil || 0); }
 // what a player's wallet looks like: their cash and hacker tools
-function walletMsg(w, q) { return { type: 'wallet', cash: w.coins.get(q.pid) || 0, tools: w.tools.get(q.pid) || 0, gear: gearOf(w, q.pid) }; }
+function walletMsg(w, q) { return { type: 'wallet', cash: w.coins.get(q.pid) || 0, tools: w.tools.get(q.pid) || 0 }; }
 // what one player is told about a door's lock: whether it is locked, whether it is theirs, and whether they may open it
 function lockMsg(w, q, lo, lock) {
   const left = lock && lock.openUntil > Date.now() && lock.decodedBy === q.pid ? lock.openUntil - Date.now() : 0;
@@ -118,27 +118,6 @@ function canMerge(a, b) {
          (a.z0 === b.z0 && a.z1 === b.z1 && (a.x1 + 1 === b.x0 || b.x1 + 1 === a.x0));
 }
 const sameRect = (o, r) => o.x0 === r[0] && o.z0 === r[1] && o.x1 === r[2] && o.z1 === r[3];
-// security cameras and view screens: blocks the shop sells, one per purchase
-const CAMERA_ID = 260, SCREEN_ID = 261;   // the block ids (see BLOCKS in index.html)
-const GEAR = { cam: { name: 'Security Camera', price: 2000 }, scr: { name: 'View Screen', price: 1500 } };
-const gearKind = b => b === CAMERA_ID ? 'cam' : b === SCREEN_ID ? 'scr' : null;
-function gearOf(w, pid) {
-  if (!w.gear.has(pid)) w.gear.set(pid, { cam: 0, camPlaced: 0, scr: 0, scrPlaced: 0, licensed: false });
-  return w.gear.get(pid);
-}
-// the way a camera or screen faces: the face of the block it is mounted on (one of the six directions)
-function faceDir(v) {
-  return Array.isArray(v) && v.length === 3 && v.every(x => x === -1 || x === 0 || x === 1) && v.filter(x => x !== 0).length === 1 ? v : [0, 0, 1];
-}
-const snapYaw = y => Math.round((y || 0) / (Math.PI / 2)) * (Math.PI / 2);
-// the cameras a player can watch: only players who have bought a view screen, and only the cameras that player bought
-function devicesMsg(w, q) {
-  const list = gearOf(w, q.pid).licensed
-    ? [...w.devices].filter(([, d]) => d.kind === 'cam' && d.pid === q.pid).map(([k, d]) => { const [x, y, z] = k.split(',').map(Number); return { key: k, x, y, z, yaw: d.yaw, dir: d.dir || [0, 0, 1], name: d.name }; })
-    : [];
-  return { type: 'devices', list };
-}
-function announceDevices(w) { for (const q of players.values()) if (q.world === w && q.joined) sendTo(q, devicesMsg(w, q)); }
 let nextOfferId = 1;
 function cleanPlotName(v) { return typeof v === 'string' ? v.replace(/[\x00-\x1f<>]/g, '').trim().slice(0, 24) : ''; }
 function offersMsg(w, q) {
@@ -167,7 +146,6 @@ function cashLogFor(w, p) {
     else if (e.kind === 'buy' && e.from === p.pid) { dir = '-'; text = 'Bought ' + e.what + ' for ' + e.amount; }
     else if (e.kind === 'plot' && e.from === p.pid) { dir = '-'; text = 'Bought a plot of ' + e.what + ' for ' + e.amount; }
     else if (e.kind === 'plotsale' && e.to === p.pid) { dir = '+'; text = 'Sold a plot of ' + e.what + ' for ' + e.amount; }
-    else if (e.kind === 'gearsale' && e.to === p.pid) { dir = '+'; text = 'Sold a ' + e.what + ' for ' + e.amount; }
     if (dir) out.push({ t: e.t, dir, text, amount: e.amount });
   }
   return out.slice(-40).reverse();
@@ -204,8 +182,6 @@ for (const w of Object.values(WORLDS)) {
   w.coins = new Map();     // hashed player id -> cash (the game creator gives it, players trade it and buy with it)
   w.tools = new Map();     // hashed player id -> hacker tools they own (each one can be used once)
   w.plots = [];            // plots of land: { x0, z0, x1, z1 (inclusive), owner (hashed id), ownerName, name, price }
-  w.gear = new Map();      // player -> { cam, camPlaced, scr, scrPlaced, licensed } (spare and placed security gear)
-  w.devices = new Map();   // "x,y,z" -> { kind: 'cam' | 'scr', pid, name, yaw } for every camera and screen placed
   w.offers = new Map();    // offers to buy a plot, kept while the server runs: id -> offer
   w.log = [];              // the latest cash transactions in this world
   w.mob = null;
@@ -217,8 +193,8 @@ for (const w of Object.values(WORLDS)) {
     const list = Array.isArray(data) ? data : data.edits;          // older saves were just the list of edits
     for (const [pid, n] of (Array.isArray(data) ? [] : (data.coins || []))) w.coins.set(pid, n);
     for (const [pid, n] of (Array.isArray(data) ? [] : (data.tools || []))) w.tools.set(pid, n);
-    if (!Array.isArray(data)) { w.plots = data.plots || []; w.log = data.log || []; w.gear = new Map(data.gear || []); w.devices = new Map(data.devices || []); }
-    for (const [k, v, o] of list) { w.edits.set(k, v); if (o !== undefined) w.owners.set(k, o); }
+    if (!Array.isArray(data)) { w.plots = data.plots || []; w.log = data.log || []; }
+    for (const [k, v, o] of list) { if (v === 260 || v === 261) continue; w.edits.set(k, v); if (o !== undefined) w.owners.set(k, o); }   // the removed camera and screen blocks
     for (const L of Array.isArray(data) ? [] : (data.locks || [])) {
       const lo = L.lower.split(',').map(Number);
       const lock = { lower: lo, owner: L.owner, salt: L.salt, digest: L.digest, allowed: new Set(L.allowed || []), keys: lockKeys(lo) };
@@ -241,7 +217,7 @@ function saveWorld(w) {
   const locks = [...new Set(w.locks.values())].map(L => ({ lower: L.lower.join(','), owner: L.owner, salt: L.salt, digest: L.digest, allowed: [...L.allowed] }));
   const tmp = w.file + '.tmp';
   try {
-    fs.writeFileSync(tmp, JSON.stringify({ edits, locks, coins: [...w.coins], tools: [...w.tools], plots: w.plots, log: w.log, gear: [...w.gear], devices: [...w.devices] }));
+    fs.writeFileSync(tmp, JSON.stringify({ edits, locks, coins: [...w.coins], tools: [...w.tools], plots: w.plots, log: w.log }));
     fs.renameSync(tmp, w.file);
   } catch (e) {
     console.error(`${w.name}: could not save the world:`, e.message);
@@ -433,7 +409,6 @@ function hello(p, id, m) {
   // each block also says who it belongs to for this player: 1 = yours, 0 = another player's, null = nobody's (land or older saves)
   for (const [k, v] of w.edits) { const [x, y, z] = k.split(',').map(Number); const o = w.owners.get(k); all.push([x, y, z, v, o === undefined ? null : (o === p.pid ? 1 : 0)]); }
   sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, edits: all, players: list, time: worldTime(w), mob: w.mob, tvs: tvList(w), sources: tvSources(w), locks: lockList(w, p), coins: w.coins.get(p.pid) || 0, tools: w.tools.get(p.pid) || 0, plots: plotsMsg(w, p).list });
-  sendTo(p, devicesMsg(w, p));
   broadcast(w, { type: 'join', id, name: p.name, color: p.color, x: p.x, y: p.y, z: p.z, yaw: p.yaw, role: p.role }, id);
   broadcast(w, { type: 'system', text: p.name + ' joined' }, id);
 }
@@ -667,11 +642,7 @@ wss.on('connection', (ws) => {
       const cash = w.coins.get(p.pid) || 0;
       if (cash < item.price) return sendTo(p, { type: 'notice', text: 'NOT ENOUGH CASH. YOU NEED ' + item.price });
       w.coins.set(p.pid, cash - item.price);
-      if (m.item === 'camera' || m.item === 'screen') {
-        const g = gearOf(w, p.pid), k = m.item === 'camera' ? 'cam' : 'scr';
-        g[k]++;
-        if (k === 'scr') { g.licensed = true; sendTo(p, devicesMsg(w, p)); }
-      } else w.tools.set(p.pid, (w.tools.get(p.pid) || 0) + 1);
+      w.tools.set(p.pid, (w.tools.get(p.pid) || 0) + 1);
       logTxn(w, { kind: 'buy', amount: item.price, from: p.pid, fromName: p.name, what: item.name });
       scheduleSave(w);
       sendTo(p, walletMsg(w, p));
@@ -836,21 +807,6 @@ wss.on('connection', (ws) => {
       announcePlots(w);
       return fail('MERGED: ' + merged.name + ' IS NOW ' + (merged.x1 - merged.x0 + 1) + ' x ' + (merged.z1 - merged.z0 + 1) + ' BLOCKS');
     }
-    if (m.type === 'gearsell') {
-      // sell a spare camera or screen (one you have placed must be broken first): half the price back
-      const fail = text => sendTo(p, { type: 'notice', text });
-      const k = m.kind === 'cam' || m.kind === 'scr' ? m.kind : null;
-      if (!k) return;
-      const g = gearOf(w, p.pid);
-      if (g[k] < 1) return fail('NO SPARE ' + GEAR[k].name.toUpperCase() + ' TO SELL. BREAK ONE YOU HAVE PLACED FIRST');
-      g[k]--;
-      const refund = Math.floor(GEAR[k].price / 2);
-      w.coins.set(p.pid, (w.coins.get(p.pid) || 0) + refund);
-      logTxn(w, { kind: 'gearsale', amount: refund, to: p.pid, toName: p.name, what: GEAR[k].name });
-      scheduleSave(w);
-      sendTo(p, walletMsg(w, p));
-      return fail('SOLD A ' + GEAR[k].name.toUpperCase() + ' FOR ' + refund + ' CASH');
-    }
     if (m.type === 'plotsplit') {
       // cut a strip off one of your plots (a full side, so both parts stay rectangles): the strip becomes its own plot
       // with its share of the price. The blocks stay where they are.
@@ -949,22 +905,12 @@ wss.on('connection', (ws) => {
         const lock = w.locks.get(key);
         if (lock && !lockOpenFor(p, lock)) return fixBlock(p, w, key, 'THAT DOOR HAS A PASSWORD');
       }
-      // security gear: placing one uses one you bought, and taking it away gives it back to whoever owns it
-      let devicesChanged = false;
-      if (cur !== m.id) {
-        const nk = gearKind(m.id);
-        if (nk && gearOf(w, p.pid)[nk] < 1) return fixBlock(p, w, key, 'BUY A ' + GEAR[nk].name.toUpperCase() + ' IN THE SHOP FIRST');
-        const old = w.devices.get(key);
-        if (old) { const og = gearOf(w, old.pid); og[old.kind]++; og[old.kind + 'Placed']--; w.devices.delete(key); devicesChanged = true; }
-        if (nk) { const g = gearOf(w, p.pid); g[nk]--; g[nk + 'Placed']++; w.devices.set(key, { kind: nk, pid: p.pid, name: p.name, dir: faceDir(m.dir), yaw: snapYaw(p.yaw + Math.PI) }); devicesChanged = true; }
-      }
       if (m.id === 0) { dropLock(w, key); w.owners.delete(key); }
       else {
         if (w.locks.has(key) && !isDoorBlock(m.id)) dropLock(w, key);
         if (owner === undefined && (cur === null || cur === 0)) w.owners.set(key, p.pid);   // a new block is the placer's
       }
       w.edits.set(key, m.id);
-      if (devicesChanged) { announceDevices(w); sendTo(p, walletMsg(w, p)); }
       scheduleSave(w);
       broadcast(w, { type: 'edit', x: m.x, y: m.y, z: m.z, id: m.id, by: id }, id);
       sendTo(p, { type: 'edit', x: m.x, y: m.y, z: m.z, id: m.id, by: id });
