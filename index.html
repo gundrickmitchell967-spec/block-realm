@@ -1217,7 +1217,7 @@ function tvVideo(){
   const v = document.createElement('video');
   v.src = TV_VIDEO_URL; v.preload = 'auto'; v.playsInline = true;
   v.style.display = 'none';
-  v.addEventListener('ended', tvOff);
+  v.addEventListener('ended', () => { tvSend('off'); tvOff(); });
   v.addEventListener('error', () => { tvOff(); flashHud(TV_NO_VIDEO); });
   document.body.appendChild(v);
   tv.el = v;
@@ -1234,26 +1234,45 @@ function tvUse(h){
   if(quick || v.error){ tvChooseFile(h); return true; }   // also when no video file was found: a right click lets you choose one from your computer
   // the TV that is on: one right click pauses it, and the next one plays it again
   if(tv.on && tv.x === h.x && tv.y === h.y && tv.z === h.z && !v.ended){
-    if(v.paused){ tv.held = false; tvPlay(); flashHud('TV PLAYING'); }
-    else { tv.held = true; v.pause(); flashHud('TV PAUSED'); }
+    if(v.paused){ tv.held = false; tvPlay(); tvSend('play'); flashHud('TV PLAYING'); }
+    else { tv.held = true; v.pause(); tvSend('pause'); flashHud('TV PAUSED'); }
     sfx.click();
     return true;
   }
   tvStart(h);   // a TV that is off, or has finished, starts again from the beginning
   return true;
 }
+// a TV that is off, or has finished, starts again from the beginning; the whole world sees it, since it is the shared video
 function tvStart(h){
   const v = tv.el;
-  if(sfx.ctx && !tv.node){
-    try{ tv.node = sfx.ctx.createMediaElementSource(v); tv.gain = sfx.ctx.createGain(); tv.node.connect(tv.gain); tv.gain.connect(sfx.master); }
-    catch(e){ tv.node = null; tv.gain = null; }
-  }
+  if(mpMode && tv.local){ tv.local = false; v.src = TV_VIDEO_URL; }   // back to the shared video after a file picked here
+  tvBegin(h);
+  tvSend('start', h);
+}
+// turns the TV on at h and starts its video from the beginning
+function tvBegin(h){
+  const v = tv.el;
+  tvWire();
   Object.assign(tv, {on:true, x:h.x, y:h.y, z:h.z});
   if(v.currentTime > 0) v.currentTime = 0;
   tv.held = false;
   tvPlay();
   sfx.click();
   flashHud('TV ON');
+}
+// connects the video to the sound, once
+function tvWire(){
+  const v = tv.el;
+  if(sfx.ctx && !tv.node){
+    try{ tv.node = sfx.ctx.createMediaElementSource(v); tv.gain = sfx.ctx.createGain(); tv.node.connect(tv.gain); tv.gain.connect(sfx.master); }
+    catch(e){ tv.node = null; tv.gain = null; }
+  }
+}
+// tells the server what this player did with the TV, so everyone in the world sees it. A file picked on this computer is not shared
+function tvSend(action, h){
+  if(!mpMode || tv.local) return;
+  const at = h || tv;
+  mpSend({type:'tv', action, x:at.x, y:at.y, z:at.z});
 }
 // starts the picture and sound; if the browser refuses the video, the TV switches off and says why
 function tvPlay(){
@@ -1271,12 +1290,31 @@ function tvChooseFile(h){
     if(tv.url) URL.revokeObjectURL(tv.url);
     tv.url = URL.createObjectURL(f);
     tv.el.src = tv.url;
-    tvStart(h);
+    tv.local = true;   // a file picked on this computer: only this player sees it
+    tvBegin(h);
   });
   document.body.appendChild(input);
   input.click();
 }
 function tvOff(){ tv.on = false; if(tv.el) tv.el.pause(); }
+// what the server says about the shared TV: on or off, where it is, and where its video has got to. Everyone in the world sees the same picture
+function tvRemote(s){
+  if(!s || tv.local) return;             // a file picked on this computer plays only here
+  if(!s.on){ if(tv.on) tvOff(); return; }
+  const b = getBlock(s.x, s.y, s.z);
+  if(b >= 0 && !(isFurn(b) && FURN[furnState(b).t].name === 'TV')) return;   // no TV at that spot in this copy of the world
+  sfx.init();
+  const v = tvVideo();
+  const fresh = !tv.on || tv.x !== s.x || tv.y !== s.y || tv.z !== s.z;
+  if(v.getAttribute('src') !== TV_VIDEO_URL) v.src = TV_VIDEO_URL;
+  tvWire();
+  if(fresh){ Object.assign(tv, {on:true, x:s.x, y:s.y, z:s.z}); tv.held = false; flashHud('TV ON'); }
+  // catch up with the others: seek only when this copy is more than half a second away
+  if(fresh || Math.abs(v.currentTime - s.pos) > 0.6){ try{ v.currentTime = s.pos; }catch(e){} }
+  tv.held = !!s.paused;
+  if(s.paused){ if(!v.paused) v.pause(); }
+  else if(v.paused && !v.ended) tvPlay();
+}
 // is there still a TV at the spot (an unloaded spot counts as still there)
 function tvStillThere(){
   const b = getBlock(tv.x, tv.y, tv.z);
@@ -3030,6 +3068,7 @@ function enterWorld(m){
   for(const p of m.players) addRemote(p);
   mp.sendT = 0;
   start();
+  if(m.tv) tvRemote(m.tv);                       // a TV already on in this world starts for you too
   adminRole = null; player.invisible = false;   // the server forgets admin powers when you reconnect
 }
 function onServerMessage(m){
@@ -3042,6 +3081,7 @@ function onServerMessage(m){
   else if(m.type==='mob'){ cowReceive(m); }
   else if(m.type==='jump'){ if(player.onGround && playing){ player.vy = 8.6; if(sfx.ctx) sfx.jump(); } }
   else if(m.type==='rtc'){ voiceSignal(m.from, m.data); }
+  else if(m.type==='tv'){ tvRemote(m.tv); }
   else if(m.type==='chat'){ addChatLine(String(m.name||'Player'), String(m.text||''), 'chat'); }
   else if(m.type==='system'){ addChatLine('', String(m.text||''), 'system'); }
   else if(m.type==='move'){

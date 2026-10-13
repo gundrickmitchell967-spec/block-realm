@@ -110,10 +110,22 @@ const requestHandler = (req, res) => {
     try { rel = decodeURIComponent(url).slice(1); } catch (e) { rel = ''; }
     const type = MEDIA_TYPES[path.extname(rel).toLowerCase()];
     if (!type || !rel.startsWith('media/') || rel.includes('..')) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('not found'); }
-    return fs.readFile(path.join(__dirname, 'public', rel), (err, data) => {
-      if (err) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('not found'); }
-      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'max-age=3600' });
-      res.end(data);
+    const file = path.join(__dirname, 'public', rel);
+    return fs.stat(file, (err, st) => {
+      if (err || !st.isFile()) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('not found'); }
+      const size = st.size, head = { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Cache-Control': 'max-age=3600' };
+      // a range request (the video jumps to a moment): only that part of the file is sent
+      const r = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+      if (r && (r[1] !== '' || r[2] !== '')) {
+        let start, end;
+        if (r[1] === '') { start = Math.max(0, size - Number(r[2])); end = size - 1; }
+        else { start = Number(r[1]); end = r[2] !== '' ? Math.min(Number(r[2]), size - 1) : size - 1; }
+        if (start > end || start >= size) { res.writeHead(416, { 'Content-Range': 'bytes */' + size }); return res.end(); }
+        res.writeHead(206, { ...head, 'Content-Length': end - start + 1, 'Content-Range': `bytes ${start}-${end}/${size}` });
+        return fs.createReadStream(file, { start, end }).pipe(res);
+      }
+      res.writeHead(200, { ...head, 'Content-Length': size });
+      fs.createReadStream(file).pipe(res);
     });
   }
   if (url === '/' || url === '/index.html') {
@@ -136,6 +148,15 @@ let nextId = 1;
 const players = new Map();   // id -> { ws, world, name, color, x, y, z, yaw, pitch, tokens, lastTick, joined, sleeping, hidden, role }
 
 function sendTo(p, msg) { if (p.ws.readyState === 1) p.ws.send(JSON.stringify(msg)); }
+// the shared TV of a world: one TV at a time. Its video is "t" seconds in, at server time "at", unless it is paused
+const TV_ACTIONS = ['start', 'pause', 'play', 'off'];
+function tvPos(t, now) { return t.paused ? t.t : t.t + (now - t.at) / 1000; }
+// the TV as the players are told it: off, or where it is and where its video has got to
+function tvSnap(w, now = Date.now()) {
+  const t = w.tv;
+  if (!t || !t.on) return { on: false };
+  return { on: true, x: t.x, y: t.y, z: t.z, paused: t.paused, pos: Math.max(0, tvPos(t, now)) };
+}
 // a message to everyone in one world (optionally not to one player)
 function broadcast(w, msg, exceptId) {
   const s = JSON.stringify(msg);
@@ -194,7 +215,7 @@ function hello(p, id, m) {
   for (const [oid, o] of players) if (oid !== id && o.joined && o.world === w) list.push({ id: oid, name: o.name, color: o.color, x: o.x, y: o.y, z: o.z, yaw: o.yaw, sleeping: o.sleeping, hidden: o.hidden, role: o.role });
   const all = [];
   for (const [k, v] of w.edits) { const [x, y, z] = k.split(',').map(Number); all.push([x, y, z, v]); }
-  sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, edits: all, players: list, time: worldTime(w), mob: w.mob });
+  sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, edits: all, players: list, time: worldTime(w), mob: w.mob, tv: tvSnap(w) });
   broadcast(w, { type: 'join', id, name: p.name, color: p.color, x: p.x, y: p.y, z: p.z, yaw: p.yaw, role: p.role }, id);
   broadcast(w, { type: 'system', text: p.name + ' joined' }, id);
 }
@@ -269,6 +290,21 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    if (m.type === 'tv') {
+      // the TV is shared by the whole world: whoever turns it on, pauses, plays or ends it sets it for everyone, if they are close to it
+      if (!isInt(m.x) || !isInt(m.y) || !isInt(m.z) || !TV_ACTIONS.includes(m.action)) return;
+      const dx = m.x + 0.5 - p.x, dy = m.y + 0.5 - p.y, dz = m.z + 0.5 - p.z;
+      if (dx * dx + dy * dy + dz * dz > REACH * REACH) return;
+      const now = Date.now(), cur = w.tv;
+      if (m.action === 'start') w.tv = { x: m.x, y: m.y, z: m.z, on: true, paused: false, t: 0, at: now };
+      else if (m.action === 'off') { if (cur) cur.on = false; }
+      else if (cur && cur.on && cur.x === m.x && cur.y === m.y && cur.z === m.z) {
+        if (m.action === 'pause' && !cur.paused) { cur.t = tvPos(cur, now); cur.at = now; cur.paused = true; }
+        if (m.action === 'play' && cur.paused) { cur.paused = false; cur.at = now; }
+      } else return;
+      broadcast(w, { type: 'tv', tv: tvSnap(w, now) }, id);   // the player who sent it already shows it
+      return;
+    }
     if (m.type === 'mob') {
       // the cow: only the lowest-numbered connected player in the world moves it, and everyone else is sent its position
       if (id !== lowestJoinedId(w)) return;
@@ -331,7 +367,12 @@ wss.on('connection', (ws) => {
 });
 
 // everyone's clock is corrected every five seconds, in each world
-setInterval(() => { for (const w of Object.values(WORLDS)) broadcast(w, { type: 'time', time: worldTime(w) }); }, 5000);
+setInterval(() => {
+  for (const w of Object.values(WORLDS)) {
+    broadcast(w, { type: 'time', time: worldTime(w) });
+    if (w.tv && w.tv.on) broadcast(w, { type: 'tv', tv: tvSnap(w) });   // the shared TV is re-checked too, so the picture stays in step
+  }
+}, 5000);
 
 server.listen(PORT, HOST, () => {
   console.log(`Block Realm server on ${useTls ? 'https' : 'http'}://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}  (game page and ws://.../ws)`);
