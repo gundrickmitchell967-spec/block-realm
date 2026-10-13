@@ -46,7 +46,9 @@
   #menu h2{margin:0;font-size:18px;letter-spacing:.14em;color:#ffe066}
   #menu p{max-width:560px;line-height:1.6;color:#d4d9e6;font-size:14px;margin:6px 0}
   #menu .help{font-size:11px;line-height:1.45;color:#9aa6c0;margin:4px 0 0}
-  #mainbtns,#settingsbox{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%}
+  #mainbtns,#settingsbox,#howbox{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%}
+  #howbox h2{margin:0;font-size:18px;letter-spacing:.14em}
+  #howbox .help{text-align:left;margin:0}
   .btn{font:bold 15px 'Courier New',monospace;width:260px;max-width:100%;box-sizing:border-box;padding:12px;background:linear-gradient(#3a4358,#2a3143);color:#fff;border:2px solid #5b6578;border-radius:8px;cursor:pointer;letter-spacing:.1em;box-shadow:0 3px 0 #111827;transition:background .15s,transform .08s}
   .btn:hover{background:linear-gradient(#4a5470,#343d54)}
   .btn:active{transform:translateY(2px);box-shadow:0 1px 0 #111827}
@@ -65,7 +67,22 @@
   #shopbox{position:fixed;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;background:rgba(8,12,22,.86)}
   #shoppanel{display:flex;flex-direction:column;align-items:center;gap:10px;width:min(460px,100%);max-height:100%;overflow:auto;box-sizing:border-box;padding:18px;background:#161b26;border:3px solid #5b6578}
   #shoppanel h2{margin:0;font-size:20px;letter-spacing:.14em;text-shadow:2px 2px 0 #000}
-  #shopcoins{margin:0;font-size:14px;color:#ffe066;text-align:center}
+  #shopcoins{margin:0;font-size:14px;color:#ffe066;text-align:center;display:flex;align-items:center;justify-content:center;gap:6px}
+  .shopcard{display:flex;flex-direction:column;gap:6px;padding:10px;background:#11151f;border:2px solid #3a4560;width:100%;box-sizing:border-box}
+  .shopcard .btn{width:100%}
+  #shopmsg{min-height:1.4em;margin:0;font-size:13px;color:#ffe066;text-align:center}
+  #shopearn{width:100%;box-sizing:border-box;padding:10px;background:#11151f;border:2px solid #3a4560;display:flex;flex-direction:column;gap:4px}
+  #shopearn h3{margin:0 0 4px;font-size:13px;letter-spacing:.1em;text-align:center}
+  #cashhud{position:fixed;top:10px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:6px;padding:4px 12px;background:rgba(0,0,0,.55);border:2px solid #5b6578;border-radius:8px;font:bold 16px 'Courier New',monospace;color:#ffe066;text-shadow:1px 1px 0 #000;pointer-events:none;z-index:3}
+  #tradebox{position:fixed;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;background:rgba(8,12,22,.86)}
+  #tradepanel{display:flex;flex-direction:column;align-items:center;gap:10px;width:min(380px,100%);max-height:100%;overflow:auto;box-sizing:border-box;padding:18px;background:#161b26;border:3px solid #5b6578}
+  #tradepanel h2{margin:0;font-size:20px;letter-spacing:.14em;text-shadow:2px 2px 0 #000}
+  #tradepanel select,#tradepanel input{font:14px 'Courier New',monospace;width:100%;box-sizing:border-box;padding:9px;background:#0d111b;color:#fff;border:2px solid #3a4560}
+  #trademsg{min-height:1.4em;margin:0;font-size:13px;color:#ffe066;text-align:center}
+  #ttrade{left:calc(14px + env(safe-area-inset-left));bottom:calc(156px + env(safe-area-inset-bottom));width:66px;height:40px;border-radius:9px;font-size:12px;background:rgba(60,110,50,.6)}
+  .coinicon{display:inline-flex;align-items:center;vertical-align:middle}
+  .coinicon svg{display:block}
+  .shoprow > span:last-child{display:inline-flex;align-items:center;gap:4px}
   #shopitems{width:100%;display:flex;flex-direction:column;gap:6px}
   .shoprow{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;background:#11151f;border:2px solid #3a4560;font-size:13px}
   #tshop{right:calc(184px + env(safe-area-inset-right));bottom:calc(106px + env(safe-area-inset-bottom));width:66px;height:66px;font-size:11px;background:rgba(40,90,120,.6)}
@@ -162,6 +179,7 @@
 <div id="loading"><div class="spin"></div><p id="loadmsg">LOADING...</p></div>
 <canvas id="c"></canvas>
 <div id="cross"></div>
+<div id="cashhud" hidden><span class="coinicon" id="cashcoin"></span><span id="cashnum">0</span></div>
 <div id="hud"><div id="fps"></div><div id="pos"></div><div id="tgt"></div><div id="tm"></div><div id="mp"></div></div>
 <div id="tags"></div>
 <div id="chatlog" aria-live="polite"></div>
@@ -176,6 +194,7 @@
   <button class="tbtn" id="tlie" type="button" hidden>LIE DOWN</button>
     <button class="tbtn" id="tdoor" type="button" hidden>DOOR</button>
     <button class="tbtn" id="tshop" type="button" hidden>SHOP</button>
+    <button class="tbtn" id="ttrade" type="button" hidden>TRADE</button>
   <button class="tbtn" id="tdown" type="button" hidden>DOWN</button>
   <div id="ttop">
     <button class="tbtn" id="tadmin" type="button" hidden>ADMIN</button>
@@ -200,6 +219,7 @@
       <button class="btn" id="leave" hidden>LEAVE SERVER</button>
       <button class="btn" id="adminbtn" type="button">ADMIN CODE</button>
       <button class="btn" id="settings">SETTINGS</button>
+      <button class="btn" id="howbtn" type="button">HOW TO</button>
     </div>
     <div id="settingsbox" hidden>
       <h2>SETTINGS</h2>
@@ -208,6 +228,19 @@
       <button class="btn" id="sensbtn" type="button">SENSITIVITY: 1x</button>
       <button class="btn" id="sound">SOUND EFFECTS: ON</button>
       <button class="btn ghost" id="setback">BACK</button>
+    </div>
+    <div id="howbox" hidden>
+      <h2>HOW TO PLAY</h2>
+    <p class="help">Mouse: look &middot; WASD: move &middot; Space: jump &middot; Shift: run<br>
+       Left click: break a block &middot; Right click: place the selected block<br>
+       1-8 or mouse wheel: choose an inventory slot &middot; E: block catalog (add or remove blocks)<br>
+       Right click a door: open or close it &middot; Q at a door: set or open its password (multiplayer)<br>
+       Right click a bed at night: go to sleep &middot; Right click the shopkeeper: open the shop<br>
+       M: sound effects on or off &middot; Esc: pause and save<br>
+       Double-tap Space: fly (Space up, Shift down) &middot; T: chat with other players (multiplayer)<br>
+       V: talk to players close to you (voice chat, multiplayer)</p>
+      <p class="help touchhelp" hidden>Touch: drag the circle on the left to walk, drag anywhere else to look.<br>Tap anywhere to place the selected block there. Hold still on a block to break it. BREAK breaks the block in the middle of the screen. JUMP jumps. BAG opens the block catalog. DOOR (shown when you look at a door) sets or opens its password. MENU pauses.</p>
+      <button class="btn ghost" id="howback" type="button">BACK</button>
     </div>
     <div id="mpbox" hidden>
       <input id="mpname" maxlength="16" placeholder="Your name" aria-label="Your name">
@@ -222,15 +255,6 @@
       <button class="btn ghost" id="mpback">BACK</button>
       <p id="mpstatus" role="status"></p>
     </div>
-    <p class="help">Mouse: look &middot; WASD: move &middot; Space: jump &middot; Shift: run<br>
-       Left click: break a block &middot; Right click: place the selected block<br>
-       1-8 or mouse wheel: choose an inventory slot &middot; E: block catalog (add or remove blocks)<br>
-       Right click a door: open or close it &middot; Q at a door: set or open its password (multiplayer)<br>
-       Right click a bed at night: go to sleep &middot; Right click the shopkeeper: open the shop<br>
-       M: sound effects on or off &middot; Esc: pause and save<br>
-       Double-tap Space: fly (Space up, Shift down) &middot; T: chat with other players (multiplayer)<br>
-       V: talk to players close to you (voice chat, multiplayer)</p>
-    <p class="help touchhelp" hidden>Touch: drag the circle on the left to walk, drag anywhere else to look.<br>Tap anywhere to place the selected block there. Hold still on a block to break it. BREAK breaks the block in the middle of the screen. JUMP jumps. BAG opens the block catalog. DOOR (shown when you look at a door) sets or opens its password. MENU pauses.</p>
   </div>
 </div>
 
@@ -253,7 +277,7 @@
       <div id="adminpanel" hidden>
         <h3>PLAYERS</h3>
         <div id="adminlist"></div>
-        <h3>GIVE COINS</h3>
+        <h3><span class="coinicon" id="givecoin"></span> GIVE CASH</h3>
         <div id="givebox">
           <select id="givewho" aria-label="Player to give coins to"></select>
           <input id="giveamt" type="number" step="1" placeholder="Amount" aria-label="Amount of coins">
@@ -278,7 +302,27 @@
     <h2 id="shoptitle">SHOP</h2>
     <p class="hint" id="shopcoins"></p>
     <div id="shopitems"></div>
+    <p id="shopmsg" role="status"></p>
+    <div id="shopearn">
+      <h3>HOW TO GET CASH</h3>
+      <p class="hint">Find bugs in the game: the bigger the bug, the more cash you get.</p>
+      <p class="hint">Find glitches in the game: you are paid for them too.</p>
+      <p class="hint">Build houses: the better a house is built, the easier it is to reach, and the more important it is, the more you get paid.</p>
+      <p class="hint">The game creator pays out cash for bugs, glitches and houses.</p>
+    </div>
     <button class="btn" id="shopclose" type="button">LEAVE (E)</button>
+  </div>
+</div>
+
+<div id="tradebox" hidden>
+  <div id="tradepanel" role="dialog" aria-labelledby="tradetitle">
+    <h2 id="tradetitle">TRADE CASH</h2>
+    <p class="hint" id="tradebal"></p>
+    <select id="tradewho" aria-label="Player to send cash to"></select>
+    <input id="tradeamt" type="number" step="1" min="1" placeholder="Amount of cash" aria-label="Amount of cash to send">
+    <button class="btn" id="tradesend" type="button">SEND CASH</button>
+    <p id="trademsg" role="status"></p>
+    <button class="btn" id="tradeclose" type="button">CLOSE (G)</button>
   </div>
 </div>
 
@@ -863,6 +907,9 @@ const isItem = b => b >= ITEM_BASE;
 const GLASS_CUP_ID = ITEM_BASE + 6, WATER_CUP_ID = ITEM_BASE + 7;   // an empty glass, and one full of water
 const REMOTE_ID = ITEM_BASE + ITEMS.length;                          // the TV remote: a gadget (the Gadgets tab), not food
 BLOCKS[REMOTE_ID] = {name:'TV Remote', top:91, side:91, bot:91, sw:'#2a2d34'};
+// the hacker tool: bought in the shop, used once. It is not in the catalog, so it can only come from the shop
+const HACK_TOOL_ID = REMOTE_ID + 1;
+BLOCKS[HACK_TOOL_ID] = {name:'Hacker Tool', top:91, side:91, bot:91, sw:'#1f6b3a'};
 // plants and the poop lie on the floor: you walk through them, and they are not blocks you can place
 const DECOR_NAMES = ['Grass Tuft','Red Flower','Yellow Flower','Blue Flower','White Flower','Poop'];
 const DECOR_T = new Set(FURN.map((_, t) => t).filter(t => DECOR_NAMES.includes(FURN[t].name)));
@@ -1716,7 +1763,7 @@ let fridgeOpen = null;          // the fridge whose shelves are showing: {key, x
 // right-clicking a fridge: a closed door opens; with food in your hand it goes in; otherwise the shelves show
 function fridgeUse(h){
   if(!furnState(h.id).f.open){ furnOpenToggle(h); return; }
-  if(isItem(HOTBAR[sel]) && HOTBAR[sel]!==REMOTE_ID){ putFood(h, HOTBAR[sel]); return; }
+  if(isItem(HOTBAR[sel]) && HOTBAR[sel]!==REMOTE_ID && HOTBAR[sel]!==HACK_TOOL_ID){ putFood(h, HOTBAR[sel]); return; }
   openFridge(h);
 }
 function putFood(h, food){
@@ -2406,6 +2453,7 @@ function partnerOf(x,y,z,id){
 function doBreak(){
   const h=raycast(6);
   if(HOTBAR[sel]===REMOTE_ID){ remoteVolume(h, (keys.ShiftLeft||keys.ShiftRight) ? 1 : -1); return; }   // the remote: left-click turns the TV's volume down, Shift turns it up
+  if(HOTBAR[sel]===HACK_TOOL_ID) return;   // the hacker tool breaks nothing
   if(!h) return;
   const cells=[[h.x,h.y,h.z]];
   const p=partnerOf(h.x,h.y,h.z,h.id); if(p) cells.push(p);   // a door or bed comes down as a whole
@@ -2543,6 +2591,7 @@ function tapVolume(){
 }
 function doPlace(){
   if(shopAim()){ openShop(); return; }   // right-click the shopkeeper: the shop opens
+  if(HOTBAR[sel]===HACK_TOOL_ID){ hackDoor(raycast(6)); return; }   // the hacker tool: right-click a locked door to decode it
   const h=raycast(6);
   if(HOTBAR[sel]===REMOTE_ID){ remotePress(h); return; }   // the remote in your hand: right-click starts or pauses the TV you aim at
   // holding a glass of water: right-click drinks it, unless you are working a door, a light, the fridge or a bed
@@ -2592,7 +2641,7 @@ function saveInv(){ try{ localStorage.setItem(INV_KEY, JSON.stringify(HOTBAR)); 
 function loadInv(){
   try{
     const a = JSON.parse(localStorage.getItem(INV_KEY) || 'null');
-    if(Array.isArray(a) && a.length === SLOTS && a.every(v => v === null || CATALOG.includes(v))){
+    if(Array.isArray(a) && a.length === SLOTS && a.every(v => v === null || v === HACK_TOOL_ID || CATALOG.includes(v))){
       HOTBAR.splice(0, SLOTS, ...a); return;
     }
   }catch(e){}
@@ -2720,6 +2769,12 @@ function playerId(){
   try{ localStorage.setItem('br_pid', myPid); }catch(e){}
   return myPid;
 }
+let cashShown = -1;
+function syncCash(){
+  const h = $('cashhud');
+  if(h.hidden !== !playing) h.hidden = !playing;
+  if(playing && cashShown !== myCoins){ cashShown = myCoins; $('cashnum').textContent = String(myCoins); }
+}
 // the locked doors the server has told us about, keyed by the lower half of each door: { ok } (ok: this player may open it)
 const doorLocks = new Map();
 let doorShown = false;     // the door panel is open
@@ -2841,6 +2896,48 @@ $('givego').addEventListener('click', ()=>{
   $('giveamt').value = '';
 });
 
+/* ---------- trading cash with other players: press G (or TRADE on a touch screen) ---------- */
+let tradeOpen = false;
+function openTrade(){
+  if(!playing || tradeOpen || shopOpen || codeOpen || invOpen || fridgeOpen || doorShown || chatOpen || player.sleeping) return;
+  if(!mpMode){ flashHud('CASH TRADES NEED THE MULTIPLAYER SERVER'); return; }
+  tradeOpen = true;
+  for(const k in keys) keys[k] = false;
+  try{ document.exitPointerLock(); }catch(e){}
+  $('trademsg').textContent = ''; $('tradeamt').value = '';
+  $('tradebox').hidden = false;
+  renderTrade();
+  $('tradeamt').focus();
+}
+function renderTrade(){
+  $('tradebal').textContent = 'Your cash: ' + myCoins;
+  const who = $('tradewho'), keep = who.value; who.textContent = '';
+  const rows = [...mp.others.values()].sort((x, y) => x.name.localeCompare(y.name));
+  if(!rows.length){ const op = document.createElement('option'); op.value = ''; op.textContent = 'No other players are here'; who.appendChild(op); }
+  for(const o of rows){ const op = document.createElement('option'); op.value = String(o.id); op.textContent = o.name; who.appendChild(op); }
+  if([...who.options].some(x => x.value === keep)) who.value = keep;
+}
+function closeTrade(){
+  if(!tradeOpen) return;
+  tradeOpen = false;
+  $('tradebox').hidden = true;
+  if(playing) lockPointer();
+}
+function sendCash(){
+  const id = +$('tradewho').value, amount = Math.trunc(Number($('tradeamt').value));
+  if(!id){ $('trademsg').textContent = 'Choose a player to send cash to.'; return; }
+  if(!Number.isFinite(amount) || amount < 1){ $('trademsg').textContent = 'Type an amount of cash to send.'; return; }
+  mpSend({type:'pay', target:id, amount});
+  $('tradeamt').value = ''; $('trademsg').textContent = 'Sending...';
+}
+$('tradesend').addEventListener('click', sendCash);
+$('tradeclose').addEventListener('click', closeTrade);
+$('tradeamt').addEventListener('keydown', e=>{
+  e.stopPropagation();
+  if(e.key === 'Enter'){ e.preventDefault(); sendCash(); }
+  else if(e.key === 'Escape'){ e.preventDefault(); closeTrade(); }
+});
+
 /* ---------- the shopkeeper, and the shop panel ---------- */
 // the shopkeeper: he stands behind the counter, facing the doorway. He is drawn like a player, with the same figure
 const SHOPKEEPER = { x: SHOP.npcX + 0.5, y: SHOP.floorY + 1, z: SHOP.npcZ + 0.5, yaw: 0, phase: 0, amt: 0, rgb: [0.55, 0.32, 0.12] };
@@ -2868,9 +2965,17 @@ function shopAim(){
   const h = raycast(6);
   return !h || t <= h.t;
 }
-// the items for sale: { name, price } (none yet; they are added here later)
-const SHOP_ITEMS = [];
-let myCoins = 0;            // your coins in this world (the multiplayer server keeps them)
+// the items for sale (the server has the same prices)
+const SHOP_ITEMS = [
+  {id:'hacktool', name:'HACKER TOOL', price:10000,
+   text:'Use it once. Equip it in your inventory, then right-click a locked door. For 30 seconds that door opens for anyone, then its password lock comes back on. The tool is used up when you use it.'}
+];
+// the coin logo: a gold coin with a dollar sign
+const COIN_SVG = '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#f5c542" stroke="#8a5a00" stroke-width="1.5"/><circle cx="12" cy="12" r="8.2" fill="none" stroke="#c28a12" stroke-width="1"/><text x="12" y="16.6" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="13" fill="#7a4d00">$</text></svg>';
+$('givecoin').innerHTML = COIN_SVG;
+$('cashcoin').innerHTML = COIN_SVG;
+let myCoins = 0;            // your cash in this world (the multiplayer server keeps it)
+let myTools = 0;           // how many hacker tools you own
 let shopOpen = false;
 function openShop(){
   if(!playing || shopOpen || codeOpen || invOpen || fridgeOpen || doorShown || chatOpen || player.sleeping) return;
@@ -2887,16 +2992,51 @@ function closeShop(){
   $('shopbox').hidden = true;
   if(playing) lockPointer();
 }
+function coinSpan(){ const s = document.createElement('span'); s.className = 'coinicon'; s.innerHTML = COIN_SVG; return s; }
+function shopNote(text){ $('shopmsg').textContent = text; }
 function renderShop(){
-  $('shopcoins').textContent = 'YOUR COINS: ' + myCoins + (mpMode ? '' : '   (coins come from the multiplayer server)');
+  const cl = $('shopcoins'); cl.textContent = '';
+  cl.appendChild(coinSpan()); cl.appendChild(document.createTextNode(' YOUR CASH: ' + myCoins + (mpMode ? '' : '   (cash comes from the multiplayer server)')));
   const list = $('shopitems'); list.textContent = '';
   if(!SHOP_ITEMS.length){ const p = document.createElement('p'); p.className = 'hint'; p.textContent = 'The shopkeeper has nothing for sale yet.'; list.appendChild(p); return; }
   for(const it of SHOP_ITEMS){
-    const row = document.createElement('div'); row.className = 'shoprow';
-    const nm = document.createElement('span'); nm.textContent = String(it.name); row.appendChild(nm);
-    const pr = document.createElement('span'); pr.textContent = it.price + ' COINS'; row.appendChild(pr);
-    list.appendChild(row);
+    const card = document.createElement('div'); card.className = 'shopcard';
+    const top = document.createElement('div'); top.className = 'shoprow';
+    const nm = document.createElement('span'); nm.textContent = it.name;
+    const pr = document.createElement('span'); pr.appendChild(coinSpan()); pr.appendChild(document.createTextNode(' ' + it.price));
+    top.appendChild(nm); top.appendChild(pr); card.appendChild(top);
+    const d = document.createElement('p'); d.className = 'hint'; d.textContent = it.text; card.appendChild(d);
+    if(it.id === 'hacktool'){ const own = document.createElement('p'); own.className = 'hint'; own.textContent = 'You own: ' + myTools; card.appendChild(own); }
+    const b = document.createElement('button'); b.className = 'btn'; b.type = 'button'; b.textContent = 'BUY';
+    b.disabled = !mpMode;
+    b.addEventListener('click', () => buyItem(it.id));
+    card.appendChild(b);
+    list.appendChild(card);
   }
+}
+// buying: the server takes the cash and gives the item; the tool then goes into an empty inventory slot
+function buyItem(id){
+  const it = SHOP_ITEMS.find(x => x.id === id); if(!it) return;
+  if(!mpMode){ shopNote('BUYING NEEDS THE MULTIPLAYER SERVER'); return; }
+  if(myCoins < it.price){ shopNote('NOT ENOUGH CASH'); return; }
+  if(id === 'hacktool' && !HOTBAR.includes(HACK_TOOL_ID) && HOTBAR.indexOf(null) < 0){ shopNote('CLEAR AN INVENTORY SLOT FIRST'); return; }
+  mpSend({type:'buy', item:id});
+}
+// the hacker tool in your inventory matches the tools you own: it leaves when used up, and comes back into an empty slot when bought
+function syncTool(){
+  const i = HOTBAR.indexOf(HACK_TOOL_ID);
+  if(myTools <= 0){ if(i >= 0){ HOTBAR[i] = null; saveInv(); refreshInv(); } return; }
+  if(i < 0){
+    const e = HOTBAR.indexOf(null);
+    if(e >= 0){ HOTBAR[e] = HACK_TOOL_ID; saveInv(); refreshInv(); }
+    else flashHud('NO EMPTY SLOT FOR YOUR HACKER TOOL: FREE ONE IN YOUR INVENTORY');
+  }
+}
+// right-click a locked door with the hacker tool in hand: the server decodes it
+function hackDoor(h){
+  if(!h || !isDoorId(h.id)){ flashHud('LOOK AT A LOCKED DOOR, THEN RIGHT-CLICK IT TO DECODE IT'); return; }
+  if(!mpMode){ flashHud('THE HACKER TOOL NEEDS THE MULTIPLAYER SERVER'); return; }
+  mpSend({type:'hack', x:h.x, y:lowerHalfY(h), z:h.z});
 }
 $('shopclose').addEventListener('click', closeShop);
 
@@ -3097,6 +3237,10 @@ addEventListener('keydown',e=>{
     if(((e.code==='KeyQ' && !(document.activeElement && document.activeElement.tagName==='INPUT')) || e.code==='Escape') && !e.repeat){ e.preventDefault(); closeDoor(); }
     return;
   }
+  if(tradeOpen){                                  // the trade panel is open: only G or Esc leaves it (typing in its boxes is left alone)
+    if(((e.code==='KeyG' && !(document.activeElement && document.activeElement.tagName==='INPUT')) || e.code==='Escape') && !e.repeat){ e.preventDefault(); closeTrade(); }
+    return;
+  }
   if(shopOpen){                                   // the shop is open: only E or Esc leaves it
     if((e.code==='KeyE' || e.code==='Escape') && !e.repeat){ e.preventDefault(); closeShop(); }
     return;
@@ -3126,6 +3270,7 @@ addEventListener('keydown',e=>{
   if(e.code==='KeyE' && !e.repeat){ e.preventDefault(); openInv(); return; }
   if(e.code==='KeyP' && !e.repeat){ e.preventDefault(); openCode(); return; }
   if(e.code==='KeyQ' && !e.repeat){ e.preventDefault(); useDoorKey(); return; }
+  if(e.code==='KeyG' && !e.repeat){ e.preventDefault(); openTrade(); return; }
   if(e.code==='Space' && !e.repeat){
     // two quick taps of Space switch flying on or off
     const now=performance.now();
@@ -3160,7 +3305,7 @@ function lockPointer(){
   try{ const p = cv.requestPointerLock(); if(p && p.catch) p.catch(()=>{}); }catch(e){}
 }
 cv.addEventListener('mousedown',e=>{
-  if(!playing || invOpen || codeOpen || fridgeOpen || doorShown || shopOpen || player.sleeping) return;
+  if(!playing || invOpen || codeOpen || fridgeOpen || doorShown || shopOpen || tradeOpen || player.sleeping) return;
   if(document.pointerLockElement!==cv) lockPointer();   // a click after a join or a pause captures the mouse
   if(document.pointerLockElement!==cv && e.button!==0) return;
   if(e.button===0) doBreak(); else if(e.button===2) doPlace();
@@ -3168,7 +3313,7 @@ cv.addEventListener('mousedown',e=>{
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('pointerlockchange',()=>{
   if(document.pointerLockElement) lookFrom = performance.now() + 150;
-  if(!document.pointerLockElement && playing && !chatOpen && !invOpen && !codeOpen && !fridgeOpen && !doorShown && !shopOpen) pause();   // releasing the mouse to type in chat or use the catalog is not a pause
+  if(!document.pointerLockElement && playing && !chatOpen && !invOpen && !codeOpen && !fridgeOpen && !doorShown && !shopOpen && !tradeOpen) pause();   // releasing the mouse to type in chat or use the catalog is not a pause
 });
 
 /* ---------- sound: every effect is synthesised with Web Audio, so there are no sound files to load ---------- */
@@ -3334,11 +3479,9 @@ function musicNext(){
 }
 // the settings were closed: the music changes to another track
 function musicReroll(){
-  if(!music.els) return;                          // nothing made yet: the first track is random anyway
+  if(!music.timer || !sfx.ctx) return;            // paused: the next start already picks a different track
   const i = musicRandom(music.cur);
-  if(i < 0) return;
-  if(music.timer && sfx.ctx) musicCrossTo(i);     // playing: change now
-  else { music.cur = i; music.next = -1; }         // not playing: the next start plays this track
+  if(i >= 0) musicCrossTo(i);                     // playing: change now
 }
 // called every quarter second while the music plays: moves on when the current track is nearly over
 function musicTick(){
@@ -3355,12 +3498,18 @@ function musicStart(){
   if(!c || !music.on || music.timer) return;
   if(c.state === 'suspended') c.resume();
   if(!music.els) musicMake();
-  let i = music.cur >= 0 ? music.cur : musicRandom(-1);
-  if(i >= 0 && music.els[i].failed) i = musicRandom(i);
+  // every start (a new game, or leaving the pause menu) plays a random track, never the one that played last
+  let i = musicRandom(music.cur);
+  if(i < 0) i = musicRandom(-1);
   if(i < 0) return;
-  music.cur = i;
   music.gen++;                                   // a stop that is still fading out must not pause the music that starts now
   const now = c.currentTime;
+  for(let j = 0; j < music.els.length; j++){     // every other track is silenced at once (one may still be fading out)
+    if(j === i) continue;
+    const t = music.els[j];
+    t.a.pause(); t.g.gain.cancelScheduledValues(now); t.g.gain.setValueAtTime(0, now);
+  }
+  music.cur = i;
   music.bus.gain.cancelScheduledValues(now); music.bus.gain.setValueAtTime(1, now);
   musicPlayTrack(i, 2);                          // the music comes in over two seconds
   music.next = musicRandom(i);
@@ -3443,7 +3592,8 @@ function defaultWS(){
   if(location.protocol==='http:' || location.protocol==='https:') return (location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws';
   return 'ws://localhost:8080/ws';
 }
-function showMain(){ $('mainbtns').hidden=false; $('mpbox').hidden=true; $('settingsbox').hidden=true; }
+function showMain(){ $('mainbtns').hidden=false; $('mpbox').hidden=true; $('settingsbox').hidden=true; $('howbox').hidden=true; }
+function showHow(){ $('mainbtns').hidden=true; $('mpbox').hidden=true; $('settingsbox').hidden=true; $('howbox').hidden=false; }
 // the settings screen holds the music and sound effect switches
 function syncSettings(){
   $('sound').textContent = 'SOUND EFFECTS: ' + (sfx.on ? 'ON' : 'OFF');
@@ -3451,7 +3601,7 @@ function syncSettings(){
   $('drawbtn').textContent = 'DRAW DISTANCE: ' + RD;
 }
 function showSettings(){
-  $('mainbtns').hidden=true; $('mpbox').hidden=true; $('settingsbox').hidden=false;
+  $('mainbtns').hidden=true; $('mpbox').hidden=true; $('settingsbox').hidden=false; $('howbox').hidden=true;
   syncSettings();
 }
 // the world to join: PUBLIC WORLD anybody can join, or OUR WORLD, which needs its password (never saved)
@@ -3465,7 +3615,7 @@ function pickWorld(w){
 $('worldpublic').addEventListener('click', () => pickWorld('public'));
 $('worldour').addEventListener('click', () => pickWorld('our'));
 function showMP(){
-  $('mainbtns').hidden=true; $('mpbox').hidden=false; $('settingsbox').hidden=true;
+  $('mainbtns').hidden=true; $('mpbox').hidden=false; $('settingsbox').hidden=true; $('howbox').hidden=true;
   let saved={}; try{ saved=JSON.parse(sessionStorage.getItem('blockrealm_mp')||'{}')||{}; }catch(e){}
   if(!$('mpname').value) $('mpname').value = saved.name || '';
   if(!$('mpurl').value) $('mpurl').value = saved.url || defaultWS();
@@ -3526,13 +3676,14 @@ function connectMP(){
   ws.onclose = ()=>{
     clearTimeout(timer);
     mp.ws = null;
-    adminRole = null; spectate.id = null; adminBypass = false; doorLocks.clear();
+    adminRole = null; spectate.id = null; adminBypass = false; doorLocks.clear(); myCoins = 0; myTools = 0;
     if(mpMode){ mpDropped(); }
     else { mpStatus(denied || 'Could not connect. Check the address and that the server is running.'); }
   };
 }
 function enterWorld(m){
   mpMode = true; mp.id = m.id;
+  myTools = +m.tools || 0; myCoins = +m.coins || 0;
   showLoading('JOINING ' + (m.worldName || 'THE WORLD') + '...'); loadWaiting = true; loadUntil = performance.now() + 15000;
   if(m.worldName) flashHud('JOINED ' + m.worldName);
   if(m.mob) cowReceive(m.mob);
@@ -3571,11 +3722,8 @@ function onServerMessage(m){
   else if(m.type==='doorinfo'){ onDoorInfo(m); }
   else if(m.type==='lock'){ onDoorLock(m); }
   else if(m.type==='doorresult'){ onDoorResult(m); }
-  else if(m.type==='coins'){
-    myCoins = +m.coins || 0; if(shopOpen) renderShop();
-    flashHud(m.change > 0 ? 'THE GAME CREATOR GAVE YOU ' + m.change + ' COINS' : 'THE GAME CREATOR TOOK ' + (-m.change) + ' COINS');
-  }
-  else if(m.type==='coinsgiven'){ flashHud((m.change > 0 ? 'GAVE ' + m.change + ' COINS TO ' : 'TOOK ' + (-m.change) + ' COINS FROM ') + String(m.name || 'PLAYER').toUpperCase()); }
+  else if(m.type==='wallet'){ myCoins = +m.cash || 0; myTools = +m.tools || 0; syncTool(); syncCash(); if(shopOpen) renderShop(); if(tradeOpen) renderTrade(); }
+  else if(m.type==='notice'){ const t = String(m.text || ''); flashHud(t); if(shopOpen) shopNote(t); if(tradeOpen) $('trademsg').textContent = t; }
   else if(m.type==='bypass'){ adminBypass = m.on === true; syncInvisBtn(); flashHud(adminBypass ? 'BREAK ANY BLOCK IS ON' : 'BREAK ANY BLOCK IS OFF'); }
   else if(m.type==='tv'){ tvSync(m.list, m.sources); }
   else if(m.type==='uploadTicket'){ const w=tvShareWait; tvShareWait=null; if(w){ if(m.token) w.ticket(m.token); else w.reject(new Error(m.error || 'not allowed')); } }
@@ -3748,7 +3896,7 @@ function tapBreakAt(sx, sy){ actAtScreen(sx, sy, () => doBreak()); }
 let breakTimer = 0;
 const tTouch = new Map();                          // touch id -> what that finger started on
 const touchesOf = e => [...e.changedTouches];
-function touchPlay(){ return isTouch && playing && !invOpen && !fridgeOpen && !codeOpen && !chatOpen && !shopOpen; }
+function touchPlay(){ return isTouch && playing && !invOpen && !fridgeOpen && !codeOpen && !chatOpen && !shopOpen && !tradeOpen; }
 // the joystick
 stick.addEventListener('touchstart', e => {
   if(!touchPlay()) return;
@@ -3807,6 +3955,7 @@ const tBtns = [
   {el:$('tlie'), down:() => tapKey('KeyZ', true)},
   {el:$('tdoor'), down:() => useDoorKey()},
   {el:$('tshop'), down:() => openShop()},
+  {el:$('ttrade'), down:() => openTrade()},
   {el:$('tbag'), down:() => tapKey('KeyE', true)},
   {el:$('tchat'), down:() => tapKey('KeyT', true)},
   {el:$('tmic'), down:() => tapKey('KeyV', true)},
@@ -3835,7 +3984,7 @@ document.addEventListener('gesturestart', e => { if(isTouch) e.preventDefault();
 // the controls show only while you are playing and no panel is open; the chat and lie-down buttons only when they apply
 let touchShown = null;
 function syncTouch(){
-  const show = isTouch && playing && !invOpen && !fridgeOpen && !codeOpen && !chatOpen && !doorShown && !shopOpen;
+  const show = isTouch && playing && !invOpen && !fridgeOpen && !codeOpen && !chatOpen && !doorShown && !shopOpen && !tradeOpen;
   if(show !== touchShown){ touchShown = show; $('touch').hidden = !show; $('touchlook').hidden = !show; }
   if(!show) return;
   $('tlie').hidden = !(player.seat && player.seat.cell);
@@ -3844,6 +3993,7 @@ function syncTouch(){
   $('tmic').hidden = !mpMode;
   $('tdoor').hidden = !(target && isDoorId(target.id));
   $('tshop').hidden = !shopAim();
+  $('ttrade').hidden = !mpMode;
 }
 
 /* ---------- full screen: a button on the main menu ---------- */
@@ -3884,6 +4034,7 @@ window.addEventListener('error', () => { if(!$('loading').hidden) $('loadmsg').t
 function start(){
   sfx.init();
   musicStart();
+  syncTool();
   played = true;
   $('menu').hidden=true; playing=true; keys.__reset=false;
   lockPointer();
@@ -3895,6 +4046,7 @@ function pause(){
   if(codeOpen){ codeOpen=false; $('codebox').hidden=true; }
   if(doorShown){ doorShown=false; $('doorbox').hidden=true; }
   if(shopOpen){ shopOpen=false; $('shopbox').hidden=true; }
+  if(tradeOpen){ tradeOpen=false; $('tradebox').hidden=true; }
   playing=false; for(const k in keys) keys[k]=false;
   musicStop();
   saveAll();
@@ -3906,6 +4058,8 @@ function pause(){
 }
 $('settings').addEventListener('click',()=>{ sfx.init(); showSettings(); });
 $('setback').addEventListener('click',()=>{ showMain(); musicReroll(); });   // closing the settings changes the track
+$('howbtn').addEventListener('click', showHow);
+$('howback').addEventListener('click', showMain);
 $('musicbtn').addEventListener('click',()=>{ sfx.init(); musicSet(!music.on); });
 // sensitivity: one button cycles through the steps for both mouse and touch
 function setSens(v){
@@ -4451,6 +4605,7 @@ function frame(now){
   render();
   hud(dt);
   syncTouch();
+  syncCash();
   if(playing) { saveT=(saveT||0)+dt; if(saveT>10){ saveT=0; saveAll(); } }
   requestAnimationFrame(frame);
 }

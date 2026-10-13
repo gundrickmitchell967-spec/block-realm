@@ -22,6 +22,8 @@ const REACH = 12;               // a block change must be this close to the play
 const MAX_BLOCK_ID = 299;       // highest block id a player may place (see BLOCKS in index.html: MAX_ID there must match)
 const COLORS = ['#e6594b', '#4b9be6', '#58c25a', '#e6c44b', '#b35ae6', '#4be6d6', '#e6894b', '#e64b9b'];
 const DAY_LEN = 480;            // seconds for one full day (the same as in index.html)
+const HACK_MS = (Number(process.env.HACK_SECONDS) || 30) * 1000;   // how long a decoded door stays open
+const SHOP_PRICES = { hacktool: { name: 'Hacker Tool', price: 10000 } };   // the shop's items and prices (the client shows the same prices)
 const VOICE_RELAY_RANGE = 48;   // voice connections can only be set up between players this close (see VOICE_RANGE in index.html)
 
 // the two worlds. OUR WORLD keeps the world that was already saved in world.json; its password is checked here
@@ -74,7 +76,9 @@ function doorPair(w, x, y, z) {
 function passDigest(salt, pass) { return crypto.createHash('sha256').update(salt + ':' + pass).digest('hex'); }
 function cleanPass(s) { return typeof s === 'string' ? s.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 16) : ''; }
 // may this player open the lock: its owner, someone who typed the password, or the creator with BREAK ANY BLOCK on
-function lockOpenFor(p, lock) { return lock.owner === p.pid || lock.allowed.has(p.pid) || canBypass(p); }
+function lockOpenFor(p, lock) { return lock.owner === p.pid || lock.allowed.has(p.pid) || canBypass(p) || Date.now() < (lock.openUntil || 0); }
+// what a player's wallet looks like: their cash and hacker tools
+function walletMsg(w, q) { return { type: 'wallet', cash: w.coins.get(q.pid) || 0, tools: w.tools.get(q.pid) || 0 }; }
 // what one player is told about a door's lock: whether it is locked, whether it is theirs, and whether they may open it
 function lockMsg(w, q, lo, lock) {
   return { type: 'lock', x: lo[0], y: lo[1], z: lo[2], locked: !!lock, mine: w.owners.get(lo.join(',')) === q.pid, ok: !!lock && lockOpenFor(q, lock) };
@@ -118,7 +122,8 @@ for (const w of Object.values(WORLDS)) {
   w.edits = new Map();
   w.owners = new Map();    // "x,y,z" -> hashed id of the player who placed the block there (land has no owner)
   w.locks = new Map();     // "x,y,z" of each half of a door with a password -> the lock (both halves share one lock)
-  w.coins = new Map();     // hashed player id -> coins (the game creator can give them)
+  w.coins = new Map();     // hashed player id -> cash (the game creator gives it, players trade it and buy with it)
+  w.tools = new Map();     // hashed player id -> hacker tools they own (each one can be used once)
   w.mob = null;
   w.clock = { t: DAY_LEN * 0.3, at: Date.now() };    // the world time is w.clock.t at the moment w.clock.at; it then runs on in real time
   w.saveTimer = null;
@@ -127,6 +132,7 @@ for (const w of Object.values(WORLDS)) {
     const data = JSON.parse(fs.readFileSync(w.file, 'utf8'));
     const list = Array.isArray(data) ? data : data.edits;          // older saves were just the list of edits
     for (const [pid, n] of (Array.isArray(data) ? [] : (data.coins || []))) w.coins.set(pid, n);
+    for (const [pid, n] of (Array.isArray(data) ? [] : (data.tools || []))) w.tools.set(pid, n);
     for (const [k, v, o] of list) { w.edits.set(k, v); if (o !== undefined) w.owners.set(k, o); }
     for (const L of Array.isArray(data) ? [] : (data.locks || [])) {
       const lo = L.lower.split(',').map(Number);
@@ -150,7 +156,7 @@ function saveWorld(w) {
   const locks = [...new Set(w.locks.values())].map(L => ({ lower: L.lower.join(','), owner: L.owner, salt: L.salt, digest: L.digest, allowed: [...L.allowed] }));
   const tmp = w.file + '.tmp';
   try {
-    fs.writeFileSync(tmp, JSON.stringify({ edits, locks, coins: [...w.coins] }));
+    fs.writeFileSync(tmp, JSON.stringify({ edits, locks, coins: [...w.coins], tools: [...w.tools] }));
     fs.renameSync(tmp, w.file);
   } catch (e) {
     console.error(`${w.name}: could not save the world:`, e.message);
@@ -341,7 +347,7 @@ function hello(p, id, m) {
   const all = [];
   // each block also says who it belongs to for this player: 1 = yours, 0 = another player's, null = nobody's (land or older saves)
   for (const [k, v] of w.edits) { const [x, y, z] = k.split(',').map(Number); const o = w.owners.get(k); all.push([x, y, z, v, o === undefined ? null : (o === p.pid ? 1 : 0)]); }
-  sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, edits: all, players: list, time: worldTime(w), mob: w.mob, tvs: tvList(w), sources: tvSources(w), locks: lockList(w, p), coins: w.coins.get(p.pid) || 0 });
+  sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, edits: all, players: list, time: worldTime(w), mob: w.mob, tvs: tvList(w), sources: tvSources(w), locks: lockList(w, p), coins: w.coins.get(p.pid) || 0, tools: w.tools.get(p.pid) || 0 });
   broadcast(w, { type: 'join', id, name: p.name, color: p.color, x: p.x, y: p.y, z: p.z, yaw: p.yaw, role: p.role }, id);
   broadcast(w, { type: 'system', text: p.name + ' joined' }, id);
 }
@@ -407,8 +413,9 @@ wss.on('connection', (ws) => {
         if (!g || !g.joined || g.world !== w || !g.pid || !amt) return;
         const now = Math.max(0, (w.coins.get(g.pid) || 0) + amt);
         w.coins.set(g.pid, now); scheduleSave(w);
-        sendTo(g, { type: 'coins', coins: now, change: amt });
-        sendTo(p, { type: 'coinsgiven', name: g.name, coins: now, change: amt });
+        sendTo(g, walletMsg(w, g));
+        sendTo(g, { type: 'notice', text: amt > 0 ? 'THE GAME CREATOR GAVE YOU ' + amt + ' CASH' : 'THE GAME CREATOR TOOK ' + (-amt) + ' CASH' });
+        sendTo(p, { type: 'notice', text: (amt > 0 ? 'GAVE ' + amt + ' CASH TO ' : 'TOOK ' + (-amt) + ' CASH FROM ') + g.name.toUpperCase() });
         return;
       }
       const q = players.get(m.target);
@@ -562,6 +569,56 @@ wss.on('connection', (ws) => {
       if (p.role !== 'creator') return;
       p.bypass = m.on === true;
       return sendTo(p, { type: 'bypass', on: p.bypass });
+    }
+    if (m.type === 'buy') {
+      // the shop: a player buys an item with their cash (the item is added to the player's tools)
+      const item = SHOP_PRICES[m.item];
+      if (!item) return;
+      const cash = w.coins.get(p.pid) || 0;
+      if (cash < item.price) return sendTo(p, { type: 'notice', text: 'NOT ENOUGH CASH. YOU NEED ' + item.price });
+      w.coins.set(p.pid, cash - item.price);
+      w.tools.set(p.pid, (w.tools.get(p.pid) || 0) + 1);
+      scheduleSave(w);
+      sendTo(p, walletMsg(w, p));
+      return sendTo(p, { type: 'notice', text: 'BOUGHT: ' + item.name.toUpperCase() });
+    }
+    if (m.type === 'pay') {
+      // a player sends some of their cash to another player in the same world
+      const fail = text => sendTo(p, { type: 'notice', text });
+      const q = players.get(m.target);
+      const amt = Number.isInteger(m.amount) ? m.amount : 0;
+      if (!q || !q.joined || q === p || q.world !== w || !q.pid) return fail('CHOOSE A PLAYER TO SEND CASH TO');
+      if (amt < 1 || amt > 1000000) return fail('TYPE AN AMOUNT OF CASH TO SEND');
+      const mine = w.coins.get(p.pid) || 0;
+      if (mine < amt) return fail('YOU DO NOT HAVE THAT MUCH CASH');
+      w.coins.set(p.pid, mine - amt);
+      w.coins.set(q.pid, (w.coins.get(q.pid) || 0) + amt);
+      scheduleSave(w);
+      sendTo(p, walletMsg(w, p));
+      sendTo(p, { type: 'notice', text: 'SENT ' + amt + ' CASH TO ' + q.name.toUpperCase() });
+      sendTo(q, walletMsg(w, q));
+      sendTo(q, { type: 'notice', text: p.name.toUpperCase() + ' SENT YOU ' + amt + ' CASH' });
+      return;
+    }
+    if (m.type === 'hack') {
+      // the hacker tool: a locked door is decoded and opens for everyone for HACK_MS, then locks again. The tool is used up.
+      const fail = msg => sendTo(p, { type: 'doorresult', ok: false, msg });
+      if (!isInt(m.x) || !isInt(m.y) || !isInt(m.z)) return;
+      const lo = doorPair(w, m.x, m.y, m.z), lk = lo ? lo.join(',') : null;
+      const lock = lk ? w.locks.get(lk) : null;
+      if (!lock) return fail('THE HACKER TOOL NEEDS A DOOR WITH A PASSWORD');
+      const dx = lo[0] + 0.5 - p.x, dy = lo[1] + 1 - p.y, dz = lo[2] + 0.5 - p.z;
+      if (dx * dx + dy * dy + dz * dz > REACH * REACH) return fail('STAND CLOSER TO THE DOOR');
+      if ((w.tools.get(p.pid) || 0) < 1) return fail('YOU HAVE NO HACKER TOOL. BUY ONE IN THE SHOP');
+      if (Date.now() < (lock.openUntil || 0)) return fail('THAT DOOR IS ALREADY DECODED');
+      const left = w.tools.get(p.pid) - 1;
+      if (left > 0) w.tools.set(p.pid, left); else w.tools.delete(p.pid);
+      lock.openUntil = Date.now() + HACK_MS;
+      scheduleSave(w);
+      announceLock(w, lo, lock);
+      setTimeout(() => { if (w.locks.get(lk) === lock) announceLock(w, lo, lock); }, HACK_MS + 50);   // locks again when the time is up
+      sendTo(p, walletMsg(w, p));
+      return sendTo(p, { type: 'doorresult', ok: true, msg: 'DOOR DECODED: OPEN FOR ' + Math.round(HACK_MS / 1000) + ' SECONDS' });
     }
     if (m.type === 'edit') {
       if (!isInt(m.x) || !isInt(m.y) || !isInt(m.z) || !isInt(m.id)) return;
