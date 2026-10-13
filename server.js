@@ -5,6 +5,7 @@
 // from the same seed, so the server only stores changes.
 
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
@@ -26,6 +27,8 @@ const ADMIN_CODES = [
   { role: 'designer', code: process.env.ADMIN_CODE_DESIGNER || '5468' },   // GAME DESIGNER: invisibility, wall hacks
   { role: 'creator',  code: process.env.ADMIN_CODE_CREATOR  || '0702' },   // GAME CREATOR: all of the above, plus player commands
 ];
+let mob = null;                  // the cow: the last position the host sent, for players who join later
+function lowestJoinedId() { let low = Infinity; for (const [oid, o] of players) if (o.joined && oid < low) low = oid; return low; }
 const authTries = new Map();     // client address -> { n: wrong tries so far, until: time the lock ends }
 function codeDigest(s) { return crypto.createHash('sha256').update(String(s)).digest(); }
 function roleForCode(code) {
@@ -73,7 +76,11 @@ function flushAndExit() {
 process.on('SIGINT', flushAndExit);
 process.on('SIGTERM', flushAndExit);
 
-const server = http.createServer((req, res) => {
+// HTTPS: browsers only allow the microphone on secure (https) pages. Give the server a certificate
+// with TLS_CERT and TLS_KEY (paths to the PEM files), or put it behind a host that provides https.
+const TLS_CERT = process.env.TLS_CERT, TLS_KEY = process.env.TLS_KEY;
+const useTls = !!(TLS_CERT && TLS_KEY);
+const requestHandler = (req, res) => {
   const url = req.url.split('?')[0];
   if (url === '/favicon.ico') { res.writeHead(204); return res.end(); }
   if (url === '/' || url === '/index.html') {
@@ -86,7 +93,10 @@ const server = http.createServer((req, res) => {
   }
   res.writeHead(404, { 'Content-Type': 'text/plain' });
   res.end('not found');
-});
+};
+const server = useTls
+  ? https.createServer({ cert: fs.readFileSync(TLS_CERT), key: fs.readFileSync(TLS_KEY) }, requestHandler)
+  : http.createServer(requestHandler);
 
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 16 * 1024 });
 let nextId = 1;
@@ -144,7 +154,7 @@ wss.on('connection', (ws) => {
       for (const [oid, o] of players) if (oid !== id && o.joined) list.push({ id: oid, name: o.name, color: o.color, x: o.x, y: o.y, z: o.z, yaw: o.yaw, sleeping: o.sleeping, hidden: o.hidden, role: o.role });
       const all = [];
       for (const [k, v] of edits) { const [x, y, z] = k.split(',').map(Number); all.push([x, y, z, v]); }
-      sendTo(p, { type: 'welcome', id, edits: all, players: list, time: worldTime() });
+      sendTo(p, { type: 'welcome', id, edits: all, players: list, time: worldTime(), mob });
       broadcast({ type: 'join', id, name: p.name, color: p.color, x: p.x, y: p.y, z: p.z, yaw: p.yaw, role: p.role }, id);
       broadcast({ type: 'system', text: p.name + ' joined' }, id);
       return;
@@ -192,9 +202,24 @@ wss.on('connection', (ws) => {
       if (p.role !== 'creator') return;
       const q = players.get(m.target);
       if (!q || !q.joined || q === p) return;
-      if (m.action === 'tp') sendTo(p, { type: 'teleport', x: q.x, y: q.y, z: q.z });        // you go to them
-      else if (m.action === 'bring') sendTo(q, { type: 'teleport', x: p.x, y: p.y, z: p.z }); // they come to you
+      if (m.action === 'tp') sendTo(p, { type: 'teleport', x: q.x, y: q.y, z: q.z, exact: true });        // you go to their exact spot
+      else if (m.action === 'bring') sendTo(q, { type: 'teleport', x: p.x, y: p.y, z: p.z, exact: false }); // they come beside you
+      else if (m.action === 'msg') {
+        // a private message: it pops up on their screen only
+        const text = typeof m.text === 'string' ? m.text.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 200) : '';
+        if (text) sendTo(q, { type: 'pm', from: p.name, role: p.role, text });
+        return;
+      }
       else if (m.action === 'jump') sendTo(q, { type: 'jump' });
+      return;
+    }
+
+    if (m.type === 'mob') {
+      // the cow: only the lowest-numbered connected player moves it, and everyone else is sent its position
+      if (id !== lowestJoinedId()) return;
+      if (!isNum(m.x) || !isNum(m.y) || !isNum(m.z) || !isNum(m.yaw)) return;
+      mob = { x: m.x, y: m.y, z: m.z, yaw: m.yaw };
+      broadcast({ type: 'mob', x: m.x, y: m.y, z: m.z, yaw: m.yaw }, id);
       return;
     }
 
@@ -254,6 +279,6 @@ wss.on('connection', (ws) => {
 setInterval(() => broadcast({ type: 'time', time: worldTime() }), 5000);
 
 server.listen(PORT, HOST, () => {
-  console.log(`Block Realm server on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}  (game page and ws://.../ws)`);
+  console.log(`Block Realm server on ${useTls ? "https" : "http"}://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}  (game page and ws://.../ws)`);
   console.log(`players up to ${MAX_PLAYERS}, world file ${WORLD_FILE}`);
 });
