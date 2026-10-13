@@ -2724,7 +2724,7 @@ function doPlace(){
   if(feedCam){ closeFeed(); return; }
   if(shopAim()){ openShop(); return; }   // right-click the shopkeeper: the shop opens
   if(HOTBAR[sel]===HACK_TOOL_ID){ hackDoor(raycast(6)); return; }   // the hacker tool: right-click a locked door to decode it
-  if(HOTBAR[sel]===SURVEY_ID){ surveyCancel(); return; }            // the Land Surveyor: right-click cancels the measuring
+  if(HOTBAR[sel]===SURVEY_ID){ surveyRight(raycast(6)); return; }   // the Land Surveyor: right-click on your land picks a part to cut out, elsewhere cancels
   const h=raycast(6);
   if(HOTBAR[sel]===REMOTE_ID){ remotePress(h); return; }   // the remote in your hand: right-click starts or pauses the TV you aim at
   if(h && h.id===SCREEN_ID){ openFeed(h); return; }   // a view screen: right-click watches the nearest camera
@@ -3447,6 +3447,7 @@ function surveyBox(){
 }
 function surveyFits(s){ return Math.min(s.w, s.d) >= PLOT_MIN && Math.max(s.w, s.d) <= PLOT_MAX; }
 function surveyText(){
+  if(cutPt) return 'CUT: CORNER 1 SET. RIGHT-CLICK THE OPPOSITE CORNER';
   if(!survey.a) return 'LAND SURVEYOR: CLICK A BLOCK TO SET THE FIRST CORNER';
   const s = surveyBox();
   if(!s) return 'LAND SURVEYOR: MOVE TO THE OTHER CORNER';
@@ -3463,7 +3464,17 @@ function surveyClick(h){
   if(!survey.a){ survey = {a: c, b: null}; flashHud('CORNER 1 SET. MOVE TO THE OTHER CORNER AND CLICK'); }
   else { survey.b = c; flashHud('LAND MEASURED. TAKE IT TO THE SHOP TO BUY IT'); }
 }
-function surveyCancel(){ survey = {a:null, b:null}; flashHud('MEASURING CANCELLED'); }
+function surveyCancel(){ survey = {a:null, b:null}; cutPt = null; flashHud('MEASURING CANCELLED'); }
+// right-click on your own land with the surveyor: two right-clicks pick the two corners of a part to cut out
+let cutPt = null;   // the first corner: { plot: 'x0,z0,x1,z1', x, z }
+function surveyRight(h){
+  const p = h && mpMode ? plotAtClient(h.x, h.z) : null;
+  if(!p || !p.mine){ surveyCancel(); return; }
+  const key = [p.x0, p.z0, p.x1, p.z1].join(',');
+  if(!cutPt || cutPt.plot !== key){ cutPt = {plot: key, x: h.x, z: h.z}; flashHud('CUT CORNER 1 SET. RIGHT-CLICK THE OPPOSITE CORNER OF THE PART'); return; }
+  mpSend({type:'plotcut', plot:[p.x0, p.z0, p.x1, p.z1], a:[cutPt.x, cutPt.z], b:[h.x, h.z]});
+  cutPt = null; flashHud('CUTTING THE PART OUT...');
+}
 // why a block can't be changed here: you may only build on a plot you have bought (the server checks it too)
 function landBlock(x, z){                    // why this block can't be changed here, or null when it can
   if(adminBypass) return null;
@@ -3603,6 +3614,7 @@ function renderAdmin(){
   $('stopspec').hidden = spectate.id == null;
   const who = $('givewho'), keep = who.value;      // the list of players in the give-coins box, keeping the choice
   who.textContent = '';
+  const selfOpt = document.createElement('option'); selfOpt.value = String(mp.id); selfOpt.textContent = 'YOURSELF (ADMIN)'; who.appendChild(selfOpt);
   for(const o of rows){ const op = document.createElement('option'); op.value = String(o.id); op.textContent = o.name; who.appendChild(op); }
   if([...who.options].some(x => x.value === keep)) who.value = keep;
 }

@@ -877,6 +877,42 @@ wss.on('connection', (ws) => {
       announcePlots(w);
       return fail('CUT OUT ' + cutName + ': ' + cw + ' x ' + cd + ' BLOCKS');
     }
+    if (m.type === 'plotcut') {
+      // cut a rectangle out of one of your plots (two corners picked with the Land Surveyor). The part becomes its own plot;
+      // the land left around it becomes up to four plots of yours. Prices are split by area and the total is kept.
+      const fail = text => sendTo(p, { type: 'notice', text });
+      if (!Array.isArray(m.plot) || !Array.isArray(m.a) || !Array.isArray(m.b) || ![...m.plot, ...m.a, ...m.b].every(Number.isInteger)) return fail('PICK TWO POINTS INSIDE YOUR PLOT');
+      const i = w.plots.findIndex(o => o.owner === p.pid && sameRect(o, m.plot));
+      if (i < 0) return fail('THAT IS NOT YOUR PLOT');
+      const pl = w.plots[i];
+      const cut = { x0: Math.min(m.a[0], m.b[0]), x1: Math.max(m.a[0], m.b[0]), z0: Math.min(m.a[1], m.b[1]), z1: Math.max(m.a[1], m.b[1]) };
+      if (cut.x0 < pl.x0 || cut.x1 > pl.x1 || cut.z0 < pl.z0 || cut.z1 > pl.z1) return fail('THE PART MUST BE INSIDE YOUR PLOT');
+      const W = pl.x1 - pl.x0 + 1, D = pl.z1 - pl.z0 + 1, cw = cut.x1 - cut.x0 + 1, cd = cut.z1 - cut.z0 + 1;
+      if (cw < PLOT_MIN || cd < PLOT_MIN) return fail('A PART MUST BE AT LEAST ' + PLOT_MIN + ' BLOCKS ON EACH SIDE');
+      if (cw === W && cd === D) return fail('THAT IS THE WHOLE PLOT. SELL IT INSTEAD');
+      const rest = [];   // the land left around the part: up to four rectangles
+      if (cut.z0 > pl.z0) rest.push({ x0: pl.x0, x1: pl.x1, z0: pl.z0, z1: cut.z0 - 1 });
+      if (cut.z1 < pl.z1) rest.push({ x0: pl.x0, x1: pl.x1, z0: cut.z1 + 1, z1: pl.z1 });
+      if (cut.x0 > pl.x0) rest.push({ x0: pl.x0, x1: cut.x0 - 1, z0: cut.z0, z1: cut.z1 });
+      if (cut.x1 < pl.x1) rest.push({ x0: cut.x1 + 1, x1: pl.x1, z0: cut.z0, z1: cut.z1 });
+      if (rest.some(r => Math.min(r.x1 - r.x0 + 1, r.z1 - r.z0 + 1) < PLOT_MIN)) return fail('THE LAND LEFT AROUND THE PART MUST BE AT LEAST ' + PLOT_MIN + ' BLOCKS ON EACH SIDE. PICK A DIFFERENT PART');
+      const total = pl.price || 0, area = W * D, cutArea = cw * cd, restTotal = total - Math.round(total * cutArea / area);
+      const restArea = area - cutArea, cutName = (pl.name || 'PLOT') + ' PART';
+      const parts = [Object.assign({}, pl, cut, { name: cutName, price: Math.round(total * cutArea / area) })];
+      let left = restTotal;
+      rest.forEach((r, k) => {
+        const a = (r.x1 - r.x0 + 1) * (r.z1 - r.z0 + 1);
+        const pr = k === rest.length - 1 ? left : Math.round(restTotal * a / restArea);
+        left -= pr;
+        parts.push(Object.assign({}, pl, r, { name: k === 0 ? (pl.name || 'PLOT') : (pl.name || 'PLOT') + ' (' + (k + 1) + ')', price: pr }));
+      });
+      w.plots.splice(i, 1, ...parts);
+      for (const k of [...w.offers.keys()]) { if (sameRect(w.offers.get(k), m.plot)) w.offers.delete(k); }
+      scheduleSave(w);
+      announceOffers(w);
+      announcePlots(w);
+      return fail('CUT OUT ' + cutName + ': ' + cw + ' x ' + cd + ' BLOCKS. THE REST OF YOUR LAND IS STILL YOURS');
+    }
     if (m.type === 'cashlog') return sendTo(p, { type: 'cashlog', entries: cashLogFor(w, p) });
     if (m.type === 'edit') {
       if (!isInt(m.x) || !isInt(m.y) || !isInt(m.z) || !isInt(m.id)) return;
