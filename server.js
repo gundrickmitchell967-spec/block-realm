@@ -704,7 +704,11 @@ wss.on('connection', (ws) => {
       if (dx * dx + dy * dy + dz * dz > REACH * REACH) return;   // too far from where this player last was
       const key = m.x + ',' + m.y + ',' + m.z;
       const landOwner = plotAt(w, m.x, m.z);
-      if (landOwner && landOwner.owner !== p.pid && !canBypass(p)) return fixBlock(p, w, key, 'THIS LAND BELONGS TO ANOTHER PLAYER');
+      if (!canBypass(p)) {
+        // building (and breaking) is allowed only on a plot the player has bought
+        if (!landOwner) return fixBlock(p, w, key, 'BUILD ONLY ON LAND YOU HAVE BOUGHT');
+        if (landOwner.owner !== p.pid) return fixBlock(p, w, key, 'THIS LAND BELONGS TO ANOTHER PLAYER');
+      }
       const cur = w.edits.has(key) ? w.edits.get(key) : null;     // null: land that no player has changed
       const owner = w.owners.get(key);                            // undefined: no player placed this block
       if (owner !== undefined && owner !== p.pid && !canBypass(p)) {

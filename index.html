@@ -234,6 +234,7 @@
     <div id="mainbtns">
       <button class="btn" id="play">PLAY</button>
       <button class="btn" id="resume" hidden>RESUME</button>
+      <button class="btn cashbtn" id="cashbtn" type="button">CASH</button>
       <button class="btn" id="mmic" type="button" hidden>MIC: OFF</button>
       <button class="btn" id="multi">MULTIPLAYER</button>
       <button class="btn" id="leave" hidden>LEAVE SERVER</button>
@@ -247,7 +248,7 @@
       <button class="btn" id="drawbtn" type="button">DRAW DISTANCE: 4</button>
       <button class="btn" id="sensbtn" type="button">SENSITIVITY: 1x</button>
       <button class="btn" id="sound">SOUND EFFECTS: ON</button>
-      <button class="btn cashbtn" id="cashbtn" type="button">CASH</button>
+      <button class="btn" id="landbtn" type="button">LAND BORDERS: ON</button>
       <button class="btn ghost" id="setback">BACK</button>
     </div>
     <div id="cashscreen" hidden>
@@ -2483,7 +2484,7 @@ function doBreak(){
   if(!h) return;
   const cells=[[h.x,h.y,h.z]];
   const p=partnerOf(h.x,h.y,h.z,h.id); if(p) cells.push(p);   // a door or bed comes down as a whole
-  if(mpMode && cells.some(([x,y,z]) => otherLand(x,z))){ flashHud('THIS LAND BELONGS TO ANOTHER PLAYER'); return; }
+  { const lb = mpMode ? cells.map(([x,y,z]) => landBlock(x,z)).find(Boolean) : null; if(lb){ flashHud(lb); return; } }
   // another player's block is not removed here at all, so nothing behind it can be reached while the server is told
   if(mpMode && cells.some(([x,y,z]) => blockOwner.get(doorKeyOf(x,y,z)) === false)){ flashHud('THAT BLOCK BELONGS TO ANOTHER PLAYER'); return; }
   for(const [x,y,z] of cells){ setBlock(x,y,z,0); blockOwner.delete(doorKeyOf(x,y,z)); mpSend({type:'edit', x, y, z, id:0}); }
@@ -2492,7 +2493,7 @@ function doBreak(){
 }
 // right-clicking a door opens it, or closes it again; a door will not close on the player
 function toggleDoor(h){
-  if(mpMode && otherLand(h.x, h.z)){ flashHud('THIS LAND BELONGS TO ANOTHER PLAYER'); return; }
+  { const lb = mpMode && landBlock(h.x, h.z); if(lb){ flashHud(lb); return; } }
   if(doorIsLocked(h)){ askDoor(h.x, lowerHalfY(h), h.z); flashHud('THE DOOR IS LOCKED: TYPE ITS PASSWORD'); return; }
   const open = isOpenDoor(h.id);
   const p = partnerOf(h.x,h.y,h.z,h.id);
@@ -2648,7 +2649,7 @@ function doPlace(){
   const id=HOTBAR[sel];
   if(id==null){ flashHud('EMPTY SLOT: press E to choose a block'); return; }
   if(isItem(id)){ flashHud('FOOD AND DISHES GO IN THE FRIDGE: open one, then right-click it'); return; }
-  if(mpMode && otherLand(h.x+h.nx, h.z+h.nz)){ flashHud('THIS LAND BELONGS TO ANOTHER PLAYER'); return; }
+  { const lb = mpMode && landBlock(h.x+h.nx, h.z+h.nz); if(lb){ flashHud(lb); return; } }
   const x=h.x+h.nx, y=h.y+h.ny, z=h.z+h.nz;
   const mt = isFurnBase(id) ? FURN[furnState(id).t].mount : null;
   if(mt === 'ceiling' && h.ny !== -1){ flashHud('HANG THE LIGHT UNDER A CEILING'); return; }
@@ -3144,9 +3145,47 @@ function surveyClick(h){
   else { survey.b = c; flashHud('LAND MEASURED. TAKE IT TO THE SHOP TO BUY IT'); }
 }
 function surveyCancel(){ survey = {a:null, b:null}; flashHud('MEASURING CANCELLED'); }
+// why a block can't be changed here: you may only build on a plot you have bought (the server checks it too)
+function landBlock(x, z){                    // why this block can't be changed here, or null when it can
+  if(adminBypass) return null;
+  const p = plotAtClient(x, z);
+  if(!p) return 'BUILD ONLY ON LAND YOU HAVE BOUGHT';
+  return p.mine ? null : 'THIS LAND BELONGS TO ANOTHER PLAYER';
+}
+let landBorders = true;                      // the LAND BORDERS setting: show the plot outlines
+let plotBuiltFor = null, plotLineMine = null, plotLineOther = null;
+function makeLineVAO(){
+  const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+  gl.bindVertexArray(null);
+  return {vao, buf, n: 0};
+}
+function uploadLines(L, arr){
+  gl.bindVertexArray(L.vao); gl.bindBuffer(gl.ARRAY_BUFFER, L.buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arr), gl.DYNAMIC_DRAW);
+  L.n = arr.length / 3; gl.bindVertexArray(null);
+}
+// the outline of every plot: one red line per block along its edge, sitting on the ground
+function buildPlotLines(){
+  plotBuiltFor = plotList;
+  if(!plotLineMine){ plotLineMine = makeLineVAO(); plotLineOther = makeLineVAO(); }
+  const mine = [], other = [];
+  const seg = (out, ax, az, bx, bz, sx, sz) => { const y = heightAt(sx, sz) + 0.06; out.push(ax, y, az, bx, y, bz); };
+  for(const p of plotList){
+    const out = p.mine ? mine : other;
+    for(let x = p.x0; x <= p.x1; x++){
+      seg(out, x, p.z0, x + 1, p.z0, x, p.z0);            // north edge
+      seg(out, x, p.z1 + 1, x + 1, p.z1 + 1, x, p.z1);    // south edge
+    }
+    for(let z = p.z0; z <= p.z1; z++){
+      seg(out, p.x0, z, p.x0, z + 1, p.x0, z);            // west edge
+      seg(out, p.x1 + 1, z, p.x1 + 1, z + 1, p.x1, z);    // east edge
+    }
+  }
+  uploadLines(plotLineMine, mine); uploadLines(plotLineOther, other);
+}
 function plotAtClient(x, z){ return plotList.find(p => x >= p.x0 && x <= p.x1 && z >= p.z0 && z <= p.z1) || null; }
-// true when this block is inside someone else's plot (the server checks it too)
-function otherLand(x, z){ const p = plotAtClient(x, z); return !!p && !p.mine && !adminBypass; }
 function buyPlot(){
   if(!mpMode){ shopNote('BUYING LAND NEEDS THE MULTIPLAYER SERVER'); return; }
   const s = surveyBox();
@@ -4188,6 +4227,7 @@ $('setback').addEventListener('click',()=>{ showMain(); musicReroll(); });   // 
 $('howbtn').addEventListener('click', showHow);
 $('howback').addEventListener('click', showMain);
 $('musicbtn').addEventListener('click',()=>{ sfx.init(); musicSet(!music.on); });
+$('landbtn').addEventListener('click',()=>{ landBorders = !landBorders; $('landbtn').textContent = 'LAND BORDERS: ' + (landBorders ? 'ON' : 'OFF'); });
 // sensitivity: one button cycles through the steps for both mouse and touch
 function setSens(v){
   lookSens = v;
@@ -4337,6 +4377,20 @@ function render(){
     gl.uniform4f(LU.uCol,0.05,0.05,0.05,1);
     gl.bindVertexArray(outlineVAO);
     gl.drawArrays(gl.LINES,0,24);
+    gl.enable(gl.CULL_FACE);
+  }
+  // land borders: your own plots in red, other players' plots in grey (the LAND BORDERS setting turns them off)
+  if(mpMode && landBorders && plotList.length){
+    if(plotList !== plotBuiltFor) buildPlotLines();
+    gl.disable(gl.CULL_FACE);
+    gl.useProgram(line);
+    gl.uniformMatrix4fv(LU.uVP,false,new Float32Array(VP));
+    gl.uniform3f(LU.uOff,0,0,0);
+    gl.uniform4f(LU.uCol,1,0.15,0.15,1);
+    gl.bindVertexArray(plotLineMine.vao); gl.drawArrays(gl.LINES,0,plotLineMine.n);
+    gl.uniform4f(LU.uCol,0.8,0.8,0.8,1);
+    gl.bindVertexArray(plotLineOther.vao); gl.drawArrays(gl.LINES,0,plotLineOther.n);
+    gl.bindVertexArray(null);
     gl.enable(gl.CULL_FACE);
   }
   // other players
