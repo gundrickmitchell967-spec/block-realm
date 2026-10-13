@@ -917,6 +917,17 @@ wss.on('connection', (ws) => {
       announcePlots(w);
       return fail('CUT OUT ' + cutName + ': ' + cw + ' x ' + cd + ' BLOCKS. THE REST OF YOUR LAND IS STILL YOURS');
     }
+    if (m.type === 'board') {
+      // the leaderboard: only the players who are online in this world, with their placed blocks, plot land and cash
+      const blocks = new Map(), land = new Map();
+      for (const o of w.owners.values()) blocks.set(o, (blocks.get(o) || 0) + 1);
+      for (const pl of w.plots) land.set(pl.owner, (land.get(pl.owner) || 0) + (pl.x1 - pl.x0 + 1) * (pl.z1 - pl.z0 + 1));
+      const rows = [...players.values()].filter(q => q.world === w && q.joined && q.pid).map(q => ({
+        name: q.name, me: q.pid === p.pid,
+        blocks: blocks.get(q.pid) || 0, land: land.get(q.pid) || 0, cash: w.coins.get(q.pid) || 0
+      }));
+      return sendTo(p, { type: 'board', rows });
+    }
     if (m.type === 'cashlog') return sendTo(p, { type: 'cashlog', entries: cashLogFor(w, p) });
     if (m.type === 'edit') {
       if (!isInt(m.x) || !isInt(m.y) || !isInt(m.z) || !isInt(m.id)) return;

@@ -162,6 +162,14 @@
   body.inmenu #hotbar,body.inmenu #hud,body.inmenu #cross,body.inmenu #selname,body.inmenu #cashhud,body.inmenu #landhud,body.inmenu #surveyhud,body.inmenu #hacktimer,body.inmenu #offerhud{display:none!important}
   body.inmenu #feedhud{display:none!important}
   #feedhud{position:fixed;top:156px;left:50%;transform:translateX(-50%);padding:4px 12px;font:bold 13px 'Courier New',monospace;color:#fff;background:rgba(160,20,20,.85);border:2px solid #ff8a7a;border-radius:6px;pointer-events:none;z-index:3;white-space:nowrap}
+  #board{width:100%;box-sizing:border-box}
+  .bcols{display:flex;gap:6px;width:100%}
+  .bcol{flex:1 1 0;min-width:0;background:#11151f;border:2px solid #2e3850;padding:6px}
+  .bcol h4{margin:0 0 6px;font:bold 11px 'Courier New',monospace;letter-spacing:.1em;color:#ffe066;text-align:center}
+  .brow{display:flex;justify-content:space-between;gap:4px;font:11px 'Courier New',monospace;padding:2px 3px;color:#d4d9e6}
+  .brow span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .brow span:last-child{color:#7ee39a;flex:0 0 auto}
+  .brow.me{color:#ffe066}
   #offerhud{position:fixed;top:118px;left:50%;transform:translateX(-50%);padding:4px 12px;font:bold 13px 'Courier New',monospace;color:#1a1200;background:#ffe066;border:2px solid #fff3a0;border-radius:6px;pointer-events:none;z-index:3;white-space:nowrap}
   #fsbtn{position:absolute;top:12px;right:12px;width:auto;padding:9px 12px;font-size:12px;letter-spacing:.06em;z-index:3}
   #fsmsg{position:absolute;top:58px;right:12px;max-width:280px;margin:0;font-size:12px;line-height:1.4;color:#ffe066;text-align:right;text-shadow:1px 1px 0 #000}
@@ -263,6 +271,14 @@
   <div class="card">
     <h1>BLOCK REALM</h1>
     <p class="tagline">Build it. Share it. Sleep through the night.</p>
+    <div id="board" hidden>
+      <h3 class="sect">LEADERBOARD: LIVE PLAYERS</h3>
+      <div class="bcols">
+        <div class="bcol"><h4>MOST BLOCKS</h4><div id="bblocks"></div></div>
+        <div class="bcol"><h4>MOST LAND</h4><div id="bland"></div></div>
+        <div class="bcol"><h4>MOST CASH</h4><div id="bcash"></div></div>
+      </div>
+    </div>
     <div id="mainbtns">
       <p class="sect">GAME</p>
       <button class="btn" id="play">PLAY</button>
@@ -964,8 +980,8 @@ const isLampBottomId = b => b===LAMP_ID || b===LAMP_OFF_ID;
 const lampId = (top, on) => top ? (on ? LAMP_TOP_ID : LAMP_OFF_TOP_ID) : (on ? LAMP_ID : LAMP_OFF_ID);
 // the security camera and the view screen: blocks the shop sells (the server counts how many each player has)
 const CAMERA_ID = 260, SCREEN_ID = 261;
-BLOCKS[CAMERA_ID] = {name:'Security Camera', top:41, side:41, bot:41, sw:'#2a1a3a'};
-BLOCKS[SCREEN_ID] = {name:'View Screen', top:17, side:17, bot:17, sw:'#2a6fdb'};
+BLOCKS[CAMERA_ID] = {name:'Security Camera', top:96, side:96, bot:96, sw:'#2a1a3a'};
+BLOCKS[SCREEN_ID] = {name:'View Screen', top:98, side:98, bot:98, sw:'#2a6fdb'};
 const MAX_ID = Math.max(LAMP_OFF_TOP_ID, FURN_MAX, SCREEN_ID);   // highest block id (matches the server)
 BLOCKS[LAMP_OFF_ID]     = {name:'Lamp (off)', top:76, side:76, bot:76, sw:'#8a8680'};
 BLOCKS[LAMP_OFF_TOP_ID] = {name:'Lamp (off)', top:76, side:76, bot:76, sw:'#8a8680'};
@@ -2389,6 +2405,24 @@ function makeAtlasCanvas(){
   tile(81,(px,py)=>{ if(py>=5&&py<=12&&px>=2&&px<=13-(py-5)*(11/7)) return Math.hypot(px-8,py-9)<1.3 ? [222,172,44] : [246,206,70]; return [200,214,226]; });   // cheese
   tile(82,(px,py)=>{ if(py<=4&&px>=8&&px<=12) return [70,150,60]; if(py>=5&&py<=14&&Math.abs(px-(py*0.5+3))<2.6) return [240,130,40]; return [200,214,228]; });   // carrot
   tile(83,(px,py)=>{ if(py>=2&&py<=4&&px>=5&&px<=10) return [200,60,50]; if(py>=5&&py<=14&&px>=4&&px<=11) return py<=6 ? [222,140,50] : [244,160,40]; return [200,214,228]; });   // juice
+  // the security camera (tile 96): a dark body with a glass lens and a red light
+  tile(96,(px,py)=>{
+    if(px<1||py<1||px>14||py>14) return [34,36,44];
+    if(Math.hypot(px-12,py-3)<1.3) return [240,50,50];
+    const r=Math.hypot(px-7.5,py-7.5);
+    if(px===6&&py===6) return [210,235,255];
+    if(r<2.4) return [12,18,30];
+    if(r<3.4) return [60,68,88];
+    if(r<4.6) return [112,124,148];
+    return [70,74,84];
+  });
+  // the view screen (tile 98): a bezel around a blue screen with scan lines
+  tile(98,(px,py)=>{
+    if(px<2||py<2||px>13||py>13) return [40,40,48];
+    const wave=0.5+0.5*Math.sin(px*0.9)*Math.cos(py*0.5);
+    const line=py%2===0?0.8:1;
+    return [(28+34*wave)*line,(108+74*wave)*line,(200+40*wave)*line];
+  });
   return c;
 }
 const atlasTex = gl.createTexture();
@@ -3374,10 +3408,27 @@ function openFeed(h){
   camList.forEach((c, i) => { const d = (c.x-hx)**2 + (c.y-hy)**2 + (c.z-hz)**2; if(d < bd){ bd = d; best = i; } });
   feedIdx = best; feedCam = camList[best]; feedBase = null;
   for(const k in keys) keys[k] = false;
-  if(document.pointerLockElement){ try{ document.exitPointerLock(); }catch(e){} }
 }
 function cycleFeed(){ if(!camList.length){ feedCam = null; return; } feedIdx = (feedIdx + 1) % camList.length; feedCam = camList[feedIdx]; feedBase = null; }
 function closeFeed(){ feedCam = null; }
+// the pause menu's leaderboard: the top players in each column (names are shown as text only)
+let boardAt = 0;
+function renderBoard(rows){
+  const fill = (id, key, fmt) => {
+    const box = $(id); box.textContent = '';
+    const top = [...rows].sort((a, b) => b[key] - a[key]).slice(0, 8);
+    if(!top.length){ const p = document.createElement('div'); p.className = 'brow'; p.textContent = 'No one yet'; box.appendChild(p); return; }
+    top.forEach((r, i) => {
+      const row = document.createElement('div'); row.className = 'brow' + (r.me ? ' me' : '');
+      const nm = document.createElement('span'); nm.textContent = (i + 1) + '. ' + r.name;
+      const v = document.createElement('span'); v.textContent = fmt(r[key]);
+      row.appendChild(nm); row.appendChild(v); box.appendChild(row);
+    });
+  };
+  fill('bblocks', 'blocks', n => fmtAmt(n));
+  fill('bland', 'land', n => fmtAmt(n) + ' ');
+  fill('bcash', 'cash', n => fmtCash(n));
+}
 function renderShop(){
   const cl = $('shopcoins'); cl.textContent = '';
   cl.appendChild(coinSpan()); cl.appendChild(document.createTextNode(' YOUR CASH: ' + fmtAmt(myCoins) + (mpMode ? '' : '   (cash comes from the multiplayer server)')));
@@ -4308,6 +4359,7 @@ function onServerMessage(m){
   }
   else if(m.type==='plots'){ plotList = m.list || []; if(shopOpen) renderShop(); }
   else if(m.type==='devices'){ camList = m.list || []; }
+  else if(m.type==='board'){ renderBoard(m.rows || []); }
   else if(m.type==='offers'){
     const before = new Set(offers.incoming.map(o => o.id));
     offers = {incoming: m.incoming || [], outgoing: m.outgoing || []};
@@ -4707,9 +4759,14 @@ $('sound').addEventListener('click',()=>{ sfx.init(); toggleSound(); });
 let meshBudget=3, genBudget=3;
 function ensureChunks(){
   const pcx=Math.floor(player.x/CS), pcz=Math.floor(player.z/CS);
+  // while a camera is on screen, the chunks around that camera are kept as well as the ones around you
+  const fcx=feedCam?Math.floor(feedCam.x/CS):pcx, fcz=feedCam?Math.floor(feedCam.z/CS):pcz;
+  const centers=feedCam?[[pcx,pcz],[fcx,fcz]]:[[pcx,pcz]];
   const want=[];
-  for(let dz=-RD;dz<=RD;dz++) for(let dx=-RD;dx<=RD;dx++){
-    const d=dx*dx+dz*dz; if(d<=RD*RD+RD) want.push([pcx+dx,pcz+dz,d]);
+  for(const [ox,oz] of centers){
+    for(let dz=-RD;dz<=RD;dz++) for(let dx=-RD;dx<=RD;dx++){
+      const d=dx*dx+dz*dz; if(d<=RD*RD+RD) want.push([ox+dx,oz+dz,d]);
+    }
   }
   want.sort((a,b)=>a[2]-b[2]);
   let made=0;
@@ -4723,11 +4780,15 @@ function ensureChunks(){
     markDirty(cx+1,cz); markDirty(cx-1,cz); markDirty(cx,cz+1); markDirty(cx,cz-1);
   }
   for(const [k,ch] of chunks){
-    if(Math.max(Math.abs(ch.cx-pcx),Math.abs(ch.cz-pcz))>RD+2){ if(hasLight(ch.data)) lightDirty = true; disposeChunk(ch); chunks.delete(k); }
+    const nearP=Math.max(Math.abs(ch.cx-pcx),Math.abs(ch.cz-pcz))<=RD+2;
+    const nearF=feedCam&&Math.max(Math.abs(ch.cx-fcx),Math.abs(ch.cz-fcz))<=RD+2;
+    if(!nearP && !nearF){ if(hasLight(ch.data)) lightDirty = true; disposeChunk(ch); chunks.delete(k); }
   }
 }
+
 function remesh(){
-  const pcx=Math.floor(player.x/CS), pcz=Math.floor(player.z/CS);
+  const vc=feedCam||player;
+  const pcx=Math.floor(vc.x/CS), pcz=Math.floor(vc.z/CS);
   const dirty=[];
   for(const ch of chunks.values()) if(ch.dirty) dirty.push(ch);
   dirty.sort((a,b)=>(Math.abs(a.cx-pcx)+Math.abs(a.cz-pcz))-(Math.abs(b.cx-pcx)+Math.abs(b.cz-pcz)));
@@ -5250,6 +5311,10 @@ function frame(now){
   syncTouch();
   syncCash();
   document.body.classList.toggle('inmenu', !$('menu').hidden);
+  // the leaderboard shows on the pause menu for multiplayer worlds, and refreshes every two seconds
+  const boardShow = mpMode && !playing && !$('menu').hidden && !$('mainbtns').hidden;
+  $('board').hidden = !boardShow;
+  if(boardShow && performance.now() - boardAt > 2000){ boardAt = performance.now(); mpSend({type:'board'}); }
   if(playing) { saveT=(saveT||0)+dt; if(saveT>10){ saveT=0; saveAll(); } }
   requestAnimationFrame(frame);
 }
