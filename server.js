@@ -102,7 +102,7 @@ function lockList(w, p) {
 // the server will not allow a change: the block goes back to how it was, and the player is told why
 function fixBlock(p, w, key, msg) {
   const [x, y, z] = key.split(',').map(Number);
-  sendTo(p, { type: 'fix', x, y, z, id: w.edits.get(key) || 0, msg });
+  sendTo(p, { type: 'fix', x, y, z, id: w.edits.get(key) || 0, own: w.owners.get(key) === p.pid, msg });
 }
 function roleForCode(code) {
   const d = codeDigest(code);
@@ -337,7 +337,8 @@ function hello(p, id, m) {
   const list = [];
   for (const [oid, o] of players) if (oid !== id && o.joined && o.world === w) list.push({ id: oid, name: o.name, color: o.color, x: o.x, y: o.y, z: o.z, yaw: o.yaw, sleeping: o.sleeping, hidden: o.hidden, role: o.role });
   const all = [];
-  for (const [k, v] of w.edits) { const [x, y, z] = k.split(',').map(Number); all.push([x, y, z, v]); }
+  // each block also says who it belongs to for this player: 1 = yours, 0 = another player's, null = nobody's (land or older saves)
+  for (const [k, v] of w.edits) { const [x, y, z] = k.split(',').map(Number); const o = w.owners.get(k); all.push([x, y, z, v, o === undefined ? null : (o === p.pid ? 1 : 0)]); }
   sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, edits: all, players: list, time: worldTime(w), mob: w.mob, tvs: tvList(w), sources: tvSources(w), locks: lockList(w, p) });
   broadcast(w, { type: 'join', id, name: p.name, color: p.color, x: p.x, y: p.y, z: p.z, yaw: p.yaw, role: p.role }, id);
   broadcast(w, { type: 'system', text: p.name + ' joined' }, id);
