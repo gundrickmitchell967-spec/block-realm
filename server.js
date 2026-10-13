@@ -8,6 +8,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
+const crypto = require('crypto');
 
 const PORT = Number(process.env.PORT) || 8080;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -19,6 +20,20 @@ const REACH = 12;               // a block change must be this close to the play
 const MAX_BLOCK_ID = 299;       // highest block id a player may place (see BLOCKS in index.html: MAX_ID there must match)
 const COLORS = ['#e6594b', '#4b9be6', '#58c25a', '#e6c44b', '#b35ae6', '#4be6d6', '#e6894b', '#e64b9b'];
 const DAY_LEN = 480;
+// admin codes are checked here, on the server, so nobody can gain admin powers by reading the page.
+// set ADMIN_CODE_DESIGNER and ADMIN_CODE_CREATOR in the environment to change them
+const ADMIN_CODES = [
+  { role: 'designer', code: process.env.ADMIN_CODE_DESIGNER || '5468' },   // GAME DESIGNER: invisibility, wall hacks
+  { role: 'creator',  code: process.env.ADMIN_CODE_CREATOR  || '0702' },   // GAME CREATOR: all of the above, plus player commands
+];
+const authTries = new Map();     // client address -> { n: wrong tries so far, until: time the lock ends }
+function codeDigest(s) { return crypto.createHash('sha256').update(String(s)).digest(); }
+function roleForCode(code) {
+  const d = codeDigest(code);
+  let role = null;
+  for (const a of ADMIN_CODES) if (crypto.timingSafeEqual(d, codeDigest(a.code))) role = a.role;
+  return role;
+}
 const VOICE_RELAY_RANGE = 48;    // voice connections can only be set up between players this close (see VOICE_RANGE in index.html)            // seconds for one full day (the same as in index.html)
 
 // one clock for the whole server, so everyone sees the same time of day.
@@ -113,7 +128,7 @@ wss.on('connection', (ws) => {
   if (players.size >= MAX_PLAYERS) { ws.close(1013, 'server full'); return; }
   const id = nextId++;
   const p = { ws, name: 'Builder' + id, color: COLORS[id % COLORS.length], x: 8.5, y: 40, z: 8.5, yaw: 0, pitch: 0,
-              tokens: 60, lastTick: Date.now(), joined: false, sleeping: false, hidden: false };
+              tokens: 60, lastTick: Date.now(), joined: false, sleeping: false, hidden: false, role: null };
   players.set(id, p);
 
   ws.on('message', (raw) => {
@@ -126,11 +141,11 @@ wss.on('connection', (ws) => {
       p.joined = true;
       p.name = cleanName(m.name);
       const list = [];
-      for (const [oid, o] of players) if (oid !== id && o.joined) list.push({ id: oid, name: o.name, color: o.color, x: o.x, y: o.y, z: o.z, yaw: o.yaw, sleeping: o.sleeping, hidden: o.hidden });
+      for (const [oid, o] of players) if (oid !== id && o.joined) list.push({ id: oid, name: o.name, color: o.color, x: o.x, y: o.y, z: o.z, yaw: o.yaw, sleeping: o.sleeping, hidden: o.hidden, role: o.role });
       const all = [];
       for (const [k, v] of edits) { const [x, y, z] = k.split(',').map(Number); all.push([x, y, z, v]); }
       sendTo(p, { type: 'welcome', id, edits: all, players: list, time: worldTime() });
-      broadcast({ type: 'join', id, name: p.name, color: p.color, x: p.x, y: p.y, z: p.z, yaw: p.yaw }, id);
+      broadcast({ type: 'join', id, name: p.name, color: p.color, x: p.x, y: p.y, z: p.z, yaw: p.yaw, role: p.role }, id);
       broadcast({ type: 'system', text: p.name + ' joined' }, id);
       return;
     }
@@ -150,8 +165,42 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    if (m.type === 'auth') {
+      // an admin code: the answer comes back to this player only; wrong guesses are slowed down per address
+      const ip = (ws._socket && ws._socket.remoteAddress) || 'unknown';
+      const now = Date.now();
+      const t = authTries.get(ip) || { n: 0, until: 0 };
+      if (t.until > now) { sendTo(p, { type: 'auth', ok: false, msg: 'Too many tries. Wait a minute and try again.' }); return; }
+      const code = typeof m.code === 'string' ? m.code.trim().slice(0, 16) : '';
+      const role = roleForCode(code);
+      if (!role) {
+        t.n += 1;
+        if (t.n >= 5) { t.until = now + 60000; t.n = 0; }
+        authTries.set(ip, t);
+        sendTo(p, { type: 'auth', ok: false, msg: 'That code is not right.' });
+        return;
+      }
+      authTries.delete(ip);
+      p.role = role;
+      sendTo(p, { type: 'auth', ok: true, role });
+      broadcast({ type: 'role', id, role }, id);
+      return;
+    }
+
+    if (m.type === 'admin') {
+      // player commands: only a game creator may use them, and only on another joined player
+      if (p.role !== 'creator') return;
+      const q = players.get(m.target);
+      if (!q || !q.joined || q === p) return;
+      if (m.action === 'tp') sendTo(p, { type: 'teleport', x: q.x, y: q.y, z: q.z });        // you go to them
+      else if (m.action === 'bring') sendTo(q, { type: 'teleport', x: p.x, y: p.y, z: p.z }); // they come to you
+      else if (m.action === 'jump') sendTo(q, { type: 'jump' });
+      return;
+    }
+
     if (m.type === 'vanish') {
-      // invisibility: while hidden, this player's position is not relayed to anyone
+      // invisibility: only admins may use it. While hidden, this player's position is not relayed to anyone
+      if (m.on === true && !p.role) return;
       p.hidden = m.on === true;
       broadcast({ type: 'vanish', id, on: p.hidden, x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch }, id);
       return;

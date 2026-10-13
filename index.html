@@ -81,6 +81,17 @@
   #fsbtn{position:absolute;top:12px;right:12px;width:auto;padding:9px 12px;font-size:12px;letter-spacing:.06em;z-index:3}
   #fsmsg{position:absolute;top:58px;right:12px;max-width:280px;margin:0;font-size:12px;line-height:1.4;color:#ffe066;text-align:right;text-shadow:1px 1px 0 #000}
   #touchlook{position:fixed;inset:0;z-index:1;touch-action:none}
+  .tag .role{font-weight:bold;font-size:10px;letter-spacing:.12em;color:#ffd54a;text-shadow:0 0 6px #ff9f1a,1px 1px 0 #000}
+  .tag .role.designer{color:#8fe9ff;text-shadow:0 0 6px #2aa9ff,1px 1px 0 #000}
+  .tag .nm.designer{color:#f0a6ff;text-shadow:0 0 6px #b84dff,1px 1px 0 #000}
+  .tag .nm.creator{color:#ffe27a;font-weight:bold;text-shadow:0 0 10px #ff8a00,1px 1px 0 #000}
+  #adminpanel{width:100%;align-self:stretch}
+  #adminlist{width:100%}
+  #adminpanel h3{margin:10px 0 4px;font-size:13px;letter-spacing:.1em;text-align:left}
+  #adminlist .row{margin:8px 0;font-size:13px;text-align:left;width:100%}
+  #adminlist .row > span:first-child{display:block;margin-bottom:4px}
+  #adminlist .acts{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;width:100%}
+  #adminlist .acts .btn{padding:6px 2px;font-size:10px;width:100%}
   body.touch{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;overscroll-behavior:none}
   body.touch #touch,body.touch #touchlook{touch-action:none}
   #touch{position:fixed;inset:0;z-index:2;pointer-events:none;touch-action:none}
@@ -131,6 +142,7 @@
   <button class="tbtn" id="tjump" type="button">JUMP</button>
   <button class="tbtn" id="tlie" type="button" hidden>LIE DOWN</button>
   <div id="ttop">
+    <button class="tbtn" id="tadmin" type="button" hidden>ADMIN</button>
     <button class="tbtn" id="tbag" type="button">BAG</button>
     <button class="tbtn" id="tchat" type="button" hidden>CHAT</button>
     <button class="tbtn" id="tmic" type="button" hidden>MIC</button>
@@ -150,6 +162,7 @@
       <button class="btn" id="mmic" type="button" hidden>MIC: OFF</button>
       <button class="btn" id="multi">MULTIPLAYER</button>
       <button class="btn" id="leave" hidden>LEAVE SERVER</button>
+      <button class="btn" id="adminbtn" type="button">ADMIN CODE</button>
       <button class="btn" id="settings">SETTINGS</button>
       <button class="btn" id="reset">RESET WORLD</button>
     </div>
@@ -180,17 +193,23 @@
 
 <div id="codebox" hidden>
   <div id="codepanel" role="dialog" aria-labelledby="codetitle">
-    <h2 id="codetitle">PRIVATE</h2>
+    <h2 id="codetitle">ADMIN CODE</h2>
     <div id="codeask">
-      <p class="hint">Enter the code to unlock your private settings.</p>
+      <p class="hint">Enter your admin code. Codes are checked by the server, so you must be connected to a multiplayer server.</p>
       <input id="codein" type="password" inputmode="numeric" maxlength="8" autocomplete="off" aria-label="Code">
       <button class="btn" id="codego" type="button">UNLOCK</button>
     </div>
     <div id="codeok" hidden>
+      <p class="hint" id="adminrole"></p>
       <button class="btn" id="invisbtn" type="button">INVISIBLE: OFF</button>
       <button class="btn" id="wallbtn" type="button">WALL HACKS: OFF</button>
       <p class="hint">Wall hacks let you fly straight through walls and floors, and see other players through them.</p>
       <p class="hint">While you are invisible, other players cannot see you or your name, and you do not appear on their screens.</p>
+      <div id="adminpanel" hidden>
+        <h3>PLAYERS</h3>
+        <div id="adminlist"></div>
+        <button class="btn" id="stopspec" type="button" hidden>STOP SPECTATING</button>
+      </div>
     </div>
     <p id="codemsg" role="status"></p>
     <button class="btn" id="codeclose" type="button">CLOSE (P)</button>
@@ -2228,43 +2247,120 @@ $('invclose').addEventListener('click', closeInv);
 
 /* ---------- private panel: press P in the game, enter the code, then toggle invisibility ---------- */
 // the code is checked in the browser only; it keeps casual visitors out of the panel, it is not a real lock
-const PRIVATE_CODE = '0702';
-let codeOpen = false, codeUnlocked = false;
+let codeOpen = false;
+let adminRole = null;                      // 'designer' or 'creator' once the server has accepted the code
+const isAdmin = () => !!adminRole;
+const spectate = { id: null };             // the player you are watching, if any
 let wallHacks = false;                    // true: other players are drawn through walls
 function syncInvisBtn(){
   $('invisbtn').textContent = 'INVISIBLE: ' + (player.invisible ? 'ON' : 'OFF');
   $('wallbtn').textContent = 'WALL HACKS: ' + (wallHacks ? 'ON' : 'OFF');
 }
 function openCode(){
-  if(!playing || chatOpen || invOpen || codeOpen || player.sleeping) return;
+  if(codeOpen || chatOpen || invOpen || fridgeOpen || player.sleeping) return;
   codeOpen = true;
   for(const k in keys) keys[k] = false;
   try{ document.exitPointerLock(); }catch(e){}
   $('codebox').hidden = false;
-  $('codeask').hidden = codeUnlocked; $('codeok').hidden = !codeUnlocked;
   $('codemsg').textContent = '';
   $('codein').value = '';
-  syncInvisBtn();
-  (codeUnlocked ? $('invisbtn') : $('codein')).focus();
+  syncAdmin();
+  (isAdmin() ? $('invisbtn') : $('codein')).focus();
 }
 function closeCode(){
   if(!codeOpen) return;
   codeOpen = false;
   $('codebox').hidden = true;
-  lockPointer();
+  if(playing) lockPointer();
+}
+// shows the code entry, or the admin panel once the code has been accepted
+function syncAdmin(){
+  const a = isAdmin(), creator = adminRole === 'creator';
+  $('codeask').hidden = a; $('codeok').hidden = !a;
+  $('codetitle').textContent = a ? (creator ? 'GAME CREATOR' : 'GAME DESIGNER') : 'ADMIN CODE';
+  $('adminrole').textContent = a ? 'Your admin powers are unlocked.' : '';
+  $('adminpanel').hidden = !creator;
+  $('tadmin').hidden = !a;
+  syncInvisBtn();
+  renderAdmin();
 }
 function tryCode(){
-  if($('codein').value.trim() === PRIVATE_CODE){
-    codeUnlocked = true;
-    $('codeask').hidden = true; $('codeok').hidden = false; $('codemsg').textContent = '';
-    syncInvisBtn();
-    $('invisbtn').focus();
+  const code = $('codein').value.trim();
+  if(!code) return;
+  if(!mpMode){ $('codemsg').textContent = 'Admin codes are checked by the server. Join a multiplayer server first.'; return; }
+  $('codemsg').textContent = 'Checking the code...';
+  mpSend({type:'auth', code});
+  $('codein').value = '';
+}
+function handleAuth(m){
+  if(m.ok){
+    adminRole = m.role === 'creator' ? 'creator' : 'designer';
+    flashHud(adminRole === 'creator' ? 'WELCOME, GAME CREATOR' : 'WELCOME, GAME DESIGNER');
+    $('codemsg').textContent = '';
+    syncAdmin();
   } else {
-    $('codemsg').textContent = 'That code is not right. Try again.';
-    $('codein').select();
+    $('codemsg').textContent = String(m.msg || 'That code is not right.');
+    if(codeOpen) $('codein').select();
   }
 }
+// the list of players, with the creator's commands
+function renderAdmin(){
+  if(!codeOpen || adminRole !== 'creator') return;
+  const list = $('adminlist'); list.textContent = '';
+  const rows = [...mp.others.values()].sort((x, y) => x.name.localeCompare(y.name));
+  if(!rows.length){ const t = document.createElement('p'); t.className = 'hint'; t.textContent = 'No other players are here.'; list.appendChild(t); }
+  for(const o of rows){
+    const row = document.createElement('div'); row.className = 'row';
+    const nm = document.createElement('span');
+    nm.textContent = o.name + (o.hidden ? ' (invisible)' : '') + (spectate.id === o.id ? ' (watching)' : '');
+    row.appendChild(nm);
+    const acts = document.createElement('span'); acts.className = 'acts';
+    const cmds = [['TP', () => adminAct('tp', o.id)], ['BRING', () => adminAct('bring', o.id)], ['WATCH', () => startSpectate(o.id)], ['JUMP', () => adminAct('jump', o.id)]];
+    for(const [label, fn] of cmds){
+      const b = document.createElement('button'); b.className = 'btn'; b.type = 'button'; b.textContent = label;
+      b.addEventListener('click', fn); acts.appendChild(b);
+    }
+    row.appendChild(acts); list.appendChild(row);
+  }
+  $('stopspec').hidden = spectate.id == null;
+}
+function adminAct(action, id){
+  if(adminRole !== 'creator') return;
+  mpSend({type:'admin', action, target:id});
+  const o = mp.others.get(id);
+  flashHud((action === 'tp' ? 'GOING TO ' : action === 'bring' ? 'BRINGING ' : 'MAKING JUMP ') + (o ? o.name.toUpperCase() : 'PLAYER'));
+}
+// the server tells you where to go; you land just beside the spot
+function teleportPlayer(x, y, z){
+  stopSpectate();
+  player.x = x + 2; player.y = y + 0.5; player.z = z;
+  player.vx = 0; player.vy = 0; player.vz = 0;
+  unstick();
+  flashHud('TELEPORTED');
+}
+function startSpectate(id){
+  if(adminRole !== 'creator' || !mp.others.has(id)) return;
+  spectate.id = id;
+  if(!player.invisible) mpSend({type:'vanish', on:true});   // you are hidden from the others while you watch
+  closeCode();
+  flashHud('WATCHING ' + mp.others.get(id).name.toUpperCase() + '. PRESS P TO OPEN THE PANEL AGAIN, OR STOP WATCHING');
+}
+function stopSpectate(){
+  if(spectate.id == null) return;
+  spectate.id = null;
+  if(!player.invisible) mpSend({type:'vanish', on:false});
+  if(codeOpen) renderAdmin();
+}
+// the camera follows the player you are watching, from just behind them
+function followSpectate(){
+  const o = mp.others.get(spectate.id);
+  if(!o){ stopSpectate(); flashHud('THAT PLAYER LEFT'); return; }
+  const fx = -Math.sin(o.yaw), fz = -Math.cos(o.yaw);
+  player.x = o.x - fx * 4; player.z = o.z - fz * 4; player.y = o.y + 2.2;
+  player.vx = 0; player.vy = 0; player.vz = 0;
+}
 function setInvisible(on){
+  if(!isAdmin()) return;
   player.invisible = on;
   mpSend({type:'vanish', on});
   syncInvisBtn();
@@ -2284,6 +2380,7 @@ function unstick(){
   player.vy = 0;
 }
 $('wallbtn').addEventListener('click', ()=>{
+  if(!isAdmin()) return;
   wallHacks = !wallHacks;
   if(!wallHacks) unstick();
   syncInvisBtn();
@@ -2574,11 +2671,15 @@ function showMP(){
   if(!$('mpurl').value) $('mpurl').value = saved.url || defaultWS();
   $('mpname').focus();
 }
-function tagText(o){ o.tag.textContent = o.name + (o.sleeping ? '  zZ' : ''); }
+function tagText(o){
+  o.tag.textContent = '';
+  if(o.role){ const r = document.createElement('div'); r.className = 'role ' + o.role; r.textContent = o.role === 'creator' ? 'GAME CREATOR' : 'GAME DESIGNER'; o.tag.appendChild(r); }
+  const n = document.createElement('div'); n.className = 'nm' + (o.role ? ' ' + o.role : ''); n.textContent = o.name + (o.sleeping ? '  zZ' : ''); o.tag.appendChild(n);
+}
 function addRemote(p){
   const tag=document.createElement('div'); tag.className='tag'; tag.hidden=true;
   $('tags').appendChild(tag);
-  const o={id:p.id, name:p.name, rgb:hexRGB(p.color||'#4b9be6'), sleeping:!!p.sleeping, hidden:!!p.hidden,
+  const o={id:p.id, name:p.name, role:p.role||null, rgb:hexRGB(p.color||'#4b9be6'), sleeping:!!p.sleeping, hidden:!!p.hidden,
     x:p.x, y:p.y, z:p.z, yaw:p.yaw||0, tx:p.x, ty:p.y, tz:p.z, tyaw:p.yaw||0, tag};
   mp.others.set(p.id, o);
   tagText(o);
@@ -2619,6 +2720,7 @@ function connectMP(){
   ws.onclose = ()=>{
     clearTimeout(timer);
     mp.ws = null;
+    adminRole = null; spectate.id = null;
     if(mpMode){ mpDropped(); }
     else { mpStatus('Could not connect. Check the address and that the server is running.'); }
   };
@@ -2638,11 +2740,15 @@ function enterWorld(m){
   for(const p of m.players) addRemote(p);
   mp.sendT = 0;
   start();
-  if(player.invisible) mpSend({type:'vanish', on:true});   // the server forgets this when you reconnect
+  adminRole = null; player.invisible = false;   // the server forgets admin powers when you reconnect
 }
 function onServerMessage(m){
-  if(m.type==='join'){ removeRemote(m.id); addRemote(m); }
-  else if(m.type==='leave'){ removeRemote(m.id); }
+  if(m.type==='join'){ removeRemote(m.id); addRemote(m); renderAdmin(); }
+  else if(m.type==='leave'){ if(spectate.id===m.id) stopSpectate(); removeRemote(m.id); renderAdmin(); }
+  else if(m.type==='auth'){ handleAuth(m); }
+  else if(m.type==='role'){ const o=mp.others.get(m.id); if(o){ o.role=m.role||null; tagText(o); } renderAdmin(); }
+  else if(m.type==='teleport'){ teleportPlayer(+m.x, +m.y, +m.z); }
+  else if(m.type==='jump'){ if(player.onGround && playing){ player.vy = 8.6; if(sfx.ctx) sfx.jump(); } }
   else if(m.type==='rtc'){ voiceSignal(m.from, m.data); }
   else if(m.type==='chat'){ addChatLine(String(m.name||'Player'), String(m.text||''), 'chat'); }
   else if(m.type==='system'){ addChatLine('', String(m.text||''), 'system'); }
@@ -2873,6 +2979,7 @@ const tBtns = [
   {el:$('tchat'), down:() => tapKey('KeyT', true)},
   {el:$('tmic'), down:() => tapKey('KeyV', true)},
   {el:$('tmenu'), down:() => pause()},
+  {el:$('tadmin'), down:() => openCode()},
 ];
 for(const b of tBtns){
   b.el.addEventListener('touchstart', e => {
@@ -2957,6 +3064,8 @@ $('drawbtn').addEventListener('click',()=>{
 });
 $('play').addEventListener('click',start);
 $('resume').addEventListener('click',start);
+$('adminbtn').addEventListener('click',()=>{ sfx.init(); openCode(); });
+$('stopspec').addEventListener('click', stopSpectate);
 $('mmic').addEventListener('click',()=>{ if(voice.on){ setMic(false); } else toggleMic(); });
 $('multi').addEventListener('click',showMP);
 $('mpback').addEventListener('click',showMain);
@@ -3245,7 +3354,8 @@ function frame(now){
   if(playing){
     worldTime+=dt;
     if(music.on && !music.timer) musicStart();   // the tune keeps going while you play
-    if(!player.sleeping && !player.seat) physics(dt);      // asleep or sitting, the player stays where they are
+    if(spectate.id!=null) followSpectate();
+    if(!player.sleeping && !player.seat && spectate.id==null) physics(dt);      // asleep or sitting, the player stays where they are
     target=raycast(6);
   } else target=null;
   if(playing && sfx.ctx){ waterT -= dt; if(waterT <= 0){ waterT = 0.2; sfx.water(tapVolume()); } }
@@ -3307,11 +3417,11 @@ window.VOX = {
   BLOCKS, HOTBAR, KEYS, CATALOG, DEFAULT_INV, GLASS_ID, LAMP_ID, DOOR_ID, DOOR_OPEN_ID, DOOR_TOP_ID, DOOR_TOP_OPEN_ID,
   BED_FOOT_ID, BED_HEAD_ID, LAMP_TOP_ID, toggleDoor, overlapsPlayer, solidAt, isSolidId, isOpaqueId, lightAt, relightLamps,
   addChatLine, skipNight, trySleep, wakeUp,
-  openCode, closeCode, tryCode, setInvisible, music, musicSet, musicStart, musicStop, PRIVATE_CODE,
+  openCode, closeCode, tryCode, setInvisible, adminAct, startSpectate, stopSpectate, music, musicSet, musicStart, musicStop,
   get wallHacks(){ return wallHacks; }, placeBunk, leaveBed, bedDirAt,
   voice, toggleMic, voiceVolume, genChunk, buildMesh, FURN_BASE, FURN_MAX, FURN, FVI, furnVar, furnPartner, furnChange, furnAct, furnOpenToggle, furnUse, furnState, FURN_BASES, ITEM_IDS, fridges, fridgeUse, sitOnFurniture, seatPlayer, standUp, takeFood, placeItem, applyBlock, toggleSwitch, toggleLamp, roomLights, LAMP_OFF_ID, LAMP_OFF_TOP_ID, isLampId, lampId,
   collides, CATS, GLOWSTONE_ID, get catFilter(){ return catFilter; }, setCat(n){ catFilter = n; if(invOpen) renderInv(); },
-  get codeOpen(){ return codeOpen; }, get codeUnlocked(){ return codeUnlocked; },
+  get codeOpen(){ return codeOpen; }, get codeUnlocked(){ return isAdmin(); },
   openInv, closeInv, addToInv, removeFromInv, get invOpen(){ return invOpen; },
   get sel(){ return sel; }, get selLabel(){ return $('selname').textContent; },
   mp, sfx, connectMP, toggleSound, enterWorld,
