@@ -142,6 +142,9 @@
   [hidden]{display:none !important}
   @supports (height:100dvh){ html,body{height:100dvh} canvas#c{height:100dvh} }
   #hotbar{z-index:2}
+  #menu{z-index:20}
+  body.inmenu #hotbar,body.inmenu #hud,body.inmenu #cross,body.inmenu #selname,body.inmenu #cashhud,body.inmenu #landhud,body.inmenu #surveyhud,body.inmenu #hacktimer,body.inmenu #offerhud{display:none!important}
+  #offerhud{position:fixed;top:118px;left:50%;transform:translateX(-50%);padding:4px 12px;font:bold 13px 'Courier New',monospace;color:#1a1200;background:#ffe066;border:2px solid #fff3a0;border-radius:6px;pointer-events:none;z-index:3;white-space:nowrap}
   #fsbtn{position:absolute;top:12px;right:12px;width:auto;padding:9px 12px;font-size:12px;letter-spacing:.06em;z-index:3}
   #fsmsg{position:absolute;top:58px;right:12px;max-width:280px;margin:0;font-size:12px;line-height:1.4;color:#ffe066;text-align:right;text-shadow:1px 1px 0 #000}
   #touchlook{position:fixed;inset:0;z-index:1;touch-action:none}
@@ -207,6 +210,7 @@
 <div id="cross"></div>
 <div id="hacktimer" hidden><span id="hacktimernum">0</span><small>SECONDS LEFT</small></div>
 <div id="landhud" hidden></div>
+<div id="offerhud" hidden></div>
 <div id="surveyhud" hidden></div>
 <div id="cashhud" hidden><span class="coinicon" id="cashcoin"></span><span id="cashnum">0</span></div>
 <div id="hud"><div id="fps"></div><div id="pos"></div><div id="tgt"></div><div id="tm"></div><div id="mp"></div></div>
@@ -3284,9 +3288,11 @@ function surveyText(){
 }
 // left-click with the Land Surveyor: the first click sets a corner, the next click sets the other one
 function surveyClick(h){
+  // a finished measurement stays put: clicking does nothing, and only right-click starts again
+  if(survey.b){ flashHud('LAND MEASURED. TAKE IT TO THE SHOP. RIGHT-CLICK TO MEASURE AGAIN'); return; }
   if(!h){ flashHud('AIM AT A BLOCK TO SET A CORNER'); return; }
   const c = {x: h.x, z: h.z};
-  if(!survey.a || survey.b){ survey = {a: c, b: null}; flashHud('CORNER 1 SET. MOVE TO THE OTHER CORNER AND CLICK'); }
+  if(!survey.a){ survey = {a: c, b: null}; flashHud('CORNER 1 SET. MOVE TO THE OTHER CORNER AND CLICK'); }
   else { survey.b = c; flashHud('LAND MEASURED. TAKE IT TO THE SHOP TO BUY IT'); }
 }
 function surveyCancel(){ survey = {a:null, b:null}; flashHud('MEASURING CANCELLED'); }
@@ -4031,7 +4037,14 @@ function onServerMessage(m){
     if(cashVisible()){ renderCash(); mpSend({type:'cashlog'}); }
   }
   else if(m.type==='plots'){ plotList = m.list || []; if(shopOpen) renderShop(); }
-  else if(m.type==='offers'){ offers = {incoming: m.incoming || [], outgoing: m.outgoing || []}; if(cashVisible()) renderCash(); }
+  else if(m.type==='offers'){
+    const before = new Set(offers.incoming.map(o => o.id));
+    offers = {incoming: m.incoming || [], outgoing: m.outgoing || []};
+    for(const o of offers.incoming) if(!before.has(o.id)) flashHud(o.fromName.toUpperCase() + ' OFFERS YOU ' + o.name.toUpperCase() + ' FOR ' + o.price + ' CASH. OPEN PAUSE > CASH TO ACCEPT');
+    const n = offers.incoming.length;
+    setText('offerhud', n ? n + (n === 1 ? ' PLOT OFFER' : ' PLOT OFFERS') + ' WAITING: PAUSE > CASH' : '');
+    if(cashVisible()) renderCash();
+  }
   else if(m.type==='plotclear'){
     // a plot was sold: its blocks go back to the land the world makes (the server took them out of its own copy)
     const gen = new Map();
@@ -4946,6 +4959,7 @@ function frame(now){
   hud(dt);
   syncTouch();
   syncCash();
+  document.body.classList.toggle('inmenu', !$('menu').hidden);
   if(playing) { saveT=(saveT||0)+dt; if(saveT>10){ saveT=0; saveAll(); } }
   requestAnimationFrame(frame);
 }
