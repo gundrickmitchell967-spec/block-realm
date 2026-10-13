@@ -108,7 +108,8 @@
        1-8 or mouse wheel: choose an inventory slot &middot; E: block catalog (add or remove blocks)<br>
        Right click a door: open or close it &middot; Right click a bed at night: go to sleep<br>
        M: sound effects on or off &middot; Esc: pause and save<br>
-       Double-tap Space: fly (Space up, Shift down) &middot; T: chat with other players (multiplayer)</p>
+       Double-tap Space: fly (Space up, Shift down) &middot; T: chat with other players (multiplayer)<br>
+       V: talk to players close to you (voice chat, multiplayer)</p>
   </div>
 </div>
 
@@ -240,6 +241,12 @@ const BIN = (x0,y0,z0,x1,y1,z1,t,th=0.05) => [
   B(x0,y0,z0,x0+th,y1,z1,t), B(x1-th,y0,z0,x1,y1,z1,t),
   B(x0,y0,z0,x1,y1,z0+th,t), B(x0,y0,z1-th,x1,y1,z1,t)
 ];
+// the body of a base unit (kitchen units, the counter, the oven): it stands on a recessed plinth and its top is at 0.86
+const CARCASS = (open, t=25) => open
+  ? [...SHELL(0.02,0.08,0.02,0.98,0.86,0.94,t,0.06), B(0.04,0,0.04,0.96,0.08,0.88,66)]
+  : [B(0.02,0.08,0.02,0.98,0.86,0.94,t), B(0.04,0,0.04,0.96,0.08,0.88,66)];
+// the quartz top of a base unit: every counter top sits at the same height (0.9), so they line up
+const QTOP = [B(0,0.86,0,1,0.9,1,54)];
 const FURN_A = [
   {name:'Toilet', icon:64, sw:'#f2f2ee', fn: () => [
     B(0.22,0,0.18,0.78,0.42,0.8,64),          // bowl
@@ -280,35 +287,38 @@ const FURN_A = [
   {name:'Kitchen Sink', icon:54, sw:'#ece6dc', states:[{},{open:1},{water:1},{open:1,water:1}],
    acts:[{box:[0.35,0.6,0,0.65,1.01,0.4], flag:'water', on:'WATER ON', off:'WATER OFF'}],
    fn: f => [
-    B(0.02,0.86,0.02,0.98,0.9,0.96,54),       // quartz counter
+    ...CARCASS(f.open),
+    ...QTOP,
+    B(0,0.9,0,1,1.0,0.07,54),                 // backsplash
     B(0.2,0.9,0.25,0.8,0.92,0.8,66),          // basin
-    B(0.46,0.9,0.1,0.54,0.99,0.16,65),        // tap
-    B(0.46,0.93,0.16,0.54,0.99,0.34,65),      // spout
+    B(0.46,0.9,0.1,0.54,1.0,0.16,65),         // tap post
+    B(0.46,0.96,0.16,0.54,0.98,0.36,65),      // spout, arched over the basin
     ...(f.water ? [B(0.24,0.92,0.3,0.76,0.95,0.75,68,64,64)] : []),
     ...(f.open ? [
-      ...SHELL(0.02,0,0.02,0.98,0.86,0.94,25),
-      OPEN_DOOR(0.03,0.47,0.94,0.02,0.84,24),
-      OPEN_RIGHT(0.53,0.97,0.94,0.02,0.84,24),
+      OPEN_DOOR(0.03,0.47,0.94,0.1,0.82,24),
+      OPEN_RIGHT(0.53,0.97,0.94,0.1,0.82,24),
       B(0.1,0.4,0.1,0.9,0.44,0.9,65)          // a shelf inside
     ] : [
-      B(0.02,0,0.02,0.98,0.86,0.94,25),       // cabinet
-      B(0.03,0.02,0.94,0.47,0.84,0.99,24),    // left door
-      B(0.53,0.02,0.94,0.97,0.84,0.99,24),    // right door
+      B(0.03,0.1,0.94,0.47,0.82,0.99,24),     // left door
+      B(0.53,0.1,0.94,0.97,0.82,0.99,24),     // right door
       B(0.4,0.6,0.99,0.44,0.7,1.0,65),
       B(0.56,0.6,0.99,0.6,0.7,1.0,65)
     ])
   ]},
-  // two blocks tall: the bottom block and the top block each have their own door
   {name:'Fridge', icon:65, sw:'#c8ccd2', tall:true, states:[{},{open:1},{top:1},{top:1,open:1}],
-   fn: f => f.open ? [
-    ...SHELL(0.02,0,0.02,0.98,1,0.92,64,0.05),
-    B(0.07,0.5,0.07,0.93,0.53,0.9,65),        // a shelf inside
-    OPEN_DOOR(0.03,0.97,0.92,0.01,0.99,65),
-    B(0.03,0.5,1.75,0.12,0.75,1.79,66)        // handle
-  ] : [
-    B(0.02,0,0.02,0.98,1,0.92,64),            // white body
-    B(0.03,0.01,0.92,0.97,0.99,0.99,65),      // door
-    B(0.86,0.5,0.99,0.9,0.75,1.02,66)         // handle
+   fn: f => [
+    ...(f.top ? [B(0.02,0.96,0.02,0.98,1,0.92,65)] : [B(0.04,0,0.04,0.96,0.06,0.88,66)]),   // a steel roof trim on top, a dark plinth at the bottom
+    ...(f.open ? [
+      ...SHELL(0.02,0.06,0.02,0.98,1,0.92,64,0.05),
+      B(0.07,0.5,0.07,0.93,0.53,0.9,65),      // a shelf inside
+      OPEN_DOOR(0.03,0.97,0.92,0.01,0.99,65),
+      B(0.03,0.5,1.75,0.12,0.75,1.79,66)      // handle
+    ] : [
+      B(0.02,0.06,0.02,0.98,1,0.92,64),       // white body
+      B(0.03,0.07,0.92,0.97,0.99,0.99,65),    // door
+      B(0.03,0.5,0.99,0.97,0.51,1.0,66),      // the seam of the door
+      B(0.86,0.6,0.99,0.9,0.85,1.02,66)       // handle
+    ])
   ]},
   {name:'Microwave', icon:65, sw:'#c8ccd2', states:[{},{open:1}], fn: f => [
     ...(f.open ? [
@@ -320,33 +330,37 @@ const FURN_A = [
     ]),
     B(0.74,0.12,0.96,0.94,0.5,1.0,65),        // control panel
     B(0.76,0.36,1.0,0.92,0.44,1.02,68,68,68,0.9),   // display
-    B(0.76,0.2,1.0,0.92,0.26,1.02,67)         // button
+    B(0.76,0.2,1.0,0.92,0.26,1.02,67),        // button
+    B(0.1,0.58,0.2,0.9,0.6,0.26,66),          // vents on top
+    B(0.1,0.58,0.32,0.9,0.6,0.38,66),
+    B(0.1,0.58,0.44,0.9,0.6,0.5,66)
   ]},
   {name:'Oven', icon:65, sw:'#c8ccd2', states:[{},{open:1}], fn: f => [
-    B(0.02,0.74,0.02,0.98,0.98,0.94,74,66,66),     // hob
-    B(0.1,0.76,0.94,0.18,0.84,0.99,65),       // knobs
-    B(0.42,0.76,0.94,0.5,0.84,0.99,65),
-    B(0.74,0.76,0.94,0.82,0.84,0.99,65),
+    ...CARCASS(f.open, 65),
+    B(0,0.86,0,1,0.9,1,74,66,66),             // hob, level with the counters
+    B(0.1,0.7,0.94,0.18,0.78,0.99,65),        // knobs on the front
+    B(0.42,0.7,0.94,0.5,0.78,0.99,65),
+    B(0.74,0.7,0.94,0.82,0.78,0.99,65),
     ...(f.open ? [
-      ...SHELL(0.02,0,0.02,0.98,0.74,0.94,65,0.06),
-      OPEN_DROP(0.05,0.95,0.94,0.08,66),      // the door lies flat
+      OPEN_DROP(0.05,0.95,0.94,0.1,66),       // the door lies flat
       B(0.1,0.3,0.1,0.9,0.34,0.9,65)          // a rack inside
     ] : [
-      B(0.02,0,0.02,0.98,0.74,0.94,65),       // steel body
-      B(0.05,0.08,0.94,0.95,0.7,1.0,66),      // oven door
-      B(0.14,0.26,1.0,0.86,0.5,1.01,67),      // oven window
-      B(0.1,0.66,1.01,0.9,0.7,1.04,65)        // door handle
+      B(0.05,0.1,0.94,0.95,0.66,1.0,66),      // oven door
+      B(0.14,0.24,1.0,0.86,0.52,1.01,67),     // oven window
+      B(0.1,0.56,1.01,0.9,0.6,1.04,65)        // door handle
     ])
   ]},
   {name:'Dishwasher', icon:65, sw:'#c8ccd2', states:[{},{open:1}], fn: f => f.open ? [
-    ...SHELL(0.02,0,0.02,0.98,0.94,0.94,65,0.06),
-    OPEN_DROP(0.02,0.98,0.94,0.02,66),
+    ...CARCASS(true, 65),
+    ...QTOP,
+    OPEN_DROP(0.02,0.98,0.94,0.1,66),
     B(0.08,0.4,0.1,0.92,0.44,0.9,65)          // a rack inside
   ] : [
-    B(0.02,0,0.02,0.98,0.94,0.94,65),         // body
-    B(0.02,0.02,0.94,0.98,0.9,0.99,65),       // door
-    B(0.1,0.76,0.99,0.9,0.86,1.02,66),        // control panel
-    B(0.12,0.6,1.0,0.88,0.64,1.04,65)         // handle
+    ...CARCASS(false, 65),
+    ...QTOP,
+    B(0.03,0.1,0.94,0.97,0.7,0.99,65),        // door
+    B(0.12,0.74,0.99,0.88,0.78,1.02,66),      // handle
+    B(0.1,0.8,0.99,0.9,0.84,1.01,66)          // control panel
   ]},
   {name:'Washing Machine', icon:64, sw:'#f2f2ee', states:[{},{open:1}], fn: f => f.open ? [
     ...SHELL(0.02,0,0.02,0.98,1,0.94,64,0.06),
@@ -359,47 +373,55 @@ const FURN_A = [
     B(0.2,0.18,0.94,0.8,0.8,0.99,66),         // door ring
     B(0.28,0.26,0.99,0.72,0.72,1.01,67)       // glass
   ]},
-  {name:'Kitchen Cabinet', icon:25, sw:'#c7a06a', states:[{},{open:1}], fn: f => f.open ? [
-    ...SHELL(0.02,0,0.02,0.98,1,0.94,25,0.06),
-    OPEN_DOOR(0.04,0.48,0.94,0.04,0.96,24),
-    OPEN_RIGHT(0.52,0.96,0.94,0.04,0.96,24),
-    B(0.08,0.5,0.08,0.92,0.55,0.9,25),        // shelves inside
-    B(0.08,0.2,0.08,0.92,0.25,0.9,25)
-  ] : [
-    B(0.02,0,0.02,0.98,1,0.94,25),            // cabinet body
-    B(0.04,0.04,0.94,0.48,0.96,0.99,24),      // left door
-    B(0.52,0.04,0.94,0.96,0.96,0.99,24),      // right door
-    B(0.4,0.5,0.99,0.44,0.62,1.02,65),
-    B(0.56,0.5,0.99,0.6,0.62,1.02,65)
+  {name:'Kitchen Cabinet', icon:25, sw:'#c7a06a', states:[{},{open:1}], fn: f => [
+    ...CARCASS(f.open, 25),
+    B(0,0.86,0,1,0.9,1,25),                   // wooden top, level with the counters
+    ...(f.open ? [
+      OPEN_DOOR(0.04,0.48,0.94,0.1,0.82,24),
+      OPEN_RIGHT(0.52,0.96,0.94,0.1,0.82,24),
+      B(0.08,0.5,0.08,0.92,0.55,0.9,25),      // shelves inside
+      B(0.08,0.2,0.08,0.92,0.25,0.9,25)
+    ] : [
+      B(0.04,0.1,0.94,0.48,0.82,0.99,24),     // left door
+      B(0.52,0.1,0.94,0.96,0.82,0.99,24),     // right door
+      B(0.4,0.48,0.99,0.44,0.6,1.02,65),
+      B(0.56,0.48,0.99,0.6,0.6,1.02,65)
+    ])
   ]},
-  {name:'Drawers', icon:24, sw:'#8a6a40', states:[{},{open:1}], fn: f => f.open ? [
-    B(0.02,0,0.02,0.98,1,0.94,24),            // chest
-    B(0.04,0.04,0.94,0.96,0.3,0.99,25),       // drawer 1
-    B(0.04,0.64,0.94,0.96,0.96,0.99,25),      // drawer 3
-    B(0.1,0.38,0.94,0.9,0.56,0.95,66),        // the empty slot of drawer 2, dark
-    B(0.04,0.34,1.3,0.96,0.6,1.36,25),        // drawer 2, pulled out: its front
-    B(0.04,0.34,0.94,0.1,0.6,1.3,25),         // its sides
-    B(0.9,0.34,0.94,0.96,0.6,1.3,25),
-    B(0.1,0.34,0.94,0.9,0.38,1.3,25),         // its bottom
-    B(0.42,0.44,1.36,0.58,0.5,1.4,65)         // its handle
-  ] : [
-    B(0.02,0,0.02,0.98,1,0.94,24),            // chest
-    B(0.04,0.04,0.94,0.96,0.3,0.99,25),      // drawer 1
-    B(0.04,0.34,0.94,0.96,0.6,0.99,25),      // drawer 2
-    B(0.04,0.64,0.94,0.96,0.96,0.99,25),     // drawer 3
-    B(0.42,0.14,0.99,0.58,0.2,1.02,65),      // handle 1
-    B(0.42,0.44,0.99,0.58,0.5,1.02,65),      // handle 2
-    B(0.42,0.74,0.99,0.58,0.8,1.02,65)       // handle 3
+  {name:'Drawers', icon:24, sw:'#8a6a40', states:[{},{open:1}], fn: f => [
+    B(0.02,0.08,0.02,0.98,0.86,0.94,24),      // chest body
+    B(0.04,0,0.04,0.96,0.08,0.88,66),         // plinth
+    ...QTOP,                                  // quartz top, level with the counters
+    ...(f.open ? [
+      B(0.04,0.1,0.94,0.96,0.3,0.99,25),      // drawer 1
+      B(0.1,0.32,0.94,0.9,0.56,0.95,66),      // the empty slot of drawer 2, dark
+      B(0.04,0.58,0.94,0.96,0.78,0.99,25),    // drawer 3
+      B(0.04,0.32,1.3,0.96,0.54,1.36,25),     // drawer 2, pulled out: its front
+      B(0.04,0.32,0.94,0.1,0.54,1.3,25),      // its sides
+      B(0.9,0.32,0.94,0.96,0.54,1.3,25),
+      B(0.1,0.32,0.94,0.9,0.36,1.3,25),       // its bottom
+      B(0.42,0.4,1.36,0.58,0.46,1.4,65),      // its handle
+      B(0.42,0.18,0.99,0.58,0.22,1.02,65),
+      B(0.42,0.66,0.99,0.58,0.7,1.02,65)
+    ] : [
+      B(0.04,0.1,0.94,0.96,0.3,0.99,25),      // drawer 1
+      B(0.04,0.34,0.94,0.96,0.54,0.99,25),    // drawer 2
+      B(0.04,0.58,0.94,0.96,0.78,0.99,25),    // drawer 3
+      B(0.42,0.18,0.99,0.58,0.22,1.02,65),    // handles
+      B(0.42,0.42,0.99,0.58,0.46,1.02,65),
+      B(0.42,0.66,0.99,0.58,0.7,1.02,65)
+    ])
   ]},
   {name:'Counter', icon:54, sw:'#ece6dc', states:[{},{open:1}], fn: f => [
-    B(0,0.86,0,1,0.9,1,54),                   // quartz top
+    ...CARCASS(f.open),
+    ...QTOP,
+    B(0,0.9,0,1,1.0,0.07,54),                 // backsplash
     ...(f.open ? [
-      ...SHELL(0.02,0,0.02,0.98,0.86,0.94,25,0.06),
-      OPEN_DOOR(0.04,0.96,0.94,0.04,0.84,24),
+      OPEN_DOOR(0.04,0.96,0.94,0.1,0.82,24),
       B(0.08,0.4,0.08,0.92,0.45,0.9,25)       // a shelf inside
     ] : [
-      B(0.02,0,0.02,0.98,0.86,0.94,25),       // cabinet
-      B(0.04,0.04,0.94,0.96,0.84,0.99,24)     // door
+      B(0.04,0.1,0.94,0.96,0.82,0.99,24),     // door
+      B(0.44,0.44,0.99,0.56,0.5,1.02,65)      // handle
     ])
   ]}
 ];
@@ -653,7 +675,9 @@ function setBlock(wx,wy,wz,t,quiet){
   const cx=Math.floor(wx/CS), cz=Math.floor(wz/CS);
   const lx=wx-cx*CS, lz=wz-cz*CS, idx=lx+lz*CS+wy*CS*CS;
   const k=chunkKey(cx,cz); if(!quiet) (edits[k]||(edits[k]={}))[idx]=t;
-  lightDirty = true;                          // a block change can move the light from a lamp
+  // the light only needs working out again when a lamp is involved, or a lit cell is next to the change
+  const prev = getBlock(wx,wy,wz);
+  if(prev !== t && (LIGHT_SRC[t] || LIGHT_SRC[prev] || litNear(wx,wy,wz))) lightDirty = true;
   const ch=chunks.get(k);
   if(!ch) return true;
   ch.data[idx]=t; ch.dirty=true;
@@ -669,6 +693,16 @@ const LIGHT_RANGE = 7;
 const lightMap = new Map();     // cell key -> 0..1, how much lamp light reaches that cell
 let lightDirty = true;
 function lk(x,y,z){ return ((x+1048576)*128 + y)*2097152 + (z+1048576); }   // a number key for a block position
+// true if a lit cell is next to this position
+function litNear(x,y,z){
+  for(const [dx,dy,dz] of NB6) if(lightMap.has(lk(x+dx,y+dy,z+dz))) return true;
+  return false;
+}
+// true if a chunk's data holds a light source (a lamp or glowstone)
+function hasLight(data){
+  for(let i=0;i<data.length;i++) if(LIGHT_SRC[data[i]]) return true;
+  return false;
+}
 function lightAt(x,y,z){ return lightMap.get(lk(x,y,z)) || 0; }
 // spreads light outwards from one lamp, one step at a time, through blocks that let light pass
 function spreadLight(x0,y0,z0){
@@ -1783,6 +1817,7 @@ addEventListener('keydown',e=>{
     return;
   }
   if(e.code==='KeyT' && playing && mpMode && !e.repeat){ e.preventDefault(); openChat(); return; }
+  if(e.code==='KeyV' && playing && mpMode && !e.repeat){ e.preventDefault(); toggleMic(); return; }
   if(!playing){ if(e.code==='Escape') pause(); return; }
   if(e.code==='Escape'){ pause(); return; }
   if(player.sleeping){                          // asleep in a bed: Space gets you up, nothing else works
@@ -2052,7 +2087,6 @@ function preloadAround(x,z){
   lightDirty = true;
   for(let dz=-2;dz<=2;dz++) for(let dx=-2;dx<=2;dx++) markDirty(pcx+dx,pcz+dz);
   relightLamps();
-  for(let i=0;i<40;i++) remesh();
 }
 function connectMP(){
   if(mp.ws) return;
@@ -2100,6 +2134,7 @@ function enterWorld(m){
 function onServerMessage(m){
   if(m.type==='join'){ removeRemote(m.id); addRemote(m); }
   else if(m.type==='leave'){ removeRemote(m.id); }
+  else if(m.type==='rtc'){ voiceSignal(m.from, m.data); }
   else if(m.type==='chat'){ addChatLine(String(m.name||'Player'), String(m.text||''), 'chat'); }
   else if(m.type==='system'){ addChatLine('', String(m.text||''), 'system'); }
   else if(m.type==='move'){
@@ -2234,6 +2269,7 @@ function pause(){
   if(codeOpen){ codeOpen=false; $('codebox').hidden=true; }
   playing=false; for(const k in keys) keys[k]=false;
   musicStop();
+  setMic(false);
   saveAll();
   menuState();
   showMain();
@@ -2275,11 +2311,11 @@ function ensureChunks(){
     if(chunks.has(k)) continue;
     const ch={cx,cz,data:genChunk(cx,cz),vao:null,vbo:null,ibo:null,count:0,dirty:true};
     chunks.set(k,ch); made++;
-    lightDirty = true;
+    if(hasLight(ch.data)) lightDirty = true;
     markDirty(cx+1,cz); markDirty(cx-1,cz); markDirty(cx,cz+1); markDirty(cx,cz-1);
   }
   for(const [k,ch] of chunks){
-    if(Math.max(Math.abs(ch.cx-pcx),Math.abs(ch.cz-pcz))>RD+2){ disposeChunk(ch); chunks.delete(k); lightDirty = true; }
+    if(Math.max(Math.abs(ch.cx-pcx),Math.abs(ch.cz-pcz))>RD+2){ if(hasLight(ch.data)) lightDirty = true; disposeChunk(ch); chunks.delete(k); }
   }
 }
 function remesh(){
@@ -2287,7 +2323,10 @@ function remesh(){
   const dirty=[];
   for(const ch of chunks.values()) if(ch.dirty) dirty.push(ch);
   dirty.sort((a,b)=>(Math.abs(a.cx-pcx)+Math.abs(a.cz-pcz))-(Math.abs(b.cx-pcx)+Math.abs(b.cz-pcz)));
-  for(let i=0;i<Math.min(meshBudget,dirty.length);i++){
+  // meshing takes about 10 ms a chunk, so it stops for the frame once about 6 ms are used (at least one chunk always)
+  const t0 = performance.now();
+  for(let i=0;i<dirty.length;i++){
+    if(i > 0 && performance.now() - t0 > 6) break;
     const ch=dirty[i];
     uploadChunk(ch, buildMesh(ch));
     ch.dirty=false;
@@ -2415,10 +2454,104 @@ function hud(dt){
     $('mp').textContent = 'ONLINE: ' + total + ' PLAYER' + (mp.others.size ? 'S' : '') + '  (you are ' + mp.id + ')'
       + (asleep ? '   ASLEEP: ' + asleep + ' OF ' + total : '')
       + (player.invisible ? '   INVISIBLE' : '')
+      + (voice.on ? '   MIC ON' : '')
       + (document.pointerLockElement ? '' : '   CLICK THE GAME TO LOOK AROUND');
   } else $('mp').textContent = '';
   const h=Math.floor(((worldTime/DAY_LEN)%1)*24);
   $('tm').textContent = $('tm').textContent || (daylight()>0.5 ? 'DAY' : 'NIGHT')+'  '+String(h).padStart(2,'0')+':00';
+}
+
+/* ---------- voice chat: press V to talk. Players close to you hear you, and the sound fades out with distance.
+   The browsers connect their voices directly to each other (WebRTC); the server only passes the connection set-up along. ---------- */
+const VOICE_RANGE = 32;                     // players this close (in blocks) can hear each other
+const RTC_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+const voice = { on:false, stream:null, track:null, peers:new Map() };
+let voiceT = 0;
+// how loud another player is at distance d: full up close, fading to silent at VOICE_RANGE
+function voiceVolume(d){ return d <= 6 ? 1 : d >= VOICE_RANGE ? 0 : (VOICE_RANGE - d) / (VOICE_RANGE - 6); }
+function voiceSend(to, data){ mpSend({type:'rtc', to, data}); }
+// turns the microphone on or off, for every connected player
+function setMic(on){
+  voice.on = on;
+  if(!on && voice.stream){ for(const t of voice.stream.getTracks()) t.stop(); voice.stream = null; voice.track = null; }
+  for(const p of voice.peers.values()) p.sender.replaceTrack(voice.track).catch(()=>{});
+}
+async function toggleMic(){
+  if(!playing || !mpMode) return;
+  if(voice.on){ setMic(false); flashHud('MIC OFF'); return; }
+  if(player.invisible){ flashHud('INVISIBLE: YOU CANNOT TALK'); return; }
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ flashHud('NO MICROPHONE IN THIS BROWSER'); return; }
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true, noiseSuppression:true, autoGainControl:true}, video:false});
+    if(!playing || !mpMode){ for(const t of stream.getTracks()) t.stop(); return; }
+    voice.stream = stream; voice.track = stream.getAudioTracks()[0];
+    setMic(true);
+    flashHud('MIC ON: PLAYERS CLOSE BY CAN HEAR YOU');
+  }catch(e){ flashHud('MICROPHONE BLOCKED: ALLOW IT IN YOUR BROWSER'); }
+}
+// one connection to another player. The lower id makes the offer.
+function voicePeer(id, initiator){
+  const old = voice.peers.get(id); if(old) return old;
+  const pc = new RTCPeerConnection(RTC_CONFIG);
+  const tr = pc.addTransceiver('audio', {direction:'sendrecv'});
+  const p = {pc, sender:tr.sender, gain:null, src:null, pending:[], ready:false};
+  voice.peers.set(id, p);
+  if(voice.track) tr.sender.replaceTrack(voice.track).catch(()=>{});
+  pc.onicecandidate = e => { if(e.candidate) voiceSend(id, {ice:e.candidate}); };
+  pc.ontrack = e => {
+    const ctx = sfx.ctx; if(!ctx) return;
+    if(p.src){ try{ p.src.disconnect(); }catch(err){} }
+    p.src = ctx.createMediaStreamSource(new MediaStream([e.track]));
+    if(!p.gain){ p.gain = ctx.createGain(); p.gain.gain.value = 0; p.gain.connect(ctx.destination); }
+    p.src.connect(p.gain);
+  };
+  pc.onconnectionstatechange = () => { if(pc.connectionState === 'failed' || pc.connectionState === 'closed') voiceDrop(id); };
+  if(initiator){
+    pc.createOffer().then(o => pc.setLocalDescription(o)).then(() => voiceSend(id, {sdp:pc.localDescription})).catch(() => voiceDrop(id));
+  }
+  return p;
+}
+function voiceDrop(id){
+  const p = voice.peers.get(id); if(!p) return;
+  voice.peers.delete(id);
+  try{ p.pc.close(); }catch(e){}
+  if(p.src){ try{ p.src.disconnect(); }catch(e){} }
+  if(p.gain){ try{ p.gain.disconnect(); }catch(e){} }
+}
+// the set-up messages from another player
+async function voiceSignal(from, data){
+  if(!data || !mp.others.has(from)) return;
+  if(data.sdp && data.sdp.type === 'offer') voiceDrop(from);          // a new offer starts the connection afresh
+  const p = voice.peers.get(from) || voicePeer(from, false);
+  const pc = p.pc;
+  try{
+    if(data.sdp){
+      await pc.setRemoteDescription(data.sdp);
+      p.ready = true;
+      for(const c of p.pending.splice(0)) await pc.addIceCandidate(c).catch(()=>{});
+      if(data.sdp.type === 'offer'){
+        await pc.setLocalDescription(await pc.createAnswer());
+        voiceSend(from, {sdp:pc.localDescription});
+      }
+    } else if(data.ice){
+      if(p.ready) await pc.addIceCandidate(data.ice).catch(()=>{});
+      else p.pending.push(data.ice);
+    }
+  }catch(e){ voiceDrop(from); }
+}
+// connects to players who come close, drops the ones who go far away, and sets the volume of each
+function updateVoice(){
+  if(!mpMode) return;
+  const ctx = sfx.ctx;
+  for(const [id, o] of mp.others){
+    const d = Math.hypot(o.x-player.x, o.y-player.y, o.z-player.z);
+    const near = d <= VOICE_RANGE && !o.hidden && !player.invisible;
+    if(near && !voice.peers.has(id)) voicePeer(id, mp.id < id);
+    const p = voice.peers.get(id);
+    if(p && (o.hidden || player.invisible || d > VOICE_RANGE + 8)){ voiceDrop(id); continue; }
+    if(p && p.gain && ctx) p.gain.gain.setTargetAtTime(near ? voiceVolume(d) : 0, ctx.currentTime, 0.15);
+  }
+  for(const id of [...voice.peers.keys()]) if(!mp.others.has(id)) voiceDrop(id);
 }
 
 /* ---------- main loop ---------- */
@@ -2431,6 +2564,7 @@ function frame(now){
   } else target=null;
   if(playing && mpMode){
     mp.sendT -= dt;
+    voiceT -= dt; if(voiceT <= 0){ voiceT = 0.25; updateVoice(); }
     if(mp.sendT <= 0){ mp.sendT = 0.1; mpSend({type:'move', x:player.x, y:player.y, z:player.z, yaw:player.yaw, pitch:player.pitch}); }
   }
   for(const o of mp.others.values()){            // ease other players toward their last reported position
@@ -2486,7 +2620,7 @@ window.VOX = {
   addChatLine, skipNight, trySleep, wakeUp,
   openCode, closeCode, tryCode, setInvisible, music, musicSet, musicStart, musicStop, PRIVATE_CODE,
   get wallHacks(){ return wallHacks; }, placeBunk, leaveBed, bedDirAt,
-  FURN_BASE, FURN_MAX, FURN, FVI, furnVar, furnPartner, furnChange, furnAct, furnOpenToggle, furnState, placeItem, applyBlock,
+  voice, toggleMic, voiceVolume, genChunk, buildMesh, FURN_BASE, FURN_MAX, FURN, FVI, furnVar, furnPartner, furnChange, furnAct, furnOpenToggle, furnState, placeItem, applyBlock,
   collides, CATS, GLOWSTONE_ID, get catFilter(){ return catFilter; }, setCat(n){ catFilter = n; if(invOpen) renderInv(); },
   get codeOpen(){ return codeOpen; }, get codeUnlocked(){ return codeUnlocked; },
   openInv, closeInv, addToInv, removeFromInv, get invOpen(){ return invOpen; },

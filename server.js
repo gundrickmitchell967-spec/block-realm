@@ -18,7 +18,8 @@ const CH = 64;                  // world height in blocks
 const REACH = 12;               // a block change must be this close to the player's last reported position
 const MAX_BLOCK_ID = 241;       // highest block id a player may place (see BLOCKS in index.html)
 const COLORS = ['#e6594b', '#4b9be6', '#58c25a', '#e6c44b', '#b35ae6', '#4be6d6', '#e6894b', '#e64b9b'];
-const DAY_LEN = 480;            // seconds for one full day (the same as in index.html)
+const DAY_LEN = 480;
+const VOICE_RELAY_RANGE = 48;    // voice connections can only be set up between players this close (see VOICE_RANGE in index.html)            // seconds for one full day (the same as in index.html)
 
 // one clock for the whole server, so everyone sees the same time of day.
 // the world time is "clock.t" at the moment "clock.at"; it then runs on in real time.
@@ -156,6 +157,16 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    if (m.type === 'rtc') {
+      // voice chat: passes connection set-up (offers, answers, ice candidates) between two players who are close together
+      const q = players.get(m.to);
+      if (!q || !q.joined || q === p || q.hidden || p.hidden || q.ws.readyState !== 1) return;
+      if (!m.data || typeof m.data !== 'object' || !(m.data.sdp || m.data.ice)) return;
+      const dx = q.x - p.x, dy = q.y - p.y, dz = q.z - p.z;
+      if (dx*dx + dy*dy + dz*dz > VOICE_RELAY_RANGE * VOICE_RELAY_RANGE) return;
+      sendTo(q, { type: 'rtc', from: id, data: m.data });
+      return;
+    }
     if (m.type === 'move') {
       if (!isNum(m.x) || !isNum(m.y) || !isNum(m.z) || !isNum(m.yaw) || !isNum(m.pitch)) return;
       p.x = Math.max(-1e6, Math.min(1e6, m.x));
