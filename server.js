@@ -113,7 +113,7 @@ const requestHandler = (req, res) => {
     const file = path.join(__dirname, 'public', rel);
     return fs.stat(file, (err, st) => {
       if (err || !st.isFile()) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('not found'); }
-      const size = st.size, head = { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Cache-Control': 'max-age=3600' };
+      const size = st.size, head = { 'Content-Type': type, 'Accept-Ranges': 'bytes', 'Cache-Control': 'max-age=3600', 'Access-Control-Allow-Origin': '*' };   // any game page may show these videos
       // a range request (the video jumps to a moment): only that part of the file is sent
       const r = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
       if (r && (r[1] !== '' || r[2] !== '')) {
@@ -127,6 +127,13 @@ const requestHandler = (req, res) => {
       res.writeHead(200, { ...head, 'Content-Length': size });
       fs.createReadStream(file).pipe(res);
     });
+  }
+  if (url === '/upload') {
+    // a shared video: the game sends the file here with a ticket from the server (see handleUpload)
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' }); return res.end(); }
+    if (req.method !== 'POST') { res.writeHead(405, { 'Content-Type': 'text/plain' }); return res.end('use POST'); }
+    return handleUpload(req, res, new URL(req.url, 'http://localhost').searchParams.get('token') || '');
   }
   if (url === '/' || url === '/index.html') {
     fs.readFile(PAGE, (err, data) => {
@@ -148,14 +155,56 @@ let nextId = 1;
 const players = new Map();   // id -> { ws, world, name, color, x, y, z, yaw, pitch, tokens, lastTick, joined, sleeping, hidden, role }
 
 function sendTo(p, msg) { if (p.ws.readyState === 1) p.ws.send(JSON.stringify(msg)); }
-// the shared TV of a world: one TV at a time. Its video is "t" seconds in, at server time "at", unless it is paused
-const TV_ACTIONS = ['start', 'pause', 'play', 'off'];
+// the TVs of a world: each TV shows a video, and they can all be on at once. "t" is the video's position in seconds at server time "at", unless it is paused
+const TV_ACTIONS = ['start', 'pause', 'play', 'off', 'source', 'volume'];
+const TV_DEFAULT_SRC = 'media/tv.mp4';   // the video a TV shows when nothing else was chosen (next to the game page)
+const TV_VOLUME_STEPS = 5;               // the volume goes from 0 to 5, a step at a time
+const UPLOAD_MAX = 150 * 1024 * 1024;    // the largest video a player can share with the world
+const UPLOAD_KEEP = 8;                   // a world keeps this many shared videos; the oldest are removed
+const UPLOAD_TYPES = { 'video/mp4': '.mp4', 'video/webm': '.webm' };
+const uploadTokens = new Map();          // a ticket for one upload: token -> { w (the world), until }
 function tvPos(t, now) { return t.paused ? t.t : t.t + (now - t.at) / 1000; }
-// the TV as the players are told it: off, or where it is and where its video has got to
-function tvSnap(w, now = Date.now()) {
-  const t = w.tv;
-  if (!t || !t.on) return { on: false };
-  return { on: true, x: t.x, y: t.y, z: t.z, paused: t.paused, pos: Math.max(0, tvPos(t, now)) };
+// the videos a TV can show in a world: the default, then the ones shared there
+function tvSources(w) { return [TV_DEFAULT_SRC, ...(w.uploads || [])]; }
+// every TV that is on in the world: where it is, its video, its volume, and where that video has got to
+function tvList(w, now = Date.now()) {
+  const out = [];
+  if (!w.tvs) return out;
+  for (const t of w.tvs.values()) if (t.on) out.push({ x: t.x, y: t.y, z: t.z, src: t.src, vol: t.vol, paused: t.paused, pos: Math.max(0, tvPos(t, now)) });
+  return out;
+}
+// a video a player shares: it is saved on the server, and listed for the world (the oldest are removed)
+function handleUpload(req, res, token) {
+  const json = (code, body) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify(body)); };
+  const ticket = uploadTokens.get(token);
+  uploadTokens.delete(token);                       // a ticket is good for one upload
+  if (!ticket || ticket.until < Date.now()) return json(403, { error: 'the upload was not allowed, try again' });
+  const ext = UPLOAD_TYPES[String(req.headers['content-type'] || '').split(';')[0].trim()];
+  if (!ext) return json(415, { error: 'use an MP4 or WebM video' });
+  if (Number(req.headers['content-length'] || 0) > UPLOAD_MAX) return json(413, { error: 'that video is too big' });
+  const name = crypto.randomBytes(8).toString('hex') + ext;
+  const dir = path.join(__dirname, 'public', 'media', 'uploads');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, name);
+  const out = fs.createWriteStream(file);
+  let size = 0, failed = false;
+  const fail = (code, msg) => {
+    if (failed) return;
+    failed = true;
+    req.unpipe(out); req.resume();                  // the rest of the upload is thrown away
+    out.destroy(); fs.unlink(file, () => {});
+    json(code, { error: msg });
+  };
+  req.on('data', (chunk) => { size += chunk.length; if (size > UPLOAD_MAX) fail(413, 'that video is too big'); });
+  req.pipe(out);
+  out.on('error', () => fail(500, 'the video could not be saved'));
+  out.on('finish', () => {
+    if (failed) return;
+    const p = '/media/uploads/' + name;
+    ticket.w.uploads = [...(ticket.w.uploads || []), p];
+    while (ticket.w.uploads.length > UPLOAD_KEEP) { const old = ticket.w.uploads.shift(); fs.unlink(path.join(__dirname, 'public', old), () => {}); }
+    json(200, { path: p });
+  });
 }
 // a message to everyone in one world (optionally not to one player)
 function broadcast(w, msg, exceptId) {
@@ -215,7 +264,7 @@ function hello(p, id, m) {
   for (const [oid, o] of players) if (oid !== id && o.joined && o.world === w) list.push({ id: oid, name: o.name, color: o.color, x: o.x, y: o.y, z: o.z, yaw: o.yaw, sleeping: o.sleeping, hidden: o.hidden, role: o.role });
   const all = [];
   for (const [k, v] of w.edits) { const [x, y, z] = k.split(',').map(Number); all.push([x, y, z, v]); }
-  sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, edits: all, players: list, time: worldTime(w), mob: w.mob, tv: tvSnap(w) });
+  sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, edits: all, players: list, time: worldTime(w), mob: w.mob, tvs: tvList(w), sources: tvSources(w) });
   broadcast(w, { type: 'join', id, name: p.name, color: p.color, x: p.x, y: p.y, z: p.z, yaw: p.yaw, role: p.role }, id);
   broadcast(w, { type: 'system', text: p.name + ' joined' }, id);
 }
@@ -290,19 +339,40 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    if (m.type === 'uploadTicket') {
+      // a player who joined may share a video: this gives a ticket for one upload, and at most one ticket every 20 seconds
+      const now = Date.now();
+      if (p.ticketAt && now - p.ticketAt < 20000) return sendTo(p, { type: 'uploadTicket', error: 'wait a little before sharing another video' });
+      p.ticketAt = now;
+      const token = crypto.randomBytes(16).toString('hex');
+      uploadTokens.set(token, { w, until: now + 120000 });
+      return sendTo(p, { type: 'uploadTicket', token });
+    }
     if (m.type === 'tv') {
-      // the TV is shared by the whole world: whoever turns it on, pauses, plays or ends it sets it for everyone, if they are close to it
+      // the TVs are shared by the whole world: whoever starts, pauses, plays, changes or ends a TV sets it for everyone, if they are close to it
       if (!isInt(m.x) || !isInt(m.y) || !isInt(m.z) || !TV_ACTIONS.includes(m.action)) return;
       const dx = m.x + 0.5 - p.x, dy = m.y + 0.5 - p.y, dz = m.z + 0.5 - p.z;
       if (dx * dx + dy * dy + dz * dz > REACH * REACH) return;
-      const now = Date.now(), cur = w.tv;
-      if (m.action === 'start') w.tv = { x: m.x, y: m.y, z: m.z, on: true, paused: false, t: 0, at: now };
-      else if (m.action === 'off') { if (cur) cur.on = false; }
-      else if (cur && cur.on && cur.x === m.x && cur.y === m.y && cur.z === m.z) {
-        if (m.action === 'pause' && !cur.paused) { cur.t = tvPos(cur, now); cur.at = now; cur.paused = true; }
-        if (m.action === 'play' && cur.paused) { cur.paused = false; cur.at = now; }
-      } else return;
-      broadcast(w, { type: 'tv', tv: tvSnap(w, now) }, id);   // the player who sent it already shows it
+      if (!w.tvs) w.tvs = new Map();
+      const key = m.x + ',' + m.y + ',' + m.z, now = Date.now(), dir = m.dir === -1 ? -1 : 1;
+      let tv = w.tvs.get(key);
+      if (m.action === 'start') {
+        if (!tv) { tv = { x: m.x, y: m.y, z: m.z, src: TV_DEFAULT_SRC, vol: TV_VOLUME_STEPS }; w.tvs.set(key, tv); }
+        if (typeof m.src === 'string' && tvSources(w).includes(m.src)) tv.src = m.src;   // a video shared in this world, or the default
+        Object.assign(tv, { on: true, paused: false, t: 0, at: now });
+      } else {
+        if (!tv) return;                                          // nothing is known about that TV
+        if (m.action === 'off') tv.on = false;
+        else if (m.action === 'pause') { if (!tv.on || tv.paused) return; tv.t = tvPos(tv, now); tv.at = now; tv.paused = true; }
+        else if (m.action === 'play') { if (!tv.on || !tv.paused) return; tv.paused = false; tv.at = now; }
+        else if (m.action === 'source') {
+          const list = tvSources(w), i = list.indexOf(tv.src);
+          tv.src = list[((i < 0 ? 0 : i) + dir + list.length) % list.length];
+          if (tv.on) Object.assign(tv, { paused: false, t: 0, at: now });
+        }
+        else if (m.action === 'volume') tv.vol = Math.max(0, Math.min(TV_VOLUME_STEPS, tv.vol + dir));
+      }
+      broadcast(w, { type: 'tv', list: tvList(w, now), sources: tvSources(w) });   // everyone in the world, the player who sent it too
       return;
     }
     if (m.type === 'mob') {
@@ -368,9 +438,11 @@ wss.on('connection', (ws) => {
 
 // everyone's clock is corrected every five seconds, in each world
 setInterval(() => {
+  const now = Date.now();
+  for (const [token, t] of uploadTokens) if (t.until < now) uploadTokens.delete(token);
   for (const w of Object.values(WORLDS)) {
     broadcast(w, { type: 'time', time: worldTime(w) });
-    if (w.tv && w.tv.on) broadcast(w, { type: 'tv', tv: tvSnap(w) });   // the shared TV is re-checked too, so the picture stays in step
+    broadcast(w, { type: 'tv', list: tvList(w), sources: tvSources(w) });   // the TVs are re-sent too, so the pictures stay in step (an empty list says none is on)
   }
 }, 5000);
 

@@ -802,6 +802,8 @@ const ITEM_IDS = ITEMS.map((_, i) => ITEM_BASE + i);
 ITEMS.forEach((it, i) => { BLOCKS[ITEM_BASE + i] = {name:it.name, top:it.icon, side:it.icon, bot:it.icon, sw:it.sw}; });
 const isItem = b => b >= ITEM_BASE;
 const GLASS_CUP_ID = ITEM_BASE + 6, WATER_CUP_ID = ITEM_BASE + 7;   // an empty glass, and one full of water
+const REMOTE_ID = ITEM_BASE + ITEMS.length;                          // the TV remote: a gadget (the Gadgets tab), not food
+BLOCKS[REMOTE_ID] = {name:'TV Remote', top:91, side:91, bot:91, sw:'#2a2d34'};
 // plants and the poop lie on the floor: you walk through them, and they are not blocks you can place
 const DECOR_NAMES = ['Grass Tuft','Red Flower','Yellow Flower','Blue Flower','White Flower','Poop'];
 const DECOR_T = new Set(FURN.map((_, t) => t).filter(t => DECOR_NAMES.includes(FURN[t].name)));
@@ -819,7 +821,8 @@ const CATS = [
   {name:'Ores & Metal', ids:[24,48,49,50,21,22,51,52]},
   {name:'Light & Glass',ids:[10,11,47]},
   {name:'Furniture',    ids:[12,16,...FURN_BASES.filter((_, t) => !DECOR_T.has(t))]},
-  {name:'Food',         ids:ITEM_IDS}
+  {name:'Food',         ids:ITEM_IDS},
+  {name:'Gadgets',      ids:[REMOTE_ID]}
 ];
 const CATALOG = CATS.flatMap(c => c.ids);      // every block a player can carry
 // the rooms the Furniture tab can be filtered by
@@ -1206,131 +1209,207 @@ function furnUse(h){
   const ty = FURN[furnState(h.id).t];
   return !!(ty.use && ty.use(h));
 }
-/* ---------- the TV: right-click it to turn it on and play the video (media/tv.mp4) on its screen ---------- */
-// the video is one file the game loads; it is only played on the screen of the player who turned the TV on
-const TV_VIDEO_URL = 'media/tv.mp4';
-const tv = { on:false, x:0, y:0, z:0, el:null, node:null, gain:null, prog:null, vao:null, vbo:null, tex:null, loc:null, url:null, lastUse:-1e9, held:false };
+/* ---------- the TVs: right-click one to turn it on. Each TV shows its own video, shared with everyone in the world; the TV remote changes the video, the volume and the pause ---------- */
+const TV_DEFAULT_SRC = 'media/tv.mp4';    // the video a TV shows when no other was chosen
+const TV_VOLUME_STEPS = 5;                // the volume goes from 0 (silent) to 5 (full), one step at a time
+const TV_DOUBLE_MS = 400;                 // two right clicks (or taps) this close together open the file picker for a different video
+const TV_MAX_UPLOAD = 150 * 1024 * 1024;  // the largest video a player can share with the world
 const TV_NO_VIDEO = 'NO VIDEO FOUND: RIGHT-CLICK THE TV AGAIN TO CHOOSE ONE';
-const TV_DOUBLE_MS = 400;   // two right clicks (or taps) this close together open the file picker to choose a different video
-function tvVideo(){
-  if(tv.el) return tv.el;
+const tvs = new Map();                    // every TV this player knows about: key "x,y,z" -> its record
+let tvSources = [TV_DEFAULT_SRC];         // the videos the remote cycles through: the default, then the ones shared in this world
+let mpBase = '';                          // the server's web address (where shared videos are), set when you connect
+let tvShareWait = null;                   // a share waiting for the server's upload ticket
+const tvKey = (x, y, z) => x + ',' + y + ',' + z;
+const tvGL = {prog:null, vao:null, vbo:null, loc:null};
+function isTV(h){ return !!h && isFurn(h.id) && FURN[furnState(h.id).t].name === 'TV'; }
+// a TV's record, made the first time it is needed
+function tvRec(x, y, z){
+  const k = tvKey(x, y, z);
+  let r = tvs.get(k);
+  if(!r){
+    r = {x, y, z, on:false, held:false, src:TV_DEFAULT_SRC, vol:TV_VOLUME_STEPS, bad:'', el:null, node:null, gain:null, tex:null, shown:'', lastUse:-1e9};
+    tvs.set(k, r);
+  }
+  return r;
+}
+// is there still a TV at the spot (an unloaded spot counts as still there)
+function tvThere(r){
+  const b = getBlock(r.x, r.y, r.z);
+  return b < 0 || (isFurn(b) && FURN[furnState(b).t].name === 'TV');
+}
+// the address a video is loaded from: the default is next to the game page, a shared video is on the server
+const tvAddr = src => (src.startsWith('/') && mpBase) ? mpBase + src : src;
+// the TV's video element, made the first time it is needed
+function tvEl(r){
+  if(r.el) return r.el;
   const v = document.createElement('video');
-  v.src = TV_VIDEO_URL; v.preload = 'auto'; v.playsInline = true;
-  v.style.display = 'none';
-  v.addEventListener('ended', () => { tvSend('off'); tvOff(); });
-  v.addEventListener('error', () => { tvOff(); flashHud(TV_NO_VIDEO); });
+  v.crossOrigin = 'anonymous';   // a video from the server (another address) can still be drawn on the screen
+  v.preload = 'auto'; v.playsInline = true; v.style.display = 'none';
+  v.addEventListener('ended', () => { if(r.el === v) tvAct(r, 'off'); });
+  v.addEventListener('error', () => {
+    if(r.el !== v || !r.on) return;
+    r.bad = r.src;   // this copy cannot play that video: the TV stays off here until the video changes
+    tvOff(r);
+    flashHud(r.src === TV_DEFAULT_SRC ? TV_NO_VIDEO : 'THAT VIDEO COULD NOT BE PLAYED');
+  });
   document.body.appendChild(v);
-  tv.el = v;
+  r.el = v;
   return v;
 }
-// right-clicking the TV turns it on and plays the video from the start; it goes off again when the video ends
-function tvUse(h){
-  if(!isFurn(h.id) || FURN[furnState(h.id).t].name !== 'TV') return false;
-  sfx.init();
-  const v = tvVideo();
-  // a double right click (or double tap) opens the picker to play a different video; after it opens, the count starts over
-  const now = performance.now(), quick = now - tv.lastUse < TV_DOUBLE_MS;
-  tv.lastUse = quick ? -1e9 : now;
-  if(quick || v.error){ tvChooseFile(h); return true; }   // also when no video file was found: a right click lets you choose one from your computer
-  // the TV that is on: one right click pauses it, and the next one plays it again
-  if(tv.on && tv.x === h.x && tv.y === h.y && tv.z === h.z && !v.ended){
-    if(v.paused){ tv.held = false; tvPlay(); tvSend('play'); flashHud('TV PLAYING'); }
-    else { tv.held = true; v.pause(); tvSend('pause'); flashHud('TV PAUSED'); }
-    sfx.click();
-    return true;
+// connects a TV's video to the sound, once
+function tvWire(r){
+  if(!sfx.ctx || r.node) return;
+  try{ r.node = sfx.ctx.createMediaElementSource(r.el); r.gain = sfx.ctx.createGain(); r.node.connect(r.gain); r.gain.connect(sfx.master); }
+  catch(e){ r.node = null; r.gain = null; }
+}
+// the picture and sound start; if the browser refuses the video, the TV switches off here and says why
+function tvPlay(r){
+  const v = r.el, p = v.play();
+  if(p && p.catch) p.catch(() => { if(r.el !== v) return; tvOff(r); flashHud(v.error ? TV_NO_VIDEO : 'THE TV WOULD NOT PLAY'); });
+}
+function tvOff(r){ r.on = false; if(r.el) r.el.pause(); }
+// shows the TV's video from the beginning, here
+function tvPlayHere(r){
+  const v = tvEl(r), want = tvAddr(r.src);
+  if(v.getAttribute('src') !== want) v.src = want;
+  tvWire(r);
+  r.on = true; r.held = false; r.bad = '';
+  if(v.currentTime > 0){ try{ v.currentTime = 0; }catch(e){} }
+  tvPlay(r);
+}
+// the next video in the remote's list, from the one the TV shows now
+function tvNextSource(cur, dir){
+  const n = tvSources.length, i = tvSources.indexOf(cur);
+  return tvSources[((i < 0 ? 0 : i) + dir + n) % n];
+}
+// what a TV does, here
+function tvLocal(r, action, dir, src){
+  if(action === 'start'){ if(src) r.src = src; tvPlayHere(r); }
+  else if(action === 'pause'){ if(r.on){ r.held = true; if(r.el) r.el.pause(); } }
+  else if(action === 'play'){ if(r.on){ r.held = false; tvPlay(r); } }
+  else if(action === 'off'){ tvOff(r); }
+  else if(action === 'source'){ r.src = tvNextSource(r.src, dir); if(r.on) tvPlayHere(r); }
+  else if(action === 'volume'){ r.vol = Math.max(0, Math.min(TV_VOLUME_STEPS, r.vol + dir)); }
+}
+// a player's action on a TV: alone it happens here; in a world the server does it, and everyone sees it
+function tvAct(r, action, dir, src){
+  if(!mpMode){ tvLocal(r, action, dir || 0, src); return; }
+  mpSend({type:'tv', action, x:r.x, y:r.y, z:r.z, dir:dir || 0, src:src || ''});
+}
+// the world's TVs as the server has them now: the ones in the list are on, the others are off
+function tvSync(list, sources){
+  if(sources && sources.length) tvSources = sources.slice();
+  const seen = new Set();
+  for(const s of list || []){
+    seen.add(tvKey(s.x, s.y, s.z));
+    const r = tvRec(s.x, s.y, s.z);
+    if(!tvThere(r)) continue;   // no TV at that spot in this copy of the world
+    const was = r.on, changed = r.src !== s.src;
+    r.src = s.src; r.vol = s.vol;
+    if(r.bad === s.src){ tvOff(r); continue; }   // this copy cannot play that video
+    const v = tvEl(r), want = tvAddr(s.src);
+    if(v.getAttribute('src') !== want) v.src = want;
+    tvWire(r);
+    if(!was){ r.on = true; flashHud('TV ON'); }
+    // catch up with the others: seek when this copy is more than half a second away, or the TV has just turned on or changed video
+    if(!was || changed || Math.abs(v.currentTime - s.pos) > 0.6){ try{ v.currentTime = s.pos; }catch(e){} }
+    r.held = !!s.paused;
+    if(s.paused){ if(!v.paused) v.pause(); }
+    else if(v.paused && !v.ended) tvPlay(r);
   }
-  tvStart(h);   // a TV that is off, or has finished, starts again from the beginning
+  for(const r of tvs.values()) if(r.on && !seen.has(tvKey(r.x, r.y, r.z))) tvOff(r);
+}
+// every frame: each TV that is on follows the pause, its volume, and how far away you are, for the sound
+function tvUpdate(){
+  for(const r of tvs.values()){
+    if(!r.on || !r.el) continue;
+    if(!tvThere(r)){ tvOff(r); tvAct(r, 'off'); continue; }   // the TV was taken away
+    if(!playing){ if(!r.el.paused) r.el.pause(); continue; }
+    if(r.el.paused && !r.el.ended && !r.held) r.el.play().catch(() => {});
+    const d = Math.hypot(player.x - (r.x + 0.5), player.y - (r.y + 0.5), player.z - (r.z + 0.5));
+    const t = Math.min(1, Math.max(0, (d - 3) / 19)), g = (1 - t) * (1 - t) * (r.vol / TV_VOLUME_STEPS);
+    if(r.gain && sfx.ctx) r.gain.gain.setTargetAtTime(g, sfx.ctx.currentTime, 0.08);
+    else r.el.volume = g;
+  }
+}
+// right-clicking a TV turns it on. Once it is on, a right click pauses it and the next one plays it again. Two quick clicks open the picker for a different video
+function tvUse(h){
+  if(!isTV(h)) return false;
+  sfx.init();
+  const r = tvRec(h.x, h.y, h.z);
+  const now = performance.now(), quick = now - r.lastUse < TV_DOUBLE_MS;
+  r.lastUse = quick ? -1e9 : now;
+  if(quick || (r.el && r.el.error)){ tvChooseFile(r); return true; }   // also when no video file was found: a right click lets you choose one
+  if(r.on && r.el){
+    if(r.el.paused){ tvAct(r, 'play'); flashHud('TV PLAYING'); }
+    else { tvAct(r, 'pause'); flashHud('TV PAUSED'); }
+  } else { tvAct(r, 'start'); flashHud('TV ON'); }
+  sfx.click();
   return true;
 }
-// a TV that is off, or has finished, starts again from the beginning; the whole world sees it, since it is the shared video
-function tvStart(h){
-  const v = tv.el;
-  if(mpMode && tv.local){ tv.local = false; v.src = TV_VIDEO_URL; }   // back to the shared video after a file picked here
-  tvBegin(h);
-  tvSend('start', h);
-}
-// turns the TV on at h and starts its video from the beginning
-function tvBegin(h){
-  const v = tv.el;
-  tvWire();
-  Object.assign(tv, {on:true, x:h.x, y:h.y, z:h.z});
-  if(v.currentTime > 0) v.currentTime = 0;
-  tv.held = false;
-  tvPlay();
-  sfx.click();
-  flashHud('TV ON');
-}
-// connects the video to the sound, once
-function tvWire(){
-  const v = tv.el;
-  if(sfx.ctx && !tv.node){
-    try{ tv.node = sfx.ctx.createMediaElementSource(v); tv.gain = sfx.ctx.createGain(); tv.node.connect(tv.gain); tv.gain.connect(sfx.master); }
-    catch(e){ tv.node = null; tv.gain = null; }
-  }
-}
-// tells the server what this player did with the TV, so everyone in the world sees it. A file picked on this computer is not shared
-function tvSend(action, h){
-  if(!mpMode || tv.local) return;
-  const at = h || tv;
-  mpSend({type:'tv', action, x:at.x, y:at.y, z:at.z});
-}
-// starts the picture and sound; if the browser refuses the video, the TV switches off and says why
-function tvPlay(){
-  const v = tv.el, p = v.play();
-  if(p && p.catch) p.catch(() => { tvOff(); flashHud(v.error ? TV_NO_VIDEO : 'THE TV WOULD NOT PLAY'); });
-}
-// no video file was found: this opens a picker for a video from your computer. It plays only in this browser and is not uploaded
-function tvChooseFile(h){
+// the picker: a video from this computer. In a world it is shared with everyone; alone it plays here
+function tvChooseFile(r){
   const input = document.createElement('input');
   input.type = 'file'; input.accept = 'video/*'; input.style.display = 'none';
-  input.addEventListener('change', () => {
+  input.addEventListener('change', async () => {
     const f = input.files && input.files[0];
     input.remove();
     if(!f) return;
-    if(tv.url) URL.revokeObjectURL(tv.url);
-    tv.url = URL.createObjectURL(f);
-    tv.el.src = tv.url;
-    tv.local = true;   // a file picked on this computer: only this player sees it
-    tvBegin(h);
+    if(!/\.(mp4|webm)$/i.test(f.name) && f.type !== 'video/mp4' && f.type !== 'video/webm'){ flashHud('PICK AN MP4 OR WEBM VIDEO'); return; }
+    if(f.size > TV_MAX_UPLOAD){ flashHud('THAT VIDEO IS TOO BIG: 150 MB AT MOST'); return; }
+    if(!mpMode){
+      const url = URL.createObjectURL(f);
+      tvSources.push(url);
+      tvAct(r, 'start', 0, url); sfx.click(); flashHud('TV ON: YOUR VIDEO');
+      return;
+    }
+    flashHud('SHARING THE VIDEO WITH EVERYONE...');
+    try{
+      const path = await tvShare(f);
+      tvAct(r, 'start', 0, path); sfx.click(); flashHud('TV ON: SHARED VIDEO');
+    }catch(e){ flashHud('COULD NOT SHARE THE VIDEO: ' + String(e.message).toUpperCase()); }
   });
   document.body.appendChild(input);
   input.click();
 }
-function tvOff(){ tv.on = false; if(tv.el) tv.el.pause(); }
-// what the server says about the shared TV: on or off, where it is, and where its video has got to. Everyone in the world sees the same picture
-function tvRemote(s){
-  if(!s || tv.local) return;             // a file picked on this computer plays only here
-  if(!s.on){ if(tv.on) tvOff(); return; }
-  const b = getBlock(s.x, s.y, s.z);
-  if(b >= 0 && !(isFurn(b) && FURN[furnState(b).t].name === 'TV')) return;   // no TV at that spot in this copy of the world
-  sfx.init();
-  const v = tvVideo();
-  const fresh = !tv.on || tv.x !== s.x || tv.y !== s.y || tv.z !== s.z;
-  if(v.getAttribute('src') !== TV_VIDEO_URL) v.src = TV_VIDEO_URL;
-  tvWire();
-  if(fresh){ Object.assign(tv, {on:true, x:s.x, y:s.y, z:s.z}); tv.held = false; flashHud('TV ON'); }
-  // catch up with the others: seek only when this copy is more than half a second away
-  if(fresh || Math.abs(v.currentTime - s.pos) > 0.6){ try{ v.currentTime = s.pos; }catch(e){} }
-  tv.held = !!s.paused;
-  if(s.paused){ if(!v.paused) v.pause(); }
-  else if(v.paused && !v.ended) tvPlay();
+// sends a picked video to the server, so everyone in the world can watch it. The server gives a ticket first, then the file is uploaded with it; the answer is the video's address on the server
+function tvShare(f){
+  return new Promise((resolve, reject) => {
+    if(!mp.ws || mp.ws.readyState !== 1){ reject(new Error('not connected')); return; }
+    const wait = {};
+    tvShareWait = wait;
+    setTimeout(() => { if(tvShareWait === wait){ tvShareWait = null; reject(new Error('the server did not answer')); } }, 10000);
+    wait.reject = reject;
+    wait.ticket = async token => {
+      try{
+        const type = (f.type === 'video/webm' || /\.webm$/i.test(f.name)) ? 'video/webm' : 'video/mp4';
+        const res = await fetch(mpBase + '/upload?token=' + encodeURIComponent(token), {method:'POST', headers:{'Content-Type': type}, body:f});
+        const j = await res.json().catch(() => ({}));
+        if(!res.ok) throw new Error(j.error || 'the upload failed');
+        resolve(j.path);
+      }catch(e){ reject(e); }
+    };
+    mpSend({type:'uploadTicket'});
+  });
 }
-// is there still a TV at the spot (an unloaded spot counts as still there)
-function tvStillThere(){
-  const b = getBlock(tv.x, tv.y, tv.z);
-  if(b < 0) return true;
-  return isFurn(b) && FURN[furnState(b).t].name === 'TV';
+// the TV remote in your hand: right-click starts a TV, or pauses it and plays it again. Left-click turns its volume down (Shift: up). The wheel changes its video
+function remotePress(h){
+  if(!isTV(h)){ flashHud('POINT THE REMOTE AT A TV'); return; }
+  const r = tvRec(h.x, h.y, h.z);
+  if(!r.on){ tvAct(r, 'start'); flashHud('TV ON'); }
+  else if(r.el && r.el.paused){ tvAct(r, 'play'); flashHud('TV PLAYING'); }
+  else { tvAct(r, 'pause'); flashHud('TV PAUSED'); }
+  sfx.click();
 }
-// the sound fades with distance: full within 3 blocks, silent from 22 blocks away. It pauses while the menu is open
-function tvUpdate(){
-  if(!tv.on || !tv.el) return;
-  if(!tvStillThere()){ tvOff(); return; }
-  if(!playing){ if(!tv.el.paused) tv.el.pause(); return; }
-  if(tv.el.paused && !tv.el.ended && !tv.held) tv.el.play().catch(() => {});   // a TV you paused stays paused until you play it
-  const d = Math.hypot(player.x - (tv.x + 0.5), player.y - (tv.y + 0.5), player.z - (tv.z + 0.5));
-  const t = Math.min(1, Math.max(0, (d - 3) / 19)), g = (1 - t) * (1 - t);
-  if(tv.gain && sfx.ctx) tv.gain.gain.setTargetAtTime(g, sfx.ctx.currentTime, 0.08);
-  else tv.el.volume = g;
+function remoteVolume(h, dir){
+  if(!isTV(h)){ flashHud('POINT THE REMOTE AT A TV'); return; }
+  tvAct(tvRec(h.x, h.y, h.z), 'volume', dir);
+  flashHud(dir > 0 ? 'TV VOLUME UP' : 'TV VOLUME DOWN');
+}
+function remoteSource(h, dir){
+  if(!isTV(h)){ flashHud('POINT THE REMOTE AT A TV'); return; }
+  tvAct(tvRec(h.x, h.y, h.z), 'source', dir);
+  flashHud(dir > 0 ? 'NEXT VIDEO' : 'PREVIOUS VIDEO');
 }
 // where the TV's picture goes: the four corners of its screen in the world, bottom-left first, and the screen's size
 function tvScreen(x, y, z, id){
@@ -1354,15 +1433,14 @@ function tvScreen(x, y, z, id){
     P[0] + (u - 0.5) * W * right[0], P[1] + (w - 0.5) * H, P[2] + (u - 0.5) * W * right[2]]);
   return { corners, W, H };
 }
-// draws the video onto the TV's screen, scaled to fit inside it without stretching (black bars where the shape differs)
-let tvVideoUpdated = -1;
-function drawTvScreen(VP){
-  const b = getBlock(tv.x, tv.y, tv.z);
-  const s = isFurn(b) ? tvScreen(tv.x, tv.y, tv.z, b) : null;
+// draws a TV's video onto its screen, scaled to fit inside it without stretching (black bars where the shape differs)
+function tvDraw(r, VP){
+  const b = getBlock(r.x, r.y, r.z);
+  const s = isFurn(b) ? tvScreen(r.x, r.y, r.z, b) : null;
   if(!s) return;
-  const v = tv.el;
-  if(!tv.prog){
-    tv.prog = program(`#version 300 es
+  const v = r.el;
+  if(!tvGL.prog){
+    tvGL.prog = program(`#version 300 es
 layout(location=0) in vec3 aPos;
 layout(location=1) in vec2 aUV;
 uniform mat4 uVP; out vec2 vUV;
@@ -1374,13 +1452,15 @@ void main(){
   if(uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0){ o = vec4(0.0, 0.0, 0.0, 1.0); return; }   // the frame around the picture
   o = vec4(texture(uVideo, uv).rgb, 1.0);
 }`);
-    tv.loc = {uVP: gl.getUniformLocation(tv.prog, 'uVP'), uScale: gl.getUniformLocation(tv.prog, 'uScale'), uVideo: gl.getUniformLocation(tv.prog, 'uVideo')};
-    tv.vao = gl.createVertexArray(); tv.vbo = gl.createBuffer();
-    gl.bindVertexArray(tv.vao); gl.bindBuffer(gl.ARRAY_BUFFER, tv.vbo);
+    tvGL.loc = {uVP: gl.getUniformLocation(tvGL.prog, 'uVP'), uScale: gl.getUniformLocation(tvGL.prog, 'uScale'), uVideo: gl.getUniformLocation(tvGL.prog, 'uVideo')};
+    tvGL.vao = gl.createVertexArray(); tvGL.vbo = gl.createBuffer();
+    gl.bindVertexArray(tvGL.vao); gl.bindBuffer(gl.ARRAY_BUFFER, tvGL.vbo);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 20, 0);
     gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 20, 12);
     gl.bindVertexArray(null);
-    tv.tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tv.tex);
+  }
+  if(!r.tex){
+    r.tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, r.tex);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   }
@@ -1388,19 +1468,20 @@ void main(){
   const scale = av > as ? [1, av / as] : [as / av, 1];
   const data = new Float32Array(20);
   s.corners.forEach((c, i) => { const uv = [[0,0],[1,0],[1,1],[0,1]][i]; data.set([c[0], c[1], c[2], uv[0], uv[1]], i * 5); });
-  gl.useProgram(tv.prog);
-  gl.uniformMatrix4fv(tv.loc.uVP, false, new Float32Array(VP));
-  gl.uniform2f(tv.loc.uScale, scale[0], scale[1]);
-  gl.uniform1i(tv.loc.uVideo, 1);
-  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, tv.tex);
-  if(v.currentTime !== tvVideoUpdated){                  // a new frame of the video
+  gl.useProgram(tvGL.prog);
+  gl.uniformMatrix4fv(tvGL.loc.uVP, false, new Float32Array(VP));
+  gl.uniform2f(tvGL.loc.uScale, scale[0], scale[1]);
+  gl.uniform1i(tvGL.loc.uVideo, 1);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, r.tex);
+  const key = v.currentTime + '|' + v.src;
+  if(key !== r.shown){                  // a new frame of the video
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, v);
+    try{ gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, v); r.shown = key; }
+    catch(e){ r.bad = r.src; tvOff(r); flashHud('THIS VIDEO CANNOT BE SHOWN HERE'); }   // the browser will not draw a video from that address
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-    tvVideoUpdated = v.currentTime;
   }
   gl.activeTexture(gl.TEXTURE0);
-  gl.bindVertexArray(tv.vao); gl.bindBuffer(gl.ARRAY_BUFFER, tv.vbo);
+  gl.bindVertexArray(tvGL.vao); gl.bindBuffer(gl.ARRAY_BUFFER, tvGL.vbo);
   gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
   gl.disable(gl.CULL_FACE);
   gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
@@ -1513,7 +1594,7 @@ let fridgeOpen = null;          // the fridge whose shelves are showing: {key, x
 // right-clicking a fridge: a closed door opens; with food in your hand it goes in; otherwise the shelves show
 function fridgeUse(h){
   if(!furnState(h.id).f.open){ furnOpenToggle(h); return; }
-  if(isItem(HOTBAR[sel])){ putFood(h, HOTBAR[sel]); return; }
+  if(isItem(HOTBAR[sel]) && HOTBAR[sel]!==REMOTE_ID){ putFood(h, HOTBAR[sel]); return; }
   openFridge(h);
 }
 function putFood(h, food){
@@ -1857,6 +1938,10 @@ function makeAtlasCanvas(){
     if(d<=1.8) return [240,205,60]; if(d<=5.2) return [g(n,r,14),g(n,gc,14),g(n,b,14)]; return [g(n,88,36),g(n,156,40),g(n,58,24)]; });
   flowerTile(86,200,40,40); flowerTile(87,236,196,50); flowerTile(88,60,100,220); flowerTile(89,240,240,236);   // flower heads on grass
   tile(90,(px,py)=>{ const n=rnd2(px,py,140); return [g(n,96,18),g(n,62,14),g(n,34,10)]; });   // poop
+  tile(91,(px,py)=>{ const n=rnd2(px,py,141); const body = px>=4 && px<=11 && py>=1 && py<=14;   // the TV remote: a dark body with buttons
+    if(!body) return [58,60,68];
+    const btn = Math.hypot(px-7.5,py-4.5) < 1.6 || Math.hypot(px-5.5,py-8.5) < 1.1 || Math.hypot(px-9.5,py-8.5) < 1.1 || Math.hypot(px-5.5,py-11.5) < 1.1 || Math.hypot(px-9.5,py-11.5) < 1.1;
+    if(btn) return [236,78,68]; return [g(n,40,12),g(n,42,12),g(n,48,12)]; });
   tile(0,(px,py)=>{ const n=rnd2(px,py,1); return [g(n,88,36),g(n,156,40),g(n,58,24)]; });              // grass top
   tile(1,(px,py)=>{ const cut=3+(rnd2(px,0,5)>0.5?1:0); if(py<cut){ const n=rnd2(px,py,2); return [g(n,88,36),g(n,156,40),g(n,58,24)]; }
                     const n=rnd2(px,py,3); return [g(n,132,40),g(n,94,34),g(n,58,26)]; });                  // grass side
@@ -2194,7 +2279,9 @@ function partnerOf(x,y,z,id){
   return null;
 }
 function doBreak(){
-  const h=raycast(6); if(!h) return;
+  const h=raycast(6);
+  if(HOTBAR[sel]===REMOTE_ID){ remoteVolume(h, (keys.ShiftLeft||keys.ShiftRight) ? 1 : -1); return; }   // the remote: left-click turns the TV's volume down, Shift turns it up
+  if(!h) return;
   const cells=[[h.x,h.y,h.z]];
   const p=partnerOf(h.x,h.y,h.z,h.id); if(p) cells.push(p);   // a door or bed comes down as a whole
   for(const [x,y,z] of cells){ setBlock(x,y,z,0); mpSend({type:'edit', x, y, z, id:0}); }
@@ -2328,6 +2415,7 @@ function tapVolume(){
 }
 function doPlace(){
   const h=raycast(6);
+  if(HOTBAR[sel]===REMOTE_ID){ remotePress(h); return; }   // the remote in your hand: right-click starts or pauses the TV you aim at
   // holding a glass of water: right-click drinks it, unless you are working a door, a light, the fridge or a bed
   if(HOTBAR[sel]===WATER_CUP_ID && !(h && (isDoorId(h.id) || isLampId(h.id) || isFurn(h.id) || h.id===BED_FOOT_ID || h.id===BED_HEAD_ID))){ drinkWater(); return; }
   if(!h) return;
@@ -2717,7 +2805,11 @@ addEventListener('keydown',e=>{
 });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
 addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; });
-addEventListener('wheel',e=>{ if(playing && !invOpen && !player.sleeping) selectSlot((sel+(e.deltaY>0?1:-1)+SLOTS)%SLOTS); },{passive:true});
+addEventListener('wheel',e=>{
+  if(!playing || invOpen || player.sleeping) return;
+  if(HOTBAR[sel]===REMOTE_ID){ const h=raycast(6); if(isTV(h)){ remoteSource(h, e.deltaY>0?1:-1); return; } }   // the remote at a TV: the wheel changes its video
+  selectSlot((sel+(e.deltaY>0?1:-1)+SLOTS)%SLOTS);
+},{passive:true});
 let lookFrom = 0;             // the mouse is read only from this moment on: right after it locks, the first movement can be a jump
 // how fast the view turns, set in SETTINGS and saved on this device
 const SENS_STEPS = [0.5, 0.75, 1, 1.5, 2];
@@ -3023,6 +3115,7 @@ function connectMP(){
   if(mp.ws) return;
   sfx.init();
   const url = $('mpurl').value.trim() || defaultWS();
+  mpBase = url.replace(/^ws/, 'http').replace(/\/ws\/?$/, '');   // the same server's web address, for the videos shared from it
   const name = ($('mpname').value.trim().replace(/[^\w \-.]/g,'').slice(0,16)) || 'Builder';
   const world = mpWorld, password = world === 'our' ? $('mppass').value : '';
   if(world === 'our' && !password){ mpStatus('Type the OUR WORLD password first.'); return; }
@@ -3068,7 +3161,7 @@ function enterWorld(m){
   for(const p of m.players) addRemote(p);
   mp.sendT = 0;
   start();
-  if(m.tv) tvRemote(m.tv);                       // a TV already on in this world starts for you too
+  tvSync(m.tvs, m.sources);                      // the TVs already on in this world start for you too
   adminRole = null; player.invisible = false;   // the server forgets admin powers when you reconnect
 }
 function onServerMessage(m){
@@ -3081,7 +3174,8 @@ function onServerMessage(m){
   else if(m.type==='mob'){ cowReceive(m); }
   else if(m.type==='jump'){ if(player.onGround && playing){ player.vy = 8.6; if(sfx.ctx) sfx.jump(); } }
   else if(m.type==='rtc'){ voiceSignal(m.from, m.data); }
-  else if(m.type==='tv'){ tvRemote(m.tv); }
+  else if(m.type==='tv'){ tvSync(m.list, m.sources); }
+  else if(m.type==='uploadTicket'){ const w=tvShareWait; tvShareWait=null; if(w){ if(m.token) w.ticket(m.token); else w.reject(new Error(m.error || 'not allowed')); } }
   else if(m.type==='chat'){ addChatLine(String(m.name||'Player'), String(m.text||''), 'chat'); }
   else if(m.type==='system'){ addChatLine('', String(m.text||''), 'system'); }
   else if(m.type==='move'){
@@ -3593,7 +3687,7 @@ function render(){
     gl.enable(gl.CULL_FACE);
   }
   // the TV's picture, on its screen, once the video has a frame to show
-  if(tv.on && tv.el && tv.el.readyState >= 2 && playing) drawTvScreen(VP);
+  if(playing) for(const r of tvs.values()) if(r.on && r.el && r.el.readyState >= 2) tvDraw(r, VP);
   // the item in your hand, drawn over the world: a bare hand when the slot is empty
   if(playing && !player.sleeping && !player.seat && !invOpen && !codeOpen && !fridgeOpen && spectate.id==null){
     gl.clear(gl.DEPTH_BUFFER_BIT);
@@ -3967,7 +4061,7 @@ requestAnimationFrame(frame);
 
 // for testing from the outside
 window.VOX = {
-  BLOCKS, lightAt, isSolidId, standUp, POOP_ID, GLASS_CUP_ID, WATER_CUP_ID, MAX_ID, FURN_ROOM, ROOMS, drinkWater, flushToilet, leaveToilet, tapVolume, emitFridgeFood, idOfVar, VAR_OF, roomOf,
+  BLOCKS, lightAt, isSolidId, standUp, POOP_ID, GLASS_CUP_ID, WATER_CUP_ID, REMOTE_ID, tvs, tvAct, tvSync, MAX_ID, FURN_ROOM, ROOMS, drinkWater, flushToilet, leaveToilet, tapVolume, emitFridgeFood, idOfVar, VAR_OF, roomOf,
   chunks, player, keys, getBlock, setBlock, raycast, start, pause, selectSlot,
   get playing(){ return playing; }, get target(){ return target; },
   doBreak, doPlace, daylight, get worldTime(){ return worldTime; }, set worldTime(v){ worldTime=v; },
