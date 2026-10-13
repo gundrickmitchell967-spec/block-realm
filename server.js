@@ -16,6 +16,7 @@ const MAX_PLAYERS = Number(process.env.MAX_PLAYERS) || 16;
 const PAGE = path.join(__dirname, 'public', 'index.html');
 const CH = 64;                  // world height in blocks
 const REACH = 12;               // a block change must be this close to the player's last reported position
+const MAX_BLOCK_ID = 25;        // highest block id a player may place (see BLOCKS in index.html)
 const COLORS = ['#e6594b', '#4b9be6', '#58c25a', '#e6c44b', '#b35ae6', '#4be6d6', '#e6894b', '#e64b9b'];
 
 // shared edits: "x,y,z" -> block id (0 is air, so a broken block is stored as 0)
@@ -66,7 +67,7 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 16 * 1024 });
 let nextId = 1;
-const players = new Map();   // id -> { ws, name, color, x, y, z, yaw, pitch, tokens, lastTick }
+const players = new Map();   // id -> { ws, name, color, x, y, z, yaw, pitch, tokens, lastTick, sleeping }
 
 function sendTo(p, msg) { if (p.ws.readyState === 1) p.ws.send(JSON.stringify(msg)); }
 function broadcast(msg, exceptId) {
@@ -78,6 +79,14 @@ function cleanName(s) {
 }
 function isNum(v) { return typeof v === 'number' && Number.isFinite(v); }
 function isInt(v) { return Number.isInteger(v); }
+// the night passes only when every joined player is in a bed at the same time
+function checkMorning() {
+  const joined = [...players.values()].filter(q => q.joined);
+  if (joined.length && joined.every(q => q.sleeping)) {
+    for (const q of joined) q.sleeping = false;
+    broadcast({ type: 'morning' });
+  }
+}
 // simple rate limit: each player has a bucket of 60 messages, refilled at 40 per second
 function allow(p) {
   const now = Date.now();
@@ -92,7 +101,7 @@ wss.on('connection', (ws) => {
   if (players.size >= MAX_PLAYERS) { ws.close(1013, 'server full'); return; }
   const id = nextId++;
   const p = { ws, name: 'Builder' + id, color: COLORS[id % COLORS.length], x: 8.5, y: 40, z: 8.5, yaw: 0, pitch: 0,
-              tokens: 60, lastTick: Date.now(), joined: false };
+              tokens: 60, lastTick: Date.now(), joined: false, sleeping: false };
   players.set(id, p);
 
   ws.on('message', (raw) => {
@@ -105,7 +114,7 @@ wss.on('connection', (ws) => {
       p.joined = true;
       p.name = cleanName(m.name);
       const list = [];
-      for (const [oid, o] of players) if (oid !== id && o.joined) list.push({ id: oid, name: o.name, color: o.color, x: o.x, y: o.y, z: o.z, yaw: o.yaw });
+      for (const [oid, o] of players) if (oid !== id && o.joined) list.push({ id: oid, name: o.name, color: o.color, x: o.x, y: o.y, z: o.z, yaw: o.yaw, sleeping: o.sleeping });
       const all = [];
       for (const [k, v] of edits) { const [x, y, z] = k.split(',').map(Number); all.push([x, y, z, v]); }
       sendTo(p, { type: 'welcome', id, edits: all, players: list });
@@ -122,6 +131,13 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    if (m.type === 'sleep') {
+      p.sleeping = m.on === true;
+      broadcast({ type: 'sleep', id, on: p.sleeping }, id);
+      checkMorning();
+      return;
+    }
+
     if (m.type === 'move') {
       if (!isNum(m.x) || !isNum(m.y) || !isNum(m.z) || !isNum(m.yaw) || !isNum(m.pitch)) return;
       p.x = Math.max(-1e6, Math.min(1e6, m.x));
@@ -134,7 +150,7 @@ wss.on('connection', (ws) => {
 
     if (m.type === 'edit') {
       if (!isInt(m.x) || !isInt(m.y) || !isInt(m.z) || !isInt(m.id)) return;
-      if (m.y < 0 || m.y >= CH || m.id < 0 || m.id > 13) return;   // 0 = air, 1-13 = block types (see BLOCKS in index.html)
+      if (m.y < 0 || m.y >= CH || m.id < 0 || m.id > MAX_BLOCK_ID) return;   // 0 = air, 1-25 = block types (see BLOCKS in index.html)
       const dx = m.x + 0.5 - p.x, dy = m.y + 0.5 - p.y, dz = m.z + 0.5 - p.z;
       if (dx * dx + dy * dy + dz * dz > REACH * REACH) return;   // too far from where this player last was
       edits.set(m.x + ',' + m.y + ',' + m.z, m.id);
@@ -150,6 +166,7 @@ wss.on('connection', (ws) => {
     if (p.joined) {
       broadcast({ type: 'leave', id });
       broadcast({ type: 'system', text: p.name + ' left' });
+      checkMorning();
     }
   });
   ws.on('error', () => {});
