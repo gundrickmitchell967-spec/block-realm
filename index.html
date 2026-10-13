@@ -143,6 +143,17 @@
   @supports (height:100dvh){ html,body{height:100dvh} canvas#c{height:100dvh} }
   #hotbar{z-index:2}
   #menu{z-index:20}
+  .celestial{position:fixed;width:56px;height:56px;border-radius:50%;pointer-events:none;z-index:1;display:none}
+  #sun{background:radial-gradient(circle,#fffbe0 0%,#ffe27a 45%,#ffc23a 62%,rgba(255,190,60,0) 72%);box-shadow:0 0 46px 16px rgba(255,220,110,.45)}
+  #moon{background:radial-gradient(circle at 36% 36%,#ffffff,#dfe6f5 55%,#a9b5cc 100%);box-shadow:0 0 34px 8px rgba(200,215,255,.3)}
+  body.inmenu #sun,body.inmenu #moon{display:none!important}
+  .sect{margin:10px 0 2px;font:bold 11px 'Courier New',monospace;letter-spacing:.22em;color:#8fa0c4;text-transform:uppercase;align-self:stretch;text-align:center;border-bottom:1px solid #2e3850;padding-bottom:4px}
+  .pane{width:100%;display:flex;flex-direction:column;align-items:center;gap:8px}
+  .pane[hidden],.cpane[hidden]{display:none!important}
+  #shoptabs,#cashtabs{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;width:100%}
+  #cashtabs{margin:4px 0}
+  .shoprow{display:flex;justify-content:space-between;gap:8px;align-items:baseline;font-weight:bold}
+  .shoprow span:last-child{color:#ffe066;font-size:12px}
   body.inmenu #hotbar,body.inmenu #hud,body.inmenu #cross,body.inmenu #selname,body.inmenu #cashhud,body.inmenu #landhud,body.inmenu #surveyhud,body.inmenu #hacktimer,body.inmenu #offerhud{display:none!important}
   #offerhud{position:fixed;top:118px;left:50%;transform:translateX(-50%);padding:4px 12px;font:bold 13px 'Courier New',monospace;color:#1a1200;background:#ffe066;border:2px solid #fff3a0;border-radius:6px;pointer-events:none;z-index:3;white-space:nowrap}
   #fsbtn{position:absolute;top:12px;right:12px;width:auto;padding:9px 12px;font-size:12px;letter-spacing:.06em;z-index:3}
@@ -211,6 +222,8 @@
 <div id="hacktimer" hidden><span id="hacktimernum">0</span><small>SECONDS LEFT</small></div>
 <div id="landhud" hidden></div>
 <div id="offerhud" hidden></div>
+<div id="sun" class="celestial" aria-hidden="true"></div>
+<div id="moon" class="celestial" aria-hidden="true"></div>
 <div id="surveyhud" hidden></div>
 <div id="cashhud" hidden><span class="coinicon" id="cashcoin"></span><span id="cashnum">0</span></div>
 <div id="hud"><div id="fps"></div><div id="pos"></div><div id="tgt"></div><div id="tm"></div><div id="mp"></div></div>
@@ -245,19 +258,24 @@
     <h1>BLOCK REALM</h1>
     <p class="tagline">Build it. Share it. Sleep through the night.</p>
     <div id="mainbtns">
+      <p class="sect">GAME</p>
       <button class="btn" id="play">PLAY</button>
       <button class="btn" id="resume" hidden>RESUME</button>
       <button class="btn cashbtn" id="cashbtn" type="button">CASH</button>
+      <p class="sect">ONLINE</p>
       <button class="btn" id="mmic" type="button" hidden>MIC: OFF</button>
       <button class="btn" id="multi">MULTIPLAYER</button>
       <button class="btn" id="leave" hidden>LEAVE SERVER</button>
       <button class="btn" id="adminbtn" type="button">ADMIN CODE</button>
+      <p class="sect">OPTIONS</p>
       <button class="btn" id="settings">SETTINGS</button>
       <button class="btn" id="howbtn" type="button">HOW TO</button>
     </div>
     <div id="settingsbox" hidden>
       <h2>SETTINGS</h2>
+      <p class="sect">SOUND</p>
       <button class="btn" id="musicbtn">MUSIC: ON</button>
+      <p class="sect">SCREEN AND CONTROLS</p>
       <button class="btn" id="drawbtn" type="button">DRAW DISTANCE: 4</button>
       <button class="btn" id="sensbtn" type="button">SENSITIVITY: 1x</button>
       <button class="btn" id="sound">SOUND EFFECTS: ON</button>
@@ -267,13 +285,19 @@
     <div id="cashscreen" hidden>
       <h2>CASH</h2>
       <p class="hint" id="cashbal"></p>
+      <div id="cashtabs"><button class="tab on" type="button" data-cash="history">HISTORY</button><button class="tab" type="button" data-cash="send">SEND CASH</button><button class="tab" type="button" data-cash="plots">PLOTS &amp; OFFERS</button></div>
+      <div class="pane cpane" data-cpane="history">
       <h3>RECENT TRANSACTIONS</h3>
       <div id="cashlist"></div>
+      </div>
+      <div class="pane cpane" data-cpane="send" hidden>
       <h3>SEND CASH TO A PLAYER</h3>
       <select id="tradewho" aria-label="Player to send cash to"></select>
       <input id="tradeamt" type="number" step="1" min="1" placeholder="Amount of cash" aria-label="Amount of cash to send">
       <button class="btn" id="tradesend" type="button">SEND CASH</button>
       <p id="trademsg" role="status"></p>
+      </div>
+      <div class="pane cpane" data-cpane="plots" hidden>
       <h3>YOUR PLOTS: OFFER ONE FOR SALE</h3>
       <select id="offerplot" aria-label="Plot to offer"></select>
       <select id="offerwho" aria-label="Player to offer the plot to"></select>
@@ -282,6 +306,7 @@
       <p id="offermsg" class="hint" role="status"></p>
       <h3>PLOT OFFERS</h3>
       <div id="offerlist"></div>
+      </div>
       <button class="btn ghost" id="cashback" type="button">BACK</button>
     </div>
     <div id="howbox" hidden>
@@ -357,7 +382,10 @@
   <div id="shoppanel" role="dialog" aria-labelledby="shoptitle">
     <h2 id="shoptitle">SHOP</h2>
     <p class="hint" id="shopcoins"></p>
-    <div id="shopitems"></div>
+    <div id="shoptabs"><button class="tab on" type="button" data-tab="items">ITEMS</button><button class="tab" type="button" data-tab="plots">MY PLOTS</button><button class="tab" type="button" data-tab="land">BUY LAND</button></div>
+    <div id="shopitems" class="pane"></div>
+    <div id="shopplots" class="pane" hidden></div>
+    <div id="shopland" class="pane" hidden></div>
     <p id="shopmsg" role="status"></p>
     <div id="shopearn">
       <h3>HOW TO GET CASH</h3>
@@ -3021,6 +3049,11 @@ function renderOffers(){
     ]);
   }
 }
+function setCashTab(name){
+  for(const b of document.querySelectorAll('#cashtabs .tab')) b.classList.toggle('on', b.dataset.cash === name);
+  for(const p of document.querySelectorAll('.cpane')) p.hidden = p.dataset.cpane !== name;
+}
+for(const b of document.querySelectorAll('#cashtabs .tab')) b.addEventListener('click', () => setCashTab(b.dataset.cash));
 function renderCash(){
   renderOffers();
   $('cashbal').textContent = mpMode ? 'Your cash: ' + myCoins : 'Join a multiplayer world to have cash.';
@@ -3188,6 +3221,11 @@ function buildPlotPreview(s){
   const wrap = document.createElement('div'); wrap.className = 'plotprev'; wrap.innerHTML = svg;
   return wrap;
 }
+function setShopTab(name){
+  for(const b of document.querySelectorAll('#shoptabs .tab')) b.classList.toggle('on', b.dataset.tab === name);
+  $('shopitems').hidden = name !== 'items'; $('shopplots').hidden = name !== 'plots'; $('shopland').hidden = name !== 'land';
+}
+for(const b of document.querySelectorAll('#shoptabs .tab')) b.addEventListener('click', () => setShopTab(b.dataset.tab));
 function renderShop(){
   const cl = $('shopcoins'); cl.textContent = '';
   cl.appendChild(coinSpan()); cl.appendChild(document.createTextNode(' YOUR CASH: ' + myCoins + (mpMode ? '' : '   (cash comes from the multiplayer server)')));
@@ -3229,11 +3267,18 @@ function renderShop(){
   bb.disabled = !mpMode || !fits;
   bb.addEventListener('click', buyPlot);
   land.appendChild(bb);
-  // your plots, each with a SELL button (click twice to sell: the first click arms it)
+  // your plots: name, size and blocks, each with SELL (click twice to sell: the first click arms it)
+  const plotsPane = document.createElement('div'); plotsPane.className = 'pane';
+  if(!plotList.some(q => q.mine)){ const n = document.createElement('p'); n.className = 'hint'; n.textContent = 'You do not own any plots yet. Measure land with the Land Surveyor, then buy it under BUY LAND.'; plotsPane.appendChild(n); }
   for(const pl of plotList.filter(q => q.mine)){
     const row = document.createElement('div'); row.className = 'shopcard';
     const txt = document.createElement('p'); txt.className = 'hint';
-    txt.textContent = (pl.name || 'PLOT') + ': ' + (pl.x1 - pl.x0 + 1) + ' x ' + (pl.z1 - pl.z0 + 1) + ' BLOCKS. SELLING GIVES BACK ' + (pl.refund || 0) + ' CASH AND DELETES EVERY BLOCK ON THE PLOT.';
+    const pw = pl.x1 - pl.x0 + 1, pd = pl.z1 - pl.z0 + 1;
+    const head = document.createElement('div'); head.className = 'shoprow';
+    const nmEl = document.createElement('span'); nmEl.textContent = (pl.name || 'PLOT').toUpperCase();
+    const szEl = document.createElement('span'); szEl.textContent = pw + ' x ' + pd + ' = ' + (pw * pd) + ' BLOCKS';
+    head.appendChild(nmEl); head.appendChild(szEl);
+    txt.textContent = 'Selling gives back ' + (pl.refund || 0) + ' cash and deletes every block on the plot. To keep the blocks, trade the plot instead (CASH > PLOTS & OFFERS).';
     const sb = document.createElement('button'); sb.className = 'btn'; sb.type = 'button'; sb.textContent = 'SELL THIS PLOT';
     sb.disabled = !mpMode;
     let armed = false;
@@ -3242,9 +3287,10 @@ function renderShop(){
       mpSend({type:'plotsell', x0: pl.x0, z0: pl.z0, x1: pl.x1, z1: pl.z1});
       shopNote('SELLING...');
     });
-    row.appendChild(txt); row.appendChild(sb); land.appendChild(row);
+    row.appendChild(head); row.appendChild(txt); row.appendChild(sb); plotsPane.appendChild(row);
   }
-  list.appendChild(land);
+  $('shopland').replaceChildren(land);
+  $('shopplots').replaceChildren(plotsPane);
 }
 // buying: the server takes the cash and gives the item; the tool then goes into an empty inventory slot
 function buyItem(id){
@@ -4469,6 +4515,21 @@ function remesh(){
 }
 
 /* ---------- sky and light ---------- */
+// the sun and the moon cross the sky on an arc: the sun is up in daytime, the moon at night
+function updateCelestials(){
+  const a = 2 * Math.PI * ((worldTime / DAY_LEN) % 1) - Math.PI / 2;
+  const W = innerWidth, H = innerHeight, cx = W / 2, hz = H * 0.8, rx = W * 0.46, ry = H * 0.7;
+  const place = (el, ang) => {
+    const alt = Math.sin(ang);
+    if(alt < -0.12){ el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.style.left = (cx + rx * Math.cos(ang) - 28) + 'px';
+    el.style.top = (hz - ry * alt - 28) + 'px';
+    el.style.opacity = alt < 0 ? String(0.5 + alt * 2) : '1';
+  };
+  place($('sun'), a);
+  place($('moon'), a + Math.PI);
+}
 function daylight(){
   const t=(worldTime/DAY_LEN)%1, sun=-Math.cos(t*Math.PI*2);
   return clamp((sun+0.25)/0.45,0,1);
@@ -4960,6 +5021,7 @@ function frame(now){
   syncTouch();
   syncCash();
   document.body.classList.toggle('inmenu', !$('menu').hidden);
+  updateCelestials();
   if(playing) { saveT=(saveT||0)+dt; if(saveT>10){ saveT=0; saveAll(); } }
   requestAnimationFrame(frame);
 }
