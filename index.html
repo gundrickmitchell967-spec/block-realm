@@ -99,6 +99,9 @@
   .btn.cashbtn{background:linear-gradient(#3fae5a,#2a7f40);border-color:#7ee39a}
   .btn.cashbtn:hover{background:linear-gradient(#4fc26a,#34914d)}
   #givebox .btn{width:auto;flex:0 0 auto;padding:8px 10px}
+  #offerlist .btn{width:auto;flex:0 0 auto;padding:6px 8px;font-size:12px}
+  #offerlist .txn{flex-wrap:wrap}
+  .plotname{width:100%;box-sizing:border-box;font:bold 14px 'Courier New',monospace;padding:9px;background:#0d111b;color:#fff;border:2px solid #ffe066;text-align:center}
   #givebox{flex-wrap:wrap}
   #landhud{position:fixed;top:50px;left:50%;transform:translateX(-50%);padding:2px 10px;font:bold 13px 'Courier New',monospace;color:#bfe9ff;background:rgba(0,0,0,.5);border-radius:6px;pointer-events:none;z-index:3;text-shadow:1px 1px 0 #000}
   #surveyhud{position:fixed;top:82px;left:50%;transform:translateX(-50%);padding:4px 12px;font:bold 14px 'Courier New',monospace;color:#ffe066;background:rgba(0,0,0,.6);border:2px solid #c9a227;border-radius:6px;pointer-events:none;z-index:3;text-shadow:1px 1px 0 #000;white-space:nowrap}
@@ -267,6 +270,14 @@
       <input id="tradeamt" type="number" step="1" min="1" placeholder="Amount of cash" aria-label="Amount of cash to send">
       <button class="btn" id="tradesend" type="button">SEND CASH</button>
       <p id="trademsg" role="status"></p>
+      <h3>YOUR PLOTS: OFFER ONE FOR SALE</h3>
+      <select id="offerplot" aria-label="Plot to offer"></select>
+      <select id="offerwho" aria-label="Player to offer the plot to"></select>
+      <input id="offeramt" type="number" step="1" min="1" placeholder="Price in cash" aria-label="Price in cash for the plot">
+      <button class="btn" id="offersend" type="button">MAKE OFFER</button>
+      <p id="offermsg" class="hint" role="status"></p>
+      <h3>PLOT OFFERS</h3>
+      <div id="offerlist"></div>
       <button class="btn ghost" id="cashback" type="button">BACK</button>
     </div>
     <div id="howbox" hidden>
@@ -2822,7 +2833,7 @@ function syncCash(){
   else if(hackEnd) hackEnd = 0;
   // the land you stand on, and the Land Surveyor's readout while it is in your hand
   const lp = playing && mpMode ? plotAtClient(Math.floor(player.x), Math.floor(player.z)) : null;
-  setText('landhud', lp ? (lp.mine ? 'YOUR LAND' : (lp.who || 'SOMEONE').toUpperCase() + "'S LAND") : '');
+  setText('landhud', lp ? (lp.name ? lp.name.toUpperCase() + ' - ' : '') + (lp.mine ? 'YOUR LAND' : (lp.who || 'SOMEONE').toUpperCase() + "'S LAND") : '');
   setText('surveyhud', playing && HOTBAR[sel]===SURVEY_ID ? surveyText() : '');
 }
 function setText(id, t){ const el = $(id); if(el.textContent !== t) el.textContent = t; if(el.hidden !== !t) el.hidden = !t; }
@@ -2966,7 +2977,48 @@ function openCashFromGame(){
   pause();
   showCash();
 }
+let offers = {incoming: [], outgoing: []};   // plot offers to you, and the ones you have made
+// the plot offers part of the CASH screen: your plots to offer, and the offers waiting for you
+function renderOffers(){
+  const plotSel = $('offerplot'), keepP = plotSel.value; plotSel.textContent = '';
+  const mine = plotList.filter(q => q.mine);
+  if(!mine.length){ const op = document.createElement('option'); op.value = ''; op.textContent = 'You have no plots'; plotSel.appendChild(op); }
+  for(const pl of mine){
+    const op = document.createElement('option'); op.value = [pl.x0, pl.z0, pl.x1, pl.z1].join(',');
+    op.textContent = (pl.name || 'PLOT') + ' (' + (pl.x1 - pl.x0 + 1) + ' x ' + (pl.z1 - pl.z0 + 1) + ')';
+    plotSel.appendChild(op);
+  }
+  if([...plotSel.options].some(o => o.value === keepP)) plotSel.value = keepP;
+  const who = $('offerwho'), keepW = who.value; who.textContent = '';
+  const rows = [...mp.others.values()].sort((x, y) => x.name.localeCompare(y.name));
+  if(!rows.length){ const op = document.createElement('option'); op.value = ''; op.textContent = mpMode ? 'No other players are here' : 'Not connected'; who.appendChild(op); }
+  for(const o of rows){ const op = document.createElement('option'); op.value = String(o.id); op.textContent = o.name; who.appendChild(op); }
+  if([...who.options].some(x => x.value === keepW)) who.value = keepW;
+  $('offersend').disabled = !mpMode || !mine.length;
+  const list = $('offerlist'); list.textContent = '';
+  const note = text => { const p = document.createElement('p'); p.className = 'hint'; p.textContent = text; list.appendChild(p); };
+  if(!offers.incoming.length && !offers.outgoing.length) note('No plot offers.');
+  const line = (text, buttons) => {
+    const row = document.createElement('div'); row.className = 'txn';
+    const span = document.createElement('span'); span.textContent = text; row.appendChild(span);
+    for(const b of buttons) row.appendChild(b);
+    list.appendChild(row);
+  };
+  const btn = (label, fn, disabled) => { const b = document.createElement('button'); b.className = 'btn'; b.type = 'button'; b.textContent = label; b.disabled = !!disabled; b.addEventListener('click', fn); return b; };
+  for(const o of offers.incoming){
+    line(o.fromName + ' offers ' + o.name + ' (' + o.size + ') for ' + o.price + ' cash.', [
+      btn('ACCEPT', () => mpSend({type:'offeraccept', id: o.id}), myCoins < o.price),
+      btn('DECLINE', () => mpSend({type:'offerdecline', id: o.id}))
+    ]);
+  }
+  for(const o of offers.outgoing){
+    line('Your offer: ' + o.name + ' to ' + o.toName + ' for ' + o.price + ' cash.', [
+      btn('CANCEL', () => mpSend({type:'offerdecline', id: o.id}))
+    ]);
+  }
+}
 function renderCash(){
+  renderOffers();
   $('cashbal').textContent = mpMode ? 'Your cash: ' + myCoins : 'Join a multiplayer world to have cash.';
   const who = $('tradewho'), keep = who.value; who.textContent = '';
   const rows = [...mp.others.values()].sort((x, y) => x.name.localeCompare(y.name));
@@ -2996,6 +3048,14 @@ function sendCash(){
   $('tradeamt').value = ''; $('trademsg').textContent = 'Sending...';
 }
 $('tradesend').addEventListener('click', sendCash);
+$('offersend').addEventListener('click', () => {
+  const msg = $('offermsg'), v = $('offerplot').value.split(',').map(Number), to = +$('offerwho').value, price = Math.trunc(Number($('offeramt').value));
+  if($('offerplot').value === '') { msg.textContent = 'You have no plot to offer.'; return; }
+  if(!to){ msg.textContent = 'Choose a player to offer it to.'; return; }
+  if(!Number.isFinite(price) || price < 1){ msg.textContent = 'Type a price in cash.'; return; }
+  mpSend({type:'plotoffer', x0: v[0], z0: v[1], x1: v[2], z1: v[3], target: to, price});
+  $('offeramt').value = ''; msg.textContent = 'Sending...';
+});
 $('tradeamt').addEventListener('keydown', e=>{
   e.stopPropagation();
   if(e.key === 'Enter'){ e.preventDefault(); sendCash(); }
@@ -3068,6 +3128,7 @@ function coinSpan(){ const s = document.createElement('span'); s.className = 'co
 function shopNote(text){ $('shopmsg').textContent = text; }
 // a top-down picture of the measured plot: grass, the blocks already built on it, and a house for each building
 let previewKey = '', previewEl = null;
+let plotNameDraft = '';        // the name typed for the plot being bought
 function plotPreview(s){
   const key = [s.x0, s.z0, s.w, s.d].join(',');
   if(key !== previewKey || !previewEl){ previewKey = key; previewEl = buildPlotPreview(s); }
@@ -3154,6 +3215,11 @@ function renderShop(){
   else { lnote.textContent = 'The shopkeeper says: ' + s.w + ' x ' + s.d + ' blocks, ' + s.area + ' blocks in all. That will be ' + s.price + ' cash.' + (fits ? '' : ' That is too ' + (Math.min(s.w, s.d) < PLOT_MIN ? 'small' : 'big') + ' for a plot.'); }
   land.appendChild(lnote);
   if(s) land.appendChild(plotPreview(s));
+  const nameIn = document.createElement('input'); nameIn.className = 'plotname'; nameIn.maxLength = 24; nameIn.placeholder = 'NAME YOUR PLOT';
+  nameIn.value = plotNameDraft; nameIn.setAttribute('aria-label', 'Name for the plot');
+  nameIn.addEventListener('input', () => { plotNameDraft = nameIn.value; });
+  nameIn.addEventListener('keydown', e => e.stopPropagation());
+  land.appendChild(nameIn);
   const bb = document.createElement('button'); bb.className = 'btn buybig'; bb.type = 'button';
   bb.textContent = fits ? 'BUY THIS PLOT (' + s.price + ' CASH)' : 'BUY PLOT';
   bb.disabled = !mpMode || !fits;
@@ -3163,7 +3229,7 @@ function renderShop(){
   for(const pl of plotList.filter(q => q.mine)){
     const row = document.createElement('div'); row.className = 'shopcard';
     const txt = document.createElement('p'); txt.className = 'hint';
-    txt.textContent = (pl.x1 - pl.x0 + 1) + ' x ' + (pl.z1 - pl.z0 + 1) + ' BLOCKS. SELLING GIVES BACK ' + (pl.refund || 0) + ' CASH AND DELETES EVERY BLOCK ON THE PLOT.';
+    txt.textContent = (pl.name || 'PLOT') + ': ' + (pl.x1 - pl.x0 + 1) + ' x ' + (pl.z1 - pl.z0 + 1) + ' BLOCKS. SELLING GIVES BACK ' + (pl.refund || 0) + ' CASH AND DELETES EVERY BLOCK ON THE PLOT.';
     const sb = document.createElement('button'); sb.className = 'btn'; sb.type = 'button'; sb.textContent = 'SELL THIS PLOT';
     sb.disabled = !mpMode;
     let armed = false;
@@ -3271,7 +3337,7 @@ function buyPlot(){
   if(!survey.b || !s){ shopNote('MEASURE THE LAND WITH THE LAND SURVEYOR FIRST'); return; }
   if(!surveyFits(s)){ shopNote('A PLOT IS ' + PLOT_MIN + ' TO ' + PLOT_MAX + ' BLOCKS ON EACH SIDE'); return; }
   if(myCoins < s.price){ shopNote('NOT ENOUGH CASH. THE PLOT COSTS ' + s.price); return; }
-  mpSend({type:'plotbuy', x0: survey.a.x, z0: survey.a.z, x1: survey.b.x, z1: survey.b.z});
+  mpSend({type:'plotbuy', x0: survey.a.x, z0: survey.a.z, x1: survey.b.x, z1: survey.b.z, name: plotNameDraft});
 }
 // right-click a locked door with the hacker tool in hand: the server decodes it
 function hackDoor(h){
@@ -3965,6 +4031,7 @@ function onServerMessage(m){
     if(cashVisible()){ renderCash(); mpSend({type:'cashlog'}); }
   }
   else if(m.type==='plots'){ plotList = m.list || []; if(shopOpen) renderShop(); }
+  else if(m.type==='offers'){ offers = {incoming: m.incoming || [], outgoing: m.outgoing || []}; if(cashVisible()) renderCash(); }
   else if(m.type==='plotclear'){
     // a plot was sold: its blocks go back to the land the world makes (the server took them out of its own copy)
     const gen = new Map();
@@ -3981,7 +4048,7 @@ function onServerMessage(m){
   else if(m.type==='cashlog'){ cashEntries = m.entries || []; if(cashVisible()) renderCash(); }
   else if(m.type==='notice'){
     const t = String(m.text || ''); flashHud(t); if(shopOpen) shopNote(t); if(cashVisible()) $('trademsg').textContent = t;
-    if(/^YOUR PLOT IS READY/.test(t)){ survey = {a:null, b:null}; if(shopOpen) renderShop(); }
+    if(/^YOUR PLOT IS READY/.test(t)){ plotNameDraft = ''; survey = {a:null, b:null}; if(shopOpen) renderShop(); }
   }
   else if(m.type==='bypass'){ adminBypass = m.on === true; syncInvisBtn(); flashHud(adminBypass ? 'BREAK ANY BLOCK IS ON' : 'BREAK ANY BLOCK IS OFF'); }
   else if(m.type==='tv'){ tvSync(m.list, m.sources); }

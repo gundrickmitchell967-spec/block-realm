@@ -111,7 +111,15 @@ function shutDecodedDoor(w, lo, lock) {
 // the plot a block position is in, if any (plots never overlap)
 function plotAt(w, x, z) { return w.plots.find(pl => x >= pl.x0 && x <= pl.x1 && z >= pl.z0 && z <= pl.z1) || null; }
 function plotsOverlap(a, b) { return a.x0 <= b.x1 && b.x0 <= a.x1 && a.z0 <= b.z1 && b.z0 <= a.z1; }
-function plotsMsg(w, q) { return { type: 'plots', list: w.plots.map(pl => ({ x0: pl.x0, z0: pl.z0, x1: pl.x1, z1: pl.z1, mine: pl.owner === q.pid, who: pl.ownerName || 'SOMEONE', refund: pl.owner === q.pid ? Math.floor((pl.price || 0) / 2) : 0 })) }; }
+function plotsMsg(w, q) { return { type: 'plots', list: w.plots.map(pl => ({ x0: pl.x0, z0: pl.z0, x1: pl.x1, z1: pl.z1, mine: pl.owner === q.pid, name: pl.name || 'PLOT', who: pl.ownerName || 'SOMEONE', refund: pl.owner === q.pid ? Math.floor((pl.price || 0) / 2) : 0 })) }; }
+let nextOfferId = 1;
+function cleanPlotName(v) { return typeof v === 'string' ? v.replace(/[\x00-\x1f<>]/g, '').trim().slice(0, 24) : ''; }
+function offersMsg(w, q) {
+  const out = o => ({ id: o.id, fromName: o.fromName, toName: o.toName, name: o.name, size: o.size, price: o.price });
+  const all = [...w.offers.values()];
+  return { type: 'offers', incoming: all.filter(o => o.toPid === q.pid).map(out), outgoing: all.filter(o => o.fromPid === q.pid).map(out) };
+}
+function announceOffers(w) { for (const q of players.values()) if (q.world === w && q.joined) sendTo(q, offersMsg(w, q)); }
 function announcePlots(w) { for (const q of players.values()) if (q.world === w && q.joined) sendTo(q, plotsMsg(w, q)); }
 // a transaction goes in the world's log (the latest 300 are kept)
 function logTxn(w, e) {
@@ -167,7 +175,8 @@ for (const w of Object.values(WORLDS)) {
   w.locks = new Map();     // "x,y,z" of each half of a door with a password -> the lock (both halves share one lock)
   w.coins = new Map();     // hashed player id -> cash (the game creator gives it, players trade it and buy with it)
   w.tools = new Map();     // hashed player id -> hacker tools they own (each one can be used once)
-  w.plots = [];            // plots of land: { x0, z0, x1, z1 (inclusive), owner (hashed id), price }
+  w.plots = [];            // plots of land: { x0, z0, x1, z1 (inclusive), owner (hashed id), ownerName, name, price }
+  w.offers = new Map();    // offers to buy a plot, kept while the server runs: id -> offer
   w.log = [];              // the latest cash transactions in this world
   w.mob = null;
   w.clock = { t: DAY_LEN * 0.3, at: Date.now() };    // the world time is w.clock.t at the moment w.clock.at; it then runs on in real time
@@ -689,10 +698,11 @@ wss.on('connection', (ws) => {
         if (o !== undefined && o !== p.pid && x >= pl.x0 && x <= pl.x1 && z >= pl.z0 && z <= pl.z1) return fail('ANOTHER PLAYER HAS BUILT ON THAT LAND');
       }
       const price = sw * sd * PLOT_RATE;
+      const plotName = cleanPlotName(m.name) || 'PLOT ' + (w.plots.length + 1);
       const cash = w.coins.get(p.pid) || 0;
       if (cash < price) return fail('NOT ENOUGH CASH. THE PLOT COSTS ' + price);
       w.coins.set(p.pid, cash - price);
-      w.plots.push(Object.assign(pl, { owner: p.pid, ownerName: p.name, price }));
+      w.plots.push(Object.assign(pl, { owner: p.pid, ownerName: p.name, name: plotName, price }));
       logTxn(w, { kind: 'plot', amount: price, from: p.pid, fromName: p.name, what: sw + ' x ' + sd + ' blocks' });
       scheduleSave(w);
       announcePlots(w);
@@ -719,9 +729,57 @@ wss.on('connection', (ws) => {
       logTxn(w, { kind: 'plotsale', amount: refund, to: p.pid, toName: p.name, what: (pl.x1 - pl.x0 + 1) + ' x ' + (pl.z1 - pl.z0 + 1) + ' blocks' });
       scheduleSave(w);
       if (cleared.length) broadcast(w, { type: 'plotclear', blocks: cleared });
+      for (const k of [...w.offers.keys()]) { const o = w.offers.get(k); if (o.x0 === pl.x0 && o.z0 === pl.z0 && o.x1 === pl.x1 && o.z1 === pl.z1) w.offers.delete(k); }
+      announceOffers(w);
       announcePlots(w);
       sendTo(p, walletMsg(w, p));
       return fail('PLOT SOLD. YOU GOT ' + refund + ' CASH BACK');
+    }
+    if (m.type === 'plotoffer') {
+      // the owner offers one of their plots to another player for a price they name
+      const fail = text => sendTo(p, { type: 'notice', text });
+      if (![m.x0, m.z0, m.x1, m.z1].every(Number.isInteger)) return fail('CHOOSE A PLOT TO OFFER');
+      const pl = w.plots.find(o => o.owner === p.pid && o.x0 === m.x0 && o.z0 === m.z0 && o.x1 === m.x1 && o.z1 === m.z1);
+      if (!pl) return fail('THAT IS NOT YOUR PLOT');
+      const q = players.get(m.target);
+      if (!q || !q.joined || q === p || q.world !== w || !q.pid) return fail('CHOOSE A PLAYER TO OFFER THE PLOT TO');
+      const price = Number.isInteger(m.price) ? m.price : 0;
+      if (price < 1 || price > 1000000) return fail('TYPE A PRICE FOR THE PLOT');
+      for (const o of w.offers.values()) if (o.fromPid === p.pid && o.toPid === q.pid && o.x0 === pl.x0 && o.z0 === pl.z0 && o.x1 === pl.x1 && o.z1 === pl.z1) return fail('YOU ALREADY OFFERED THIS PLOT TO THAT PLAYER');
+      const id = nextOfferId++;
+      w.offers.set(id, { id, fromPid: p.pid, fromName: p.name, toPid: q.pid, toName: q.name, x0: pl.x0, z0: pl.z0, x1: pl.x1, z1: pl.z1, name: pl.name || 'PLOT', size: (pl.x1 - pl.x0 + 1) + ' x ' + (pl.z1 - pl.z0 + 1) + ' blocks', price });
+      announceOffers(w);
+      return fail('OFFER SENT TO ' + q.name);
+    }
+    if (m.type === 'offeraccept') {
+      // the buyer accepts: they pay the price, and the plot (with every block on it) is theirs
+      const fail = text => sendTo(p, { type: 'notice', text });
+      const o = w.offers.get(+m.id);
+      if (!o || o.toPid !== p.pid) return fail('THAT OFFER IS GONE');
+      const pl = w.plots.find(x => x.owner === o.fromPid && x.x0 === o.x0 && x.z0 === o.z0 && x.x1 === o.x1 && x.z1 === o.z1);
+      if (!pl) { w.offers.delete(o.id); announceOffers(w); return fail('THAT PLOT IS NO LONGER FOR SALE'); }
+      const cash = w.coins.get(p.pid) || 0;
+      if (cash < o.price) return fail('NOT ENOUGH CASH. THE PLOT COSTS ' + o.price);
+      w.coins.set(p.pid, cash - o.price);
+      w.coins.set(o.fromPid, (w.coins.get(o.fromPid) || 0) + o.price);
+      pl.owner = p.pid; pl.ownerName = p.name; pl.price = o.price;
+      for (const k of [...w.offers.keys()]) { const x = w.offers.get(k); if (x.x0 === o.x0 && x.z0 === o.z0 && x.x1 === o.x1 && x.z1 === o.z1) w.offers.delete(k); }
+      logTxn(w, { kind: 'plot', amount: o.price, from: p.pid, fromName: p.name, what: o.size });
+      logTxn(w, { kind: 'plotsale', amount: o.price, to: o.fromPid, toName: o.fromName, what: o.size });
+      scheduleSave(w);
+      announceOffers(w);
+      announcePlots(w);
+      for (const q of players.values()) if (q.world === w && q.joined && (q.pid === o.fromPid || q.pid === p.pid)) sendTo(q, walletMsg(w, q));
+      for (const q of players.values()) if (q.world === w && q.joined && q.pid === o.fromPid) sendTo(q, { type: 'notice', text: p.name + ' BOUGHT YOUR PLOT FOR ' + o.price });
+      return fail('YOU BOUGHT THE PLOT ' + o.name + ' FOR ' + o.price);
+    }
+    if (m.type === 'offerdecline') {
+      // the buyer declines, or the owner takes back their offer
+      const o = w.offers.get(+m.id);
+      if (!o || (o.toPid !== p.pid && o.fromPid !== p.pid)) return;
+      w.offers.delete(o.id);
+      announceOffers(w);
+      return sendTo(p, { type: 'notice', text: o.fromPid === p.pid ? 'OFFER CANCELLED' : 'OFFER DECLINED' });
     }
     if (m.type === 'cashlog') return sendTo(p, { type: 'cashlog', entries: cashLogFor(w, p) });
     if (m.type === 'edit') {
