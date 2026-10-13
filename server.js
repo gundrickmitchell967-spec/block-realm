@@ -22,6 +22,7 @@ const REACH = 12;               // a block change must be this close to the play
 const MAX_BLOCK_ID = 299;       // highest block id a player may place (see BLOCKS in index.html: MAX_ID there must match)
 const COLORS = ['#e6594b', '#4b9be6', '#58c25a', '#e6c44b', '#b35ae6', '#4be6d6', '#e6894b', '#e64b9b'];
 const DAY_LEN = 480;            // seconds for one full day (the same as in index.html)
+const PLOT_RATE = 20, PLOT_MIN = 3, PLOT_MAX = 32;   // a plot costs this much cash per block; its sides are between these lengths
 const HACK_MS = (Number(process.env.HACK_SECONDS) || 30) * 1000;   // how long a decoded door stays open
 const SHOP_PRICES = { hacktool: { name: 'Hacker Tool', price: 10000 } };   // the shop's items and prices (the client shows the same prices)
 const VOICE_RELAY_RANGE = 48;   // voice connections can only be set up between players this close (see VOICE_RANGE in index.html)
@@ -81,7 +82,8 @@ function lockOpenFor(p, lock) { return lock.owner === p.pid || lock.allowed.has(
 function walletMsg(w, q) { return { type: 'wallet', cash: w.coins.get(q.pid) || 0, tools: w.tools.get(q.pid) || 0 }; }
 // what one player is told about a door's lock: whether it is locked, whether it is theirs, and whether they may open it
 function lockMsg(w, q, lo, lock) {
-  return { type: 'lock', x: lo[0], y: lo[1], z: lo[2], locked: !!lock, mine: w.owners.get(lo.join(',')) === q.pid, ok: !!lock && lockOpenFor(q, lock) };
+  const left = lock && lock.openUntil > Date.now() && lock.decodedBy === q.pid ? lock.openUntil - Date.now() : 0;
+  return { type: 'lock', x: lo[0], y: lo[1], z: lo[2], locked: !!lock, mine: w.owners.get(lo.join(',')) === q.pid, ok: !!lock && lockOpenFor(q, lock), openFor: left };
 }
 function announceLock(w, lo, lock) {
   for (const q of players.values()) if (q.world === w && q.joined) sendTo(q, lockMsg(w, q, lo, lock));
@@ -92,6 +94,46 @@ function dropLock(w, key) {
   if (!L) return;
   for (const k of L.keys) w.locks.delete(k);
   announceLock(w, L.lower, null);
+}
+// when a decoded door's time is up: it shuts again, and locks for everyone. It waits while someone stands in the doorway
+function shutDecodedDoor(w, lo, lock) {
+  const lk = lo.join(','), uk = [lo[0], lo[1] + 1, lo[2]].join(',');
+  if (w.locks.get(lk) !== lock) return;                       // the door was broken, or its lock changed, meanwhile
+  const inDoorway = [...players.values()].some(q => q.world === w && q.joined &&
+    Math.abs(q.x - (lo[0] + 0.5)) < 0.9 && Math.abs(q.z - (lo[2] + 0.5)) < 0.9 && q.y < lo[1] + 2 && q.y + 1.8 > lo[1]);
+  if (inDoorway) return setTimeout(() => shutDecodedDoor(w, lo, lock), 500);
+  let changed = false;
+  if (w.edits.get(lk) === 13) { w.edits.set(lk, 12); changed = true; broadcast(w, { type: 'edit', x: lo[0], y: lo[1], z: lo[2], id: 12, by: 0 }); }
+  if (w.edits.get(uk) === 15) { w.edits.set(uk, 14); changed = true; broadcast(w, { type: 'edit', x: lo[0], y: lo[1] + 1, z: lo[2], id: 14, by: 0 }); }
+  if (changed) scheduleSave(w);
+  announceLock(w, lo, lock);
+}
+// the plot a block position is in, if any (plots never overlap)
+function plotAt(w, x, z) { return w.plots.find(pl => x >= pl.x0 && x <= pl.x1 && z >= pl.z0 && z <= pl.z1) || null; }
+function plotsOverlap(a, b) { return a.x0 <= b.x1 && b.x0 <= a.x1 && a.z0 <= b.z1 && b.z0 <= a.z1; }
+function plotsMsg(w, q) { return { type: 'plots', list: w.plots.map(pl => ({ x0: pl.x0, z0: pl.z0, x1: pl.x1, z1: pl.z1, mine: pl.owner === q.pid })) }; }
+function announcePlots(w) { for (const q of players.values()) if (q.world === w && q.joined) sendTo(q, plotsMsg(w, q)); }
+// a transaction goes in the world's log (the latest 300 are kept)
+function logTxn(w, e) {
+  w.log.push(Object.assign({ t: Date.now() }, e));
+  if (w.log.length > 300) w.log.splice(0, w.log.length - 300);
+  scheduleSave(w);
+}
+// the transactions a player is part of, newest first, worded from that player's side
+function cashLogFor(w, p) {
+  const out = [];
+  for (const e of w.log) {
+    let dir = null, text = null;
+    if (e.kind === 'trade') {
+      if (e.from === p.pid) { dir = '-'; text = 'Sent ' + e.amount + ' to ' + e.toName; }
+      else if (e.to === p.pid) { dir = '+'; text = e.fromName + ' sent you ' + e.amount; }
+    } else if (e.kind === 'give' && e.to === p.pid) { dir = '+'; text = 'The game creator gave you ' + e.amount; }
+    else if (e.kind === 'take' && e.from === p.pid) { dir = '-'; text = 'The game creator took ' + e.amount; }
+    else if (e.kind === 'buy' && e.from === p.pid) { dir = '-'; text = 'Bought ' + e.what + ' for ' + e.amount; }
+    else if (e.kind === 'plot' && e.from === p.pid) { dir = '-'; text = 'Bought a plot of ' + e.what + ' for ' + e.amount; }
+    if (dir) out.push({ t: e.t, dir, text, amount: e.amount });
+  }
+  return out.slice(-40).reverse();
 }
 // the locks a player sees when they join
 function lockList(w, p) {
@@ -124,6 +166,8 @@ for (const w of Object.values(WORLDS)) {
   w.locks = new Map();     // "x,y,z" of each half of a door with a password -> the lock (both halves share one lock)
   w.coins = new Map();     // hashed player id -> cash (the game creator gives it, players trade it and buy with it)
   w.tools = new Map();     // hashed player id -> hacker tools they own (each one can be used once)
+  w.plots = [];            // plots of land: { x0, z0, x1, z1 (inclusive), owner (hashed id), price }
+  w.log = [];              // the latest cash transactions in this world
   w.mob = null;
   w.clock = { t: DAY_LEN * 0.3, at: Date.now() };    // the world time is w.clock.t at the moment w.clock.at; it then runs on in real time
   w.saveTimer = null;
@@ -133,6 +177,7 @@ for (const w of Object.values(WORLDS)) {
     const list = Array.isArray(data) ? data : data.edits;          // older saves were just the list of edits
     for (const [pid, n] of (Array.isArray(data) ? [] : (data.coins || []))) w.coins.set(pid, n);
     for (const [pid, n] of (Array.isArray(data) ? [] : (data.tools || []))) w.tools.set(pid, n);
+    if (!Array.isArray(data)) { w.plots = data.plots || []; w.log = data.log || []; }
     for (const [k, v, o] of list) { w.edits.set(k, v); if (o !== undefined) w.owners.set(k, o); }
     for (const L of Array.isArray(data) ? [] : (data.locks || [])) {
       const lo = L.lower.split(',').map(Number);
@@ -156,7 +201,7 @@ function saveWorld(w) {
   const locks = [...new Set(w.locks.values())].map(L => ({ lower: L.lower.join(','), owner: L.owner, salt: L.salt, digest: L.digest, allowed: [...L.allowed] }));
   const tmp = w.file + '.tmp';
   try {
-    fs.writeFileSync(tmp, JSON.stringify({ edits, locks, coins: [...w.coins], tools: [...w.tools] }));
+    fs.writeFileSync(tmp, JSON.stringify({ edits, locks, coins: [...w.coins], tools: [...w.tools], plots: w.plots, log: w.log }));
     fs.renameSync(tmp, w.file);
   } catch (e) {
     console.error(`${w.name}: could not save the world:`, e.message);
@@ -347,7 +392,7 @@ function hello(p, id, m) {
   const all = [];
   // each block also says who it belongs to for this player: 1 = yours, 0 = another player's, null = nobody's (land or older saves)
   for (const [k, v] of w.edits) { const [x, y, z] = k.split(',').map(Number); const o = w.owners.get(k); all.push([x, y, z, v, o === undefined ? null : (o === p.pid ? 1 : 0)]); }
-  sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, edits: all, players: list, time: worldTime(w), mob: w.mob, tvs: tvList(w), sources: tvSources(w), locks: lockList(w, p), coins: w.coins.get(p.pid) || 0, tools: w.tools.get(p.pid) || 0 });
+  sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, edits: all, players: list, time: worldTime(w), mob: w.mob, tvs: tvList(w), sources: tvSources(w), locks: lockList(w, p), coins: w.coins.get(p.pid) || 0, tools: w.tools.get(p.pid) || 0, plots: plotsMsg(w, p).list });
   broadcast(w, { type: 'join', id, name: p.name, color: p.color, x: p.x, y: p.y, z: p.z, yaw: p.yaw, role: p.role }, id);
   broadcast(w, { type: 'system', text: p.name + ' joined' }, id);
 }
@@ -411,8 +456,12 @@ wss.on('connection', (ws) => {
       if (m.action === 'give') {
         const g = players.get(m.target), amt = Number.isInteger(m.amount) ? Math.max(-1000000, Math.min(1000000, m.amount)) : 0;
         if (!g || !g.joined || g.world !== w || !g.pid || !amt) return;
-        const now = Math.max(0, (w.coins.get(g.pid) || 0) + amt);
+        const before = w.coins.get(g.pid) || 0;
+        const now = Math.max(0, before + amt);
         w.coins.set(g.pid, now); scheduleSave(w);
+        const applied = now - before;
+        if (applied > 0) logTxn(w, { kind: 'give', amount: applied, to: g.pid, toName: g.name });
+        else if (applied < 0) logTxn(w, { kind: 'take', amount: -applied, from: g.pid, fromName: g.name });
         sendTo(g, walletMsg(w, g));
         sendTo(g, { type: 'notice', text: amt > 0 ? 'THE GAME CREATOR GAVE YOU ' + amt + ' CASH' : 'THE GAME CREATOR TOOK ' + (-amt) + ' CASH' });
         sendTo(p, { type: 'notice', text: (amt > 0 ? 'GAVE ' + amt + ' CASH TO ' : 'TOOK ' + (-amt) + ' CASH FROM ') + g.name.toUpperCase() });
@@ -578,6 +627,7 @@ wss.on('connection', (ws) => {
       if (cash < item.price) return sendTo(p, { type: 'notice', text: 'NOT ENOUGH CASH. YOU NEED ' + item.price });
       w.coins.set(p.pid, cash - item.price);
       w.tools.set(p.pid, (w.tools.get(p.pid) || 0) + 1);
+      logTxn(w, { kind: 'buy', amount: item.price, from: p.pid, fromName: p.name, what: item.name });
       scheduleSave(w);
       sendTo(p, walletMsg(w, p));
       return sendTo(p, { type: 'notice', text: 'BOUGHT: ' + item.name.toUpperCase() });
@@ -593,6 +643,7 @@ wss.on('connection', (ws) => {
       if (mine < amt) return fail('YOU DO NOT HAVE THAT MUCH CASH');
       w.coins.set(p.pid, mine - amt);
       w.coins.set(q.pid, (w.coins.get(q.pid) || 0) + amt);
+      logTxn(w, { kind: 'trade', amount: amt, from: p.pid, fromName: p.name, to: q.pid, toName: q.name });
       scheduleSave(w);
       sendTo(p, walletMsg(w, p));
       sendTo(p, { type: 'notice', text: 'SENT ' + amt + ' CASH TO ' + q.name.toUpperCase() });
@@ -614,18 +665,46 @@ wss.on('connection', (ws) => {
       const left = w.tools.get(p.pid) - 1;
       if (left > 0) w.tools.set(p.pid, left); else w.tools.delete(p.pid);
       lock.openUntil = Date.now() + HACK_MS;
+      lock.decodedBy = p.pid;
       scheduleSave(w);
       announceLock(w, lo, lock);
-      setTimeout(() => { if (w.locks.get(lk) === lock) announceLock(w, lo, lock); }, HACK_MS + 50);   // locks again when the time is up
+      setTimeout(() => shutDecodedDoor(w, lo, lock), HACK_MS + 50);   // shuts and locks again when the time is up
       sendTo(p, walletMsg(w, p));
       return sendTo(p, { type: 'doorresult', ok: true, msg: 'DOOR DECODED: OPEN FOR ' + Math.round(HACK_MS / 1000) + ' SECONDS' });
     }
+    if (m.type === 'plotbuy') {
+      // the shopkeeper sells a plot: the measured corners are checked, the price is worked out here, and the buyer owns the land
+      const fail = text => sendTo(p, { type: 'notice', text });
+      if (![m.x0, m.z0, m.x1, m.z1].every(Number.isInteger)) return fail('MEASURE A PLOT WITH THE LAND SURVEYOR FIRST');
+      const pl = { x0: Math.min(m.x0, m.x1), x1: Math.max(m.x0, m.x1), z0: Math.min(m.z0, m.z1), z1: Math.max(m.z0, m.z1) };
+      const sw = pl.x1 - pl.x0 + 1, sd = pl.z1 - pl.z0 + 1;
+      if (sw < PLOT_MIN || sd < PLOT_MIN || sw > PLOT_MAX || sd > PLOT_MAX) return fail('A PLOT MUST BE ' + PLOT_MIN + ' TO ' + PLOT_MAX + ' BLOCKS ON EACH SIDE');
+      if (w.plots.some(o => plotsOverlap(o, pl))) return fail('THAT LAND IS ALREADY OWNED');
+      for (const [k, v] of w.edits) {
+        if (v === 0) continue;
+        const [x, , z] = k.split(',').map(Number);
+        if (x >= pl.x0 && x <= pl.x1 && z >= pl.z0 && z <= pl.z1) return fail('SOMEONE HAS BUILT ON THAT LAND');
+      }
+      const price = sw * sd * PLOT_RATE;
+      const cash = w.coins.get(p.pid) || 0;
+      if (cash < price) return fail('NOT ENOUGH CASH. THE PLOT COSTS ' + price);
+      w.coins.set(p.pid, cash - price);
+      w.plots.push(Object.assign(pl, { owner: p.pid, price }));
+      logTxn(w, { kind: 'plot', amount: price, from: p.pid, fromName: p.name, what: sw + ' x ' + sd + ' blocks' });
+      scheduleSave(w);
+      announcePlots(w);
+      sendTo(p, walletMsg(w, p));
+      return fail('YOUR PLOT IS READY: ' + sw + ' x ' + sd + ' BLOCKS. BUILD INSIDE IT');
+    }
+    if (m.type === 'cashlog') return sendTo(p, { type: 'cashlog', entries: cashLogFor(w, p) });
     if (m.type === 'edit') {
       if (!isInt(m.x) || !isInt(m.y) || !isInt(m.z) || !isInt(m.id)) return;
       if (m.y < 0 || m.y >= CH || m.id < 0 || m.id > MAX_BLOCK_ID) return;   // 0 = air, 1-25 = block types (see BLOCKS in index.html)
       const dx = m.x + 0.5 - p.x, dy = m.y + 0.5 - p.y, dz = m.z + 0.5 - p.z;
       if (dx * dx + dy * dy + dz * dz > REACH * REACH) return;   // too far from where this player last was
       const key = m.x + ',' + m.y + ',' + m.z;
+      const landOwner = plotAt(w, m.x, m.z);
+      if (landOwner && landOwner.owner !== p.pid && !canBypass(p)) return fixBlock(p, w, key, 'THIS LAND BELONGS TO ANOTHER PLAYER');
       const cur = w.edits.has(key) ? w.edits.get(key) : null;     // null: land that no player has changed
       const owner = w.owners.get(key);                            // undefined: no player placed this block
       if (owner !== undefined && owner !== p.pid && !canBypass(p)) {

@@ -70,15 +70,32 @@
   #shopcoins{margin:0;font-size:14px;color:#ffe066;text-align:center;display:flex;align-items:center;justify-content:center;gap:6px}
   .shopcard{display:flex;flex-direction:column;gap:6px;padding:10px;background:#11151f;border:2px solid #3a4560;width:100%;box-sizing:border-box}
   .shopcard .btn{width:100%}
+  .shopart{display:flex;justify-content:center;padding:4px 0}
+  .shopart svg{width:100%;max-width:220px;height:auto}
   #shopmsg{min-height:1.4em;margin:0;font-size:13px;color:#ffe066;text-align:center}
   #shopearn{width:100%;box-sizing:border-box;padding:10px;background:#11151f;border:2px solid #3a4560;display:flex;flex-direction:column;gap:4px}
   #shopearn h3{margin:0 0 4px;font-size:13px;letter-spacing:.1em;text-align:center}
   #cashhud{position:fixed;top:10px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:6px;padding:4px 12px;background:rgba(0,0,0,.55);border:2px solid #5b6578;border-radius:8px;font:bold 16px 'Courier New',monospace;color:#ffe066;text-shadow:1px 1px 0 #000;pointer-events:none;z-index:3}
-  #tradebox{position:fixed;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;background:rgba(8,12,22,.86)}
-  #tradepanel{display:flex;flex-direction:column;align-items:center;gap:10px;width:min(380px,100%);max-height:100%;overflow:auto;box-sizing:border-box;padding:18px;background:#161b26;border:3px solid #5b6578}
-  #tradepanel h2{margin:0;font-size:20px;letter-spacing:.14em;text-shadow:2px 2px 0 #000}
-  #tradepanel select,#tradepanel input{font:14px 'Courier New',monospace;width:100%;box-sizing:border-box;padding:9px;background:#0d111b;color:#fff;border:2px solid #3a4560}
+  #hacktimer{position:fixed;left:50%;top:16%;transform:translateX(-50%);text-align:center;pointer-events:none;z-index:4;font-family:'Courier New',monospace;color:#ff2a1f;text-shadow:0 0 14px #000,3px 3px 0 #000,-2px 0 0 #000}
+  #hacktimernum{display:block;font-size:72px;font-weight:bold;line-height:1;letter-spacing:.06em}
+  #hacktimer small{display:block;font-size:16px;font-weight:bold;letter-spacing:.2em;margin-top:4px}
   #trademsg{min-height:1.4em;margin:0;font-size:13px;color:#ffe066;text-align:center}
+  #cashscreen{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%}
+  #cashscreen h2{margin:0;font-size:18px;letter-spacing:.14em}
+  #cashscreen h3{margin:6px 0 0;font-size:13px;letter-spacing:.1em}
+  #cashscreen select,#cashscreen input{font:14px 'Courier New',monospace;width:100%;box-sizing:border-box;padding:9px;background:#0d111b;color:#fff;border:2px solid #3a4560}
+  #cashlist{width:100%;display:flex;flex-direction:column;gap:4px;max-height:200px;overflow:auto}
+  .txn{display:flex;gap:8px;align-items:baseline;padding:6px 8px;background:#11151f;border:2px solid #3a4560;font-size:13px;text-align:left;width:100%;box-sizing:border-box}
+  .txn .amt{font-weight:bold;min-width:64px}
+  .txn.in .amt{color:#7ee39a}
+  .txn.out .amt{color:#ff8a7a}
+  .txn .when{color:#8a94a8;font-size:11px;min-width:44px}
+  .btn.cashbtn{background:linear-gradient(#3fae5a,#2a7f40);border-color:#7ee39a}
+  .btn.cashbtn:hover{background:linear-gradient(#4fc26a,#34914d)}
+  #givebox .btn{width:auto;flex:0 0 auto;padding:8px 10px}
+  #givebox{flex-wrap:wrap}
+  #landhud{position:fixed;top:50px;left:50%;transform:translateX(-50%);padding:2px 10px;font:bold 13px 'Courier New',monospace;color:#bfe9ff;background:rgba(0,0,0,.5);border-radius:6px;pointer-events:none;z-index:3;text-shadow:1px 1px 0 #000}
+  #surveyhud{position:fixed;top:82px;left:50%;transform:translateX(-50%);padding:4px 12px;font:bold 14px 'Courier New',monospace;color:#ffe066;background:rgba(0,0,0,.6);border:2px solid #c9a227;border-radius:6px;pointer-events:none;z-index:3;text-shadow:1px 1px 0 #000;white-space:nowrap}
   #ttrade{left:calc(14px + env(safe-area-inset-left));bottom:calc(156px + env(safe-area-inset-bottom));width:66px;height:40px;border-radius:9px;font-size:12px;background:rgba(60,110,50,.6)}
   .coinicon{display:inline-flex;align-items:center;vertical-align:middle}
   .coinicon svg{display:block}
@@ -179,6 +196,9 @@
 <div id="loading"><div class="spin"></div><p id="loadmsg">LOADING...</p></div>
 <canvas id="c"></canvas>
 <div id="cross"></div>
+<div id="hacktimer" hidden><span id="hacktimernum">0</span><small>SECONDS LEFT</small></div>
+<div id="landhud" hidden></div>
+<div id="surveyhud" hidden></div>
 <div id="cashhud" hidden><span class="coinicon" id="cashcoin"></span><span id="cashnum">0</span></div>
 <div id="hud"><div id="fps"></div><div id="pos"></div><div id="tgt"></div><div id="tm"></div><div id="mp"></div></div>
 <div id="tags"></div>
@@ -227,7 +247,20 @@
       <button class="btn" id="drawbtn" type="button">DRAW DISTANCE: 4</button>
       <button class="btn" id="sensbtn" type="button">SENSITIVITY: 1x</button>
       <button class="btn" id="sound">SOUND EFFECTS: ON</button>
+      <button class="btn cashbtn" id="cashbtn" type="button">CASH</button>
       <button class="btn ghost" id="setback">BACK</button>
+    </div>
+    <div id="cashscreen" hidden>
+      <h2>CASH</h2>
+      <p class="hint" id="cashbal"></p>
+      <h3>RECENT TRANSACTIONS</h3>
+      <div id="cashlist"></div>
+      <h3>SEND CASH TO A PLAYER</h3>
+      <select id="tradewho" aria-label="Player to send cash to"></select>
+      <input id="tradeamt" type="number" step="1" min="1" placeholder="Amount of cash" aria-label="Amount of cash to send">
+      <button class="btn" id="tradesend" type="button">SEND CASH</button>
+      <p id="trademsg" role="status"></p>
+      <button class="btn ghost" id="cashback" type="button">BACK</button>
     </div>
     <div id="howbox" hidden>
       <h2>HOW TO PLAY</h2>
@@ -282,8 +315,9 @@
           <select id="givewho" aria-label="Player to give coins to"></select>
           <input id="giveamt" type="number" step="1" placeholder="Amount" aria-label="Amount of coins">
           <button class="btn" id="givego" type="button">GIVE</button>
+          <button class="btn" id="takego" type="button">TAKE</button>
         </div>
-        <p class="hint">A negative amount takes coins away.</p>
+        <p class="hint">GIVE adds cash. TAKE removes it (a player never goes below zero).</p>
         <div id="pmbox" hidden>
           <p class="hint" id="pmto"></p>
           <input id="pmtext" maxlength="200" autocomplete="off" aria-label="Message to the player">
@@ -311,18 +345,6 @@
       <p class="hint">The game creator pays out cash for bugs, glitches and houses.</p>
     </div>
     <button class="btn" id="shopclose" type="button">LEAVE (E)</button>
-  </div>
-</div>
-
-<div id="tradebox" hidden>
-  <div id="tradepanel" role="dialog" aria-labelledby="tradetitle">
-    <h2 id="tradetitle">TRADE CASH</h2>
-    <p class="hint" id="tradebal"></p>
-    <select id="tradewho" aria-label="Player to send cash to"></select>
-    <input id="tradeamt" type="number" step="1" min="1" placeholder="Amount of cash" aria-label="Amount of cash to send">
-    <button class="btn" id="tradesend" type="button">SEND CASH</button>
-    <p id="trademsg" role="status"></p>
-    <button class="btn" id="tradeclose" type="button">CLOSE (G)</button>
   </div>
 </div>
 
@@ -910,6 +932,9 @@ BLOCKS[REMOTE_ID] = {name:'TV Remote', top:91, side:91, bot:91, sw:'#2a2d34'};
 // the hacker tool: bought in the shop, used once. It is not in the catalog, so it can only come from the shop
 const HACK_TOOL_ID = REMOTE_ID + 1;
 BLOCKS[HACK_TOOL_ID] = {name:'Hacker Tool', top:91, side:91, bot:91, sw:'#1f6b3a'};
+// the Land Surveyor: measures a plot of land (it is free, from the Gadgets tab)
+const SURVEY_ID = REMOTE_ID + 2;
+BLOCKS[SURVEY_ID] = {name:'Land Surveyor', top:91, side:91, bot:91, sw:'#c9a227'};
 // plants and the poop lie on the floor: you walk through them, and they are not blocks you can place
 const DECOR_NAMES = ['Grass Tuft','Red Flower','Yellow Flower','Blue Flower','White Flower','Poop'];
 const DECOR_T = new Set(FURN.map((_, t) => t).filter(t => DECOR_NAMES.includes(FURN[t].name)));
@@ -928,7 +953,7 @@ const CATS = [
   {name:'Light & Glass',ids:[10,11,47]},
   {name:'Furniture',    ids:[12,16,...FURN_BASES.filter((_, t) => !DECOR_T.has(t))]},
   {name:'Food',         ids:ITEM_IDS},
-  {name:'Gadgets',      ids:[REMOTE_ID]}
+  {name:'Gadgets',      ids:[REMOTE_ID, SURVEY_ID]}
 ];
 const CATALOG = CATS.flatMap(c => c.ids);      // every block a player can carry
 // the rooms the Furniture tab can be filtered by
@@ -1763,7 +1788,7 @@ let fridgeOpen = null;          // the fridge whose shelves are showing: {key, x
 // right-clicking a fridge: a closed door opens; with food in your hand it goes in; otherwise the shelves show
 function fridgeUse(h){
   if(!furnState(h.id).f.open){ furnOpenToggle(h); return; }
-  if(isItem(HOTBAR[sel]) && HOTBAR[sel]!==REMOTE_ID && HOTBAR[sel]!==HACK_TOOL_ID){ putFood(h, HOTBAR[sel]); return; }
+  if(isItem(HOTBAR[sel]) && HOTBAR[sel]!==REMOTE_ID && HOTBAR[sel]!==HACK_TOOL_ID && HOTBAR[sel]!==SURVEY_ID){ putFood(h, HOTBAR[sel]); return; }
   openFridge(h);
 }
 function putFood(h, food){
@@ -2454,9 +2479,11 @@ function doBreak(){
   const h=raycast(6);
   if(HOTBAR[sel]===REMOTE_ID){ remoteVolume(h, (keys.ShiftLeft||keys.ShiftRight) ? 1 : -1); return; }   // the remote: left-click turns the TV's volume down, Shift turns it up
   if(HOTBAR[sel]===HACK_TOOL_ID) return;   // the hacker tool breaks nothing
+  if(HOTBAR[sel]===SURVEY_ID){ surveyClick(h); return; }   // the Land Surveyor: left-click sets a corner
   if(!h) return;
   const cells=[[h.x,h.y,h.z]];
   const p=partnerOf(h.x,h.y,h.z,h.id); if(p) cells.push(p);   // a door or bed comes down as a whole
+  if(mpMode && cells.some(([x,y,z]) => otherLand(x,z))){ flashHud('THIS LAND BELONGS TO ANOTHER PLAYER'); return; }
   // another player's block is not removed here at all, so nothing behind it can be reached while the server is told
   if(mpMode && cells.some(([x,y,z]) => blockOwner.get(doorKeyOf(x,y,z)) === false)){ flashHud('THAT BLOCK BELONGS TO ANOTHER PLAYER'); return; }
   for(const [x,y,z] of cells){ setBlock(x,y,z,0); blockOwner.delete(doorKeyOf(x,y,z)); mpSend({type:'edit', x, y, z, id:0}); }
@@ -2465,6 +2492,7 @@ function doBreak(){
 }
 // right-clicking a door opens it, or closes it again; a door will not close on the player
 function toggleDoor(h){
+  if(mpMode && otherLand(h.x, h.z)){ flashHud('THIS LAND BELONGS TO ANOTHER PLAYER'); return; }
   if(doorIsLocked(h)){ askDoor(h.x, lowerHalfY(h), h.z); flashHud('THE DOOR IS LOCKED: TYPE ITS PASSWORD'); return; }
   const open = isOpenDoor(h.id);
   const p = partnerOf(h.x,h.y,h.z,h.id);
@@ -2592,6 +2620,7 @@ function tapVolume(){
 function doPlace(){
   if(shopAim()){ openShop(); return; }   // right-click the shopkeeper: the shop opens
   if(HOTBAR[sel]===HACK_TOOL_ID){ hackDoor(raycast(6)); return; }   // the hacker tool: right-click a locked door to decode it
+  if(HOTBAR[sel]===SURVEY_ID){ surveyCancel(); return; }            // the Land Surveyor: right-click cancels the measuring
   const h=raycast(6);
   if(HOTBAR[sel]===REMOTE_ID){ remotePress(h); return; }   // the remote in your hand: right-click starts or pauses the TV you aim at
   // holding a glass of water: right-click drinks it, unless you are working a door, a light, the fridge or a bed
@@ -2619,6 +2648,7 @@ function doPlace(){
   const id=HOTBAR[sel];
   if(id==null){ flashHud('EMPTY SLOT: press E to choose a block'); return; }
   if(isItem(id)){ flashHud('FOOD AND DISHES GO IN THE FRIDGE: open one, then right-click it'); return; }
+  if(mpMode && otherLand(h.x+h.nx, h.z+h.nz)){ flashHud('THIS LAND BELONGS TO ANOTHER PLAYER'); return; }
   const x=h.x+h.nx, y=h.y+h.ny, z=h.z+h.nz;
   const mt = isFurnBase(id) ? FURN[furnState(id).t].mount : null;
   if(mt === 'ceiling' && h.ny !== -1){ flashHud('HANG THE LIGHT UNDER A CEILING'); return; }
@@ -2770,11 +2800,25 @@ function playerId(){
   return myPid;
 }
 let cashShown = -1;
+let hackEnd = 0;           // when the door you decoded shuts again (performance.now time), 0 when none
+let hackShown = -1;
 function syncCash(){
   const h = $('cashhud');
   if(h.hidden !== !playing) h.hidden = !playing;
   if(playing && cashShown !== myCoins){ cashShown = myCoins; $('cashnum').textContent = String(myCoins); }
+  // the countdown: whole seconds left, shown only while a door you decoded is still open
+  const left = hackEnd - performance.now();
+  const show = playing && left > 0;
+  const ht = $('hacktimer');
+  if(ht.hidden === show) ht.hidden = !show;
+  if(show){ const secs = Math.ceil(left / 1000); if(secs !== hackShown){ hackShown = secs; $('hacktimernum').textContent = String(secs); } }
+  else if(hackEnd) hackEnd = 0;
+  // the land you stand on, and the Land Surveyor's readout while it is in your hand
+  const lp = playing && mpMode ? plotAtClient(Math.floor(player.x), Math.floor(player.z)) : null;
+  setText('landhud', lp ? (lp.mine ? 'YOUR LAND' : 'PRIVATE LAND') : '');
+  setText('surveyhud', playing && HOTBAR[sel]===SURVEY_ID ? surveyText() : '');
 }
+function setText(id, t){ const el = $(id); if(el.textContent !== t) el.textContent = t; if(el.hidden !== !t) el.hidden = !t; }
 // the locked doors the server has told us about, keyed by the lower half of each door: { ok } (ok: this player may open it)
 const doorLocks = new Map();
 let doorShown = false;     // the door panel is open
@@ -2814,6 +2858,7 @@ function onDoorInfo(m){
 }
 // the server changed a door's lock (for everyone; mine and ok are for this player)
 function onDoorLock(m){
+  if(m.openFor > 0) hackEnd = performance.now() + m.openFor;   // you decoded this door: the countdown starts
   const key = doorKeyOf(+m.x, +m.y, +m.z);
   if(m.locked) doorLocks.set(key, {ok: !!m.ok}); else doorLocks.delete(key);
   if(doorShown && doorInfo && doorKeyOf(doorInfo.x, doorInfo.y, doorInfo.z) === key){
@@ -2897,33 +2942,46 @@ $('givego').addEventListener('click', ()=>{
 });
 
 /* ---------- trading cash with other players: press G (or TRADE on a touch screen) ---------- */
-let tradeOpen = false;
-function openTrade(){
-  if(!playing || tradeOpen || shopOpen || codeOpen || invOpen || fridgeOpen || doorShown || chatOpen || player.sleeping) return;
-  if(!mpMode){ flashHud('CASH TRADES NEED THE MULTIPLAYER SERVER'); return; }
-  tradeOpen = true;
-  for(const k in keys) keys[k] = false;
-  try{ document.exitPointerLock(); }catch(e){}
-  $('trademsg').textContent = ''; $('tradeamt').value = '';
-  $('tradebox').hidden = false;
-  renderTrade();
-  $('tradeamt').focus();
+/* ---------- cash: the CASH screen (in the menu) lists recent transactions and sends cash to other players ---------- */
+let cashEntries = [];                       // the latest transactions, from the server
+function cashVisible(){ return !$('cashscreen').hidden; }
+function showCash(){
+  $('mainbtns').hidden = true; $('mpbox').hidden = true; $('settingsbox').hidden = true; $('howbox').hidden = true;
+  $('cashscreen').hidden = false;
+  $('trademsg').textContent = '';
+  renderCash();
+  if(mpMode) mpSend({type:'cashlog'});
 }
-function renderTrade(){
-  $('tradebal').textContent = 'Your cash: ' + myCoins;
+// from the game (G, or TRADE on a touch screen): pause, then the CASH screen
+function openCashFromGame(){
+  if(!playing || shopOpen || codeOpen || invOpen || fridgeOpen || doorShown || chatOpen || player.sleeping) return;
+  if(!mpMode){ flashHud('CASH NEEDS THE MULTIPLAYER SERVER'); return; }
+  pause();
+  showCash();
+}
+function renderCash(){
+  $('cashbal').textContent = mpMode ? 'Your cash: ' + myCoins : 'Join a multiplayer world to have cash.';
   const who = $('tradewho'), keep = who.value; who.textContent = '';
   const rows = [...mp.others.values()].sort((x, y) => x.name.localeCompare(y.name));
-  if(!rows.length){ const op = document.createElement('option'); op.value = ''; op.textContent = 'No other players are here'; who.appendChild(op); }
+  if(!rows.length){ const op = document.createElement('option'); op.value = ''; op.textContent = mpMode ? 'No other players are here' : 'Not connected'; who.appendChild(op); }
   for(const o of rows){ const op = document.createElement('option'); op.value = String(o.id); op.textContent = o.name; who.appendChild(op); }
   if([...who.options].some(x => x.value === keep)) who.value = keep;
+  $('tradesend').disabled = !mpMode;
+  const list = $('cashlist'); list.textContent = '';
+  const note = t => { const p = document.createElement('p'); p.className = 'hint'; p.textContent = t; list.appendChild(p); };
+  if(!mpMode) note('Transactions are kept by the multiplayer server.');
+  else if(!cashEntries.length) note('No transactions yet.');
+  for(const e of cashEntries){
+    const row = document.createElement('div'); row.className = 'txn ' + (e.dir === '+' ? 'in' : 'out');
+    const amt = document.createElement('span'); amt.className = 'amt'; amt.textContent = (e.dir === '+' ? '+' : '-') + e.amount;
+    const when = document.createElement('span'); when.className = 'when'; when.textContent = new Date(e.t).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+    const what = document.createElement('span'); what.textContent = e.text;
+    row.appendChild(amt); row.appendChild(when); row.appendChild(what); list.appendChild(row);
+  }
 }
-function closeTrade(){
-  if(!tradeOpen) return;
-  tradeOpen = false;
-  $('tradebox').hidden = true;
-  if(playing) lockPointer();
-}
+// sends cash to the chosen player (the server checks the amount and the balance)
 function sendCash(){
+  if(!mpMode) return;
   const id = +$('tradewho').value, amount = Math.trunc(Number($('tradeamt').value));
   if(!id){ $('trademsg').textContent = 'Choose a player to send cash to.'; return; }
   if(!Number.isFinite(amount) || amount < 1){ $('trademsg').textContent = 'Type an amount of cash to send.'; return; }
@@ -2931,11 +2989,18 @@ function sendCash(){
   $('tradeamt').value = ''; $('trademsg').textContent = 'Sending...';
 }
 $('tradesend').addEventListener('click', sendCash);
-$('tradeclose').addEventListener('click', closeTrade);
 $('tradeamt').addEventListener('keydown', e=>{
   e.stopPropagation();
   if(e.key === 'Enter'){ e.preventDefault(); sendCash(); }
-  else if(e.key === 'Escape'){ e.preventDefault(); closeTrade(); }
+});
+$('cashbtn').addEventListener('click', showCash);
+$('cashback').addEventListener('click', showMain);
+$('takego').addEventListener('click', ()=>{
+  if(adminRole !== 'creator') return;
+  const id = +$('givewho').value, amount = Math.abs(Math.trunc(Number($('giveamt').value)));
+  if(!id || !Number.isFinite(amount) || !amount){ flashHud('CHOOSE A PLAYER AND TYPE AN AMOUNT'); return; }
+  mpSend({type:'admin', action:'give', target:id, amount:-amount});
+  $('giveamt').value = '';
 });
 
 /* ---------- the shopkeeper, and the shop panel ---------- */
@@ -2967,7 +3032,7 @@ function shopAim(){
 }
 // the items for sale (the server has the same prices)
 const SHOP_ITEMS = [
-  {id:'hacktool', name:'HACKER TOOL', price:10000,
+  {id:'hacktool', name:'HACKER TOOL', price:10000, art:'<svg width="220" height="150" viewBox="0 0 240 170" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="hf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f9a64"/><stop offset="1" stop-color="#1f5235"/></linearGradient><linearGradient id="ht" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#2f7d50"/><stop offset="1" stop-color="#6bc68c"/></linearGradient><linearGradient id="hs" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#173f28"/><stop offset="1" stop-color="#0e2a1a"/></linearGradient><linearGradient id="scr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0b2315"/><stop offset="1" stop-color="#06140c"/></linearGradient><radialGradient id="sh" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#000" stop-opacity="0.45"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient></defs><ellipse cx="122" cy="150" rx="92" ry="11" fill="url(#sh)"/><polygon points="172.0,86.0 206.0,60.0 206.0,110.0 172.0,136.0" fill="url(#hs)" stroke="#0a2014" stroke-width="1.5"/><polygon points="60.0,86.0 172.0,86.0 206.0,60.0 94.0,60.0" fill="url(#ht)" stroke="#0a2014" stroke-width="1.5"/><polygon points="60.0,86.0 172.0,86.0 172.0,136.0 60.0,136.0" fill="url(#hf)" stroke="#0a2014" stroke-width="1.5"/><line x1="60" y1="87" x2="172" y2="87" stroke="#9be8b5" stroke-opacity="0.6" stroke-width="1.5"/><polygon points="80.9,80.3 163.8,80.3 183.5,65.2 100.6,65.2" fill="url(#scr)" stroke="#7dffa8" stroke-width="1" stroke-opacity="0.8"/><line x1="90.4" y1="78.2" x2="139.6" y2="78.2" stroke="#7dffa8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.95"/><line x1="93.8" y1="75.6" x2="161.0" y2="75.6" stroke="#7dffa8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.95"/><line x1="97.2" y1="73.0" x2="133.0" y2="73.0" stroke="#7dffa8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.95"/><line x1="100.6" y1="70.4" x2="158.8" y2="70.4" stroke="#7dffa8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.95"/><line x1="104.0" y1="67.8" x2="146.5" y2="67.8" stroke="#7dffa8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.95"/><rect x="151.6" y="74.2" width="4" height="7" fill="#e8ff9a"/><circle cx="84.6" cy="112.0" r="7" fill="#e04b3c" stroke="#0a2014" stroke-width="1.2"/><circle cx="82.6" cy="109.5" r="2.2" fill="#ffffff" fill-opacity="0.55"/><circle cx="111.5" cy="112.0" r="7" fill="#f2c33c" stroke="#0a2014" stroke-width="1.2"/><circle cx="109.5" cy="109.5" r="2.2" fill="#ffffff" fill-opacity="0.55"/><circle cx="138.4" cy="112.0" r="7" fill="#4bd6e6" stroke="#0a2014" stroke-width="1.2"/><circle cx="136.4" cy="109.5" r="2.2" fill="#ffffff" fill-opacity="0.55"/><line x1="80.2" y1="126.0" x2="80.2" y2="132.0" stroke="#0a2014" stroke-width="2" stroke-linecap="round" stroke-opacity="0.7"/><line x1="88.0" y1="126.0" x2="88.0" y2="132.0" stroke="#0a2014" stroke-width="2" stroke-linecap="round" stroke-opacity="0.7"/><line x1="95.8" y1="126.0" x2="95.8" y2="132.0" stroke="#0a2014" stroke-width="2" stroke-linecap="round" stroke-opacity="0.7"/><line x1="103.7" y1="126.0" x2="103.7" y2="132.0" stroke="#0a2014" stroke-width="2" stroke-linecap="round" stroke-opacity="0.7"/><line x1="187.6" y1="62.1" x2="193.6" y2="16.1" stroke="#2b2f36" stroke-width="3" stroke-linecap="round"/><circle cx="193.6" cy="14.1" r="4.5" fill="#f2c33c" stroke="#0a2014" stroke-width="1"/></svg>',
    text:'Use it once. Equip it in your inventory, then right-click a locked door. For 30 seconds that door opens for anyone, then its password lock comes back on. The tool is used up when you use it.'}
 ];
 // the coin logo: a gold coin with a dollar sign
@@ -3005,6 +3070,7 @@ function renderShop(){
     const nm = document.createElement('span'); nm.textContent = it.name;
     const pr = document.createElement('span'); pr.appendChild(coinSpan()); pr.appendChild(document.createTextNode(' ' + it.price));
     top.appendChild(nm); top.appendChild(pr); card.appendChild(top);
+    if(it.art){ const pic = document.createElement('div'); pic.className = 'shopart'; pic.innerHTML = it.art; card.appendChild(pic); }
     const d = document.createElement('p'); d.className = 'hint'; d.textContent = it.text; card.appendChild(d);
     if(it.id === 'hacktool'){ const own = document.createElement('p'); own.className = 'hint'; own.textContent = 'You own: ' + myTools; card.appendChild(own); }
     const b = document.createElement('button'); b.className = 'btn'; b.type = 'button'; b.textContent = 'BUY';
@@ -3013,6 +3079,22 @@ function renderShop(){
     card.appendChild(b);
     list.appendChild(card);
   }
+  // the land: what the Land Surveyor measured, and the shopkeeper's price for it
+  const land = document.createElement('div'); land.className = 'shopcard';
+  const lhead = document.createElement('div'); lhead.className = 'shoprow';
+  const lname = document.createElement('span'); lname.textContent = 'LAND (A PLOT)'; lhead.appendChild(lname); land.appendChild(lhead);
+  const lnote = document.createElement('p'); lnote.className = 'hint';
+  const s = surveyBox();
+  const fits = !!(s && survey.b && surveyFits(s));
+  if(!survey.b){ lnote.textContent = 'Measure land with the LAND SURVEYOR (Gadgets tab): click one corner, move, then click the other corner. Then bring the measurement here.'; }
+  else { lnote.textContent = 'The shopkeeper says: ' + s.w + ' x ' + s.d + ' blocks, ' + s.area + ' blocks in all. That will be ' + s.price + ' cash.' + (fits ? '' : ' That is too ' + (Math.min(s.w, s.d) < PLOT_MIN ? 'small' : 'big') + ' for a plot.'); }
+  land.appendChild(lnote);
+  const bb = document.createElement('button'); bb.className = 'btn'; bb.type = 'button';
+  bb.textContent = fits ? 'BUY THIS PLOT (' + s.price + ' CASH)' : 'BUY PLOT';
+  bb.disabled = !mpMode || !fits;
+  bb.addEventListener('click', buyPlot);
+  land.appendChild(bb);
+  list.appendChild(land);
 }
 // buying: the server takes the cash and gives the item; the tool then goes into an empty inventory slot
 function buyItem(id){
@@ -3031,6 +3113,47 @@ function syncTool(){
     if(e >= 0){ HOTBAR[e] = HACK_TOOL_ID; saveInv(); refreshInv(); }
     else flashHud('NO EMPTY SLOT FOR YOUR HACKER TOOL: FREE ONE IN YOUR INVENTORY');
   }
+}
+/* ---------- land: the Land Surveyor measures a plot, the shopkeeper sells it ---------- */
+const PLOT_RATE = 20, PLOT_MIN = 3, PLOT_MAX = 32;   // cash per block, and the shortest and longest side of a plot (the server checks these too)
+let survey = {a:null, b:null};                       // the corners set with the Land Surveyor (blocks at x, z)
+let plotList = [];                                   // the plots in this world: { x0, z0, x1, z1, mine }
+// the measurement: from the first corner to the second, or to the block you aim at while still measuring
+function surveyBox(){
+  if(!survey.a) return null;
+  const b = survey.b || (target ? {x: target.x, z: target.z} : null);
+  if(!b) return null;
+  const x0 = Math.min(survey.a.x, b.x), x1 = Math.max(survey.a.x, b.x), z0 = Math.min(survey.a.z, b.z), z1 = Math.max(survey.a.z, b.z);
+  const w = x1 - x0 + 1, d = z1 - z0 + 1;
+  return {x0, z0, x1, z1, w, d, area: w * d, price: w * d * PLOT_RATE, fixed: !!survey.b};
+}
+function surveyFits(s){ return Math.min(s.w, s.d) >= PLOT_MIN && Math.max(s.w, s.d) <= PLOT_MAX; }
+function surveyText(){
+  if(!survey.a) return 'LAND SURVEYOR: CLICK A BLOCK TO SET THE FIRST CORNER';
+  const s = surveyBox();
+  if(!s) return 'LAND SURVEYOR: MOVE TO THE OTHER CORNER';
+  const size = s.w + ' x ' + s.d + ' = ' + s.area + ' BLOCKS, ' + s.price + ' CASH';
+  if(!surveyFits(s)) return size + '   (A PLOT IS ' + PLOT_MIN + ' TO ' + PLOT_MAX + ' BLOCKS ON EACH SIDE)';
+  return size + (s.fixed ? '   TAKE IT TO THE SHOP' : '   CLICK TO SET THE OTHER CORNER');
+}
+// left-click with the Land Surveyor: the first click sets a corner, the next click sets the other one
+function surveyClick(h){
+  if(!h){ flashHud('AIM AT A BLOCK TO SET A CORNER'); return; }
+  const c = {x: h.x, z: h.z};
+  if(!survey.a || survey.b){ survey = {a: c, b: null}; flashHud('CORNER 1 SET. MOVE TO THE OTHER CORNER AND CLICK'); }
+  else { survey.b = c; flashHud('LAND MEASURED. TAKE IT TO THE SHOP TO BUY IT'); }
+}
+function surveyCancel(){ survey = {a:null, b:null}; flashHud('MEASURING CANCELLED'); }
+function plotAtClient(x, z){ return plotList.find(p => x >= p.x0 && x <= p.x1 && z >= p.z0 && z <= p.z1) || null; }
+// true when this block is inside someone else's plot (the server checks it too)
+function otherLand(x, z){ const p = plotAtClient(x, z); return !!p && !p.mine && !adminBypass; }
+function buyPlot(){
+  if(!mpMode){ shopNote('BUYING LAND NEEDS THE MULTIPLAYER SERVER'); return; }
+  const s = surveyBox();
+  if(!survey.b || !s){ shopNote('MEASURE THE LAND WITH THE LAND SURVEYOR FIRST'); return; }
+  if(!surveyFits(s)){ shopNote('A PLOT IS ' + PLOT_MIN + ' TO ' + PLOT_MAX + ' BLOCKS ON EACH SIDE'); return; }
+  if(myCoins < s.price){ shopNote('NOT ENOUGH CASH. THE PLOT COSTS ' + s.price); return; }
+  mpSend({type:'plotbuy', x0: survey.a.x, z0: survey.a.z, x1: survey.b.x, z1: survey.b.z});
 }
 // right-click a locked door with the hacker tool in hand: the server decodes it
 function hackDoor(h){
@@ -3237,10 +3360,6 @@ addEventListener('keydown',e=>{
     if(((e.code==='KeyQ' && !(document.activeElement && document.activeElement.tagName==='INPUT')) || e.code==='Escape') && !e.repeat){ e.preventDefault(); closeDoor(); }
     return;
   }
-  if(tradeOpen){                                  // the trade panel is open: only G or Esc leaves it (typing in its boxes is left alone)
-    if(((e.code==='KeyG' && !(document.activeElement && document.activeElement.tagName==='INPUT')) || e.code==='Escape') && !e.repeat){ e.preventDefault(); closeTrade(); }
-    return;
-  }
   if(shopOpen){                                   // the shop is open: only E or Esc leaves it
     if((e.code==='KeyE' || e.code==='Escape') && !e.repeat){ e.preventDefault(); closeShop(); }
     return;
@@ -3270,7 +3389,7 @@ addEventListener('keydown',e=>{
   if(e.code==='KeyE' && !e.repeat){ e.preventDefault(); openInv(); return; }
   if(e.code==='KeyP' && !e.repeat){ e.preventDefault(); openCode(); return; }
   if(e.code==='KeyQ' && !e.repeat){ e.preventDefault(); useDoorKey(); return; }
-  if(e.code==='KeyG' && !e.repeat){ e.preventDefault(); openTrade(); return; }
+  if(e.code==='KeyG' && !e.repeat){ e.preventDefault(); openCashFromGame(); return; }
   if(e.code==='Space' && !e.repeat){
     // two quick taps of Space switch flying on or off
     const now=performance.now();
@@ -3305,7 +3424,7 @@ function lockPointer(){
   try{ const p = cv.requestPointerLock(); if(p && p.catch) p.catch(()=>{}); }catch(e){}
 }
 cv.addEventListener('mousedown',e=>{
-  if(!playing || invOpen || codeOpen || fridgeOpen || doorShown || shopOpen || tradeOpen || player.sleeping) return;
+  if(!playing || invOpen || codeOpen || fridgeOpen || doorShown || shopOpen || player.sleeping) return;
   if(document.pointerLockElement!==cv) lockPointer();   // a click after a join or a pause captures the mouse
   if(document.pointerLockElement!==cv && e.button!==0) return;
   if(e.button===0) doBreak(); else if(e.button===2) doPlace();
@@ -3313,7 +3432,7 @@ cv.addEventListener('mousedown',e=>{
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('pointerlockchange',()=>{
   if(document.pointerLockElement) lookFrom = performance.now() + 150;
-  if(!document.pointerLockElement && playing && !chatOpen && !invOpen && !codeOpen && !fridgeOpen && !doorShown && !shopOpen && !tradeOpen) pause();   // releasing the mouse to type in chat or use the catalog is not a pause
+  if(!document.pointerLockElement && playing && !chatOpen && !invOpen && !codeOpen && !fridgeOpen && !doorShown && !shopOpen) pause();   // releasing the mouse to type in chat or use the catalog is not a pause
 });
 
 /* ---------- sound: every effect is synthesised with Web Audio, so there are no sound files to load ---------- */
@@ -3592,7 +3711,7 @@ function defaultWS(){
   if(location.protocol==='http:' || location.protocol==='https:') return (location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws';
   return 'ws://localhost:8080/ws';
 }
-function showMain(){ $('mainbtns').hidden=false; $('mpbox').hidden=true; $('settingsbox').hidden=true; $('howbox').hidden=true; }
+function showMain(){ $('mainbtns').hidden=false; $('mpbox').hidden=true; $('settingsbox').hidden=true; $('howbox').hidden=true; $('cashscreen').hidden=true; }
 function showHow(){ $('mainbtns').hidden=true; $('mpbox').hidden=true; $('settingsbox').hidden=true; $('howbox').hidden=false; }
 // the settings screen holds the music and sound effect switches
 function syncSettings(){
@@ -3601,7 +3720,7 @@ function syncSettings(){
   $('drawbtn').textContent = 'DRAW DISTANCE: ' + RD;
 }
 function showSettings(){
-  $('mainbtns').hidden=true; $('mpbox').hidden=true; $('settingsbox').hidden=false; $('howbox').hidden=true;
+  $('mainbtns').hidden=true; $('mpbox').hidden=true; $('settingsbox').hidden=false; $('howbox').hidden=true; $('cashscreen').hidden=true;
   syncSettings();
 }
 // the world to join: PUBLIC WORLD anybody can join, or OUR WORLD, which needs its password (never saved)
@@ -3615,7 +3734,7 @@ function pickWorld(w){
 $('worldpublic').addEventListener('click', () => pickWorld('public'));
 $('worldour').addEventListener('click', () => pickWorld('our'));
 function showMP(){
-  $('mainbtns').hidden=true; $('mpbox').hidden=false; $('settingsbox').hidden=true; $('howbox').hidden=true;
+  $('mainbtns').hidden=true; $('mpbox').hidden=false; $('settingsbox').hidden=true; $('howbox').hidden=true; $('cashscreen').hidden=true;
   let saved={}; try{ saved=JSON.parse(sessionStorage.getItem('blockrealm_mp')||'{}')||{}; }catch(e){}
   if(!$('mpname').value) $('mpname').value = saved.name || '';
   if(!$('mpurl').value) $('mpurl').value = saved.url || defaultWS();
@@ -3676,7 +3795,7 @@ function connectMP(){
   ws.onclose = ()=>{
     clearTimeout(timer);
     mp.ws = null;
-    adminRole = null; spectate.id = null; adminBypass = false; doorLocks.clear(); myCoins = 0; myTools = 0;
+    adminRole = null; spectate.id = null; adminBypass = false; doorLocks.clear(); myCoins = 0; myTools = 0; plotList = [];
     if(mpMode){ mpDropped(); }
     else { mpStatus(denied || 'Could not connect. Check the address and that the server is running.'); }
   };
@@ -3684,6 +3803,7 @@ function connectMP(){
 function enterWorld(m){
   mpMode = true; mp.id = m.id;
   myTools = +m.tools || 0; myCoins = +m.coins || 0;
+  plotList = m.plots || []; survey = {a:null, b:null};
   showLoading('JOINING ' + (m.worldName || 'THE WORLD') + '...'); loadWaiting = true; loadUntil = performance.now() + 15000;
   if(m.worldName) flashHud('JOINED ' + m.worldName);
   if(m.mob) cowReceive(m.mob);
@@ -3722,8 +3842,16 @@ function onServerMessage(m){
   else if(m.type==='doorinfo'){ onDoorInfo(m); }
   else if(m.type==='lock'){ onDoorLock(m); }
   else if(m.type==='doorresult'){ onDoorResult(m); }
-  else if(m.type==='wallet'){ myCoins = +m.cash || 0; myTools = +m.tools || 0; syncTool(); syncCash(); if(shopOpen) renderShop(); if(tradeOpen) renderTrade(); }
-  else if(m.type==='notice'){ const t = String(m.text || ''); flashHud(t); if(shopOpen) shopNote(t); if(tradeOpen) $('trademsg').textContent = t; }
+  else if(m.type==='wallet'){
+    myCoins = +m.cash || 0; myTools = +m.tools || 0; syncTool(); syncCash(); if(shopOpen) renderShop();
+    if(cashVisible()){ renderCash(); mpSend({type:'cashlog'}); }
+  }
+  else if(m.type==='plots'){ plotList = m.list || []; }
+  else if(m.type==='cashlog'){ cashEntries = m.entries || []; if(cashVisible()) renderCash(); }
+  else if(m.type==='notice'){
+    const t = String(m.text || ''); flashHud(t); if(shopOpen) shopNote(t); if(cashVisible()) $('trademsg').textContent = t;
+    if(/^YOUR PLOT IS READY/.test(t)){ survey = {a:null, b:null}; if(shopOpen) renderShop(); }
+  }
   else if(m.type==='bypass'){ adminBypass = m.on === true; syncInvisBtn(); flashHud(adminBypass ? 'BREAK ANY BLOCK IS ON' : 'BREAK ANY BLOCK IS OFF'); }
   else if(m.type==='tv'){ tvSync(m.list, m.sources); }
   else if(m.type==='uploadTicket'){ const w=tvShareWait; tvShareWait=null; if(w){ if(m.token) w.ticket(m.token); else w.reject(new Error(m.error || 'not allowed')); } }
@@ -3896,7 +4024,7 @@ function tapBreakAt(sx, sy){ actAtScreen(sx, sy, () => doBreak()); }
 let breakTimer = 0;
 const tTouch = new Map();                          // touch id -> what that finger started on
 const touchesOf = e => [...e.changedTouches];
-function touchPlay(){ return isTouch && playing && !invOpen && !fridgeOpen && !codeOpen && !chatOpen && !shopOpen && !tradeOpen; }
+function touchPlay(){ return isTouch && playing && !invOpen && !fridgeOpen && !codeOpen && !chatOpen && !shopOpen; }
 // the joystick
 stick.addEventListener('touchstart', e => {
   if(!touchPlay()) return;
@@ -3955,7 +4083,7 @@ const tBtns = [
   {el:$('tlie'), down:() => tapKey('KeyZ', true)},
   {el:$('tdoor'), down:() => useDoorKey()},
   {el:$('tshop'), down:() => openShop()},
-  {el:$('ttrade'), down:() => openTrade()},
+  {el:$('ttrade'), down:() => openCashFromGame()},
   {el:$('tbag'), down:() => tapKey('KeyE', true)},
   {el:$('tchat'), down:() => tapKey('KeyT', true)},
   {el:$('tmic'), down:() => tapKey('KeyV', true)},
@@ -3984,7 +4112,7 @@ document.addEventListener('gesturestart', e => { if(isTouch) e.preventDefault();
 // the controls show only while you are playing and no panel is open; the chat and lie-down buttons only when they apply
 let touchShown = null;
 function syncTouch(){
-  const show = isTouch && playing && !invOpen && !fridgeOpen && !codeOpen && !chatOpen && !doorShown && !shopOpen && !tradeOpen;
+  const show = isTouch && playing && !invOpen && !fridgeOpen && !codeOpen && !chatOpen && !doorShown && !shopOpen;
   if(show !== touchShown){ touchShown = show; $('touch').hidden = !show; $('touchlook').hidden = !show; }
   if(!show) return;
   $('tlie').hidden = !(player.seat && player.seat.cell);
@@ -4046,7 +4174,6 @@ function pause(){
   if(codeOpen){ codeOpen=false; $('codebox').hidden=true; }
   if(doorShown){ doorShown=false; $('doorbox').hidden=true; }
   if(shopOpen){ shopOpen=false; $('shopbox').hidden=true; }
-  if(tradeOpen){ tradeOpen=false; $('tradebox').hidden=true; }
   playing=false; for(const k in keys) keys[k]=false;
   musicStop();
   saveAll();
