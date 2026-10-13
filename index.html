@@ -107,6 +107,7 @@
   #tjump{right:calc(14px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom));width:84px;height:84px;font-size:15px}
   #tbreak{right:calc(106px + env(safe-area-inset-right));bottom:calc(24px + env(safe-area-inset-bottom));width:66px;height:66px;background:rgba(150,44,36,.6)}
   #tplace{right:calc(14px + env(safe-area-inset-right));bottom:calc(106px + env(safe-area-inset-bottom));width:66px;height:66px;background:rgba(36,100,56,.6)}
+  #tdown{right:calc(14px + env(safe-area-inset-right));bottom:calc(106px + env(safe-area-inset-bottom));width:66px;height:66px;font-size:11px;background:rgba(60,60,120,.6)}
   #tlie{right:calc(106px + env(safe-area-inset-right));bottom:calc(106px + env(safe-area-inset-bottom));width:66px;height:66px;font-size:11px;background:rgba(60,60,120,.6)}
   #ttop{position:fixed;top:calc(10px + env(safe-area-inset-top));right:calc(10px + env(safe-area-inset-right));display:flex;gap:6px;pointer-events:none}
   #ttop .tbtn{position:relative;width:66px;height:40px;border-radius:9px;font-size:12px}
@@ -147,6 +148,7 @@
   <button class="tbtn" id="tbreak" type="button">BREAK</button>
   <button class="tbtn" id="tjump" type="button">JUMP</button>
   <button class="tbtn" id="tlie" type="button" hidden>LIE DOWN</button>
+  <button class="tbtn" id="tdown" type="button" hidden>DOWN</button>
   <div id="ttop">
     <button class="tbtn" id="tadmin" type="button" hidden>ADMIN</button>
     <button class="tbtn" id="tbag" type="button">BAG</button>
@@ -176,6 +178,7 @@
       <h2>SETTINGS</h2>
       <button class="btn" id="musicbtn">MUSIC: ON</button>
       <button class="btn" id="drawbtn" type="button">DRAW DISTANCE: 4</button>
+      <button class="btn" id="sensbtn" type="button">SENSITIVITY: 1x</button>
       <button class="btn" id="sound">SOUND EFFECTS: ON</button>
       <button class="btn ghost" id="setback">BACK</button>
     </div>
@@ -766,7 +769,10 @@ const isOpenDoor = b => b === DOOR_OPEN_ID || b === DOOR_TOP_OPEN_ID;
 // blocks that do not stop the player: lamps and open doors
 const NONSOLID = new Set([LAMP_ID, LAMP_TOP_ID, LAMP_OFF_ID, LAMP_OFF_TOP_ID, DOOR_OPEN_ID, DOOR_TOP_OPEN_ID]);
 // solid blocks stop the player (-1 means a chunk that is not loaded yet, which counts as solid)
-function isSolidId(b){ return b!==0 && !NONSOLID.has(b); }
+// light switches are walkable: you pass straight through them (you can still right-click them)
+const SWITCH_IDS = new Set();
+FURN_VAR.forEach((v, vi) => { if(FURN[v.t].name === 'Light Switch') for(let f = 0; f < 4; f++) SWITCH_IDS.add(idOfVar(vi, f)); });
+function isSolidId(b){ return b!==0 && !NONSOLID.has(b) && !SWITCH_IDS.has(b); }
 // opaque blocks hide the faces behind them; glass, beds and doors do not (a door is a thin panel, so the walls beside it must still show their faces)
 function isOpaqueId(b){ return b!==0 && isSolidId(b) && b!==GLASS_ID && b!==BED_FOOT_ID && b!==BED_HEAD_ID && !isDoorId(b) && !isFurn(b); }
 const SLOTS = 8;                                       // the inventory has 8 slots
@@ -1852,7 +1858,7 @@ function mul(a,b){
 }
 
 /* ---------- player, physics and controls ---------- */
-const player = {x:8.5, y:40, z:8.5, vx:0, vy:0, vz:0, yaw:0, pitch:0, onGround:false, fly:false, lastSpace:0, sleeping:false, invisible:false, bed:null, seat:null};
+const player = {x:8.5, y:40, z:8.5, vx:0, vy:0, vz:0, yaw:0, pitch:0, onGround:false, fly:false, lastSpace:0, sleeping:false, invisible:false, bed:null, seat:null, phase:0, amt:0};
 let playing=false, sel=0, target=null, worldTime=DAY_LEN*0.3;
 const keys = {};
 // how high the eyes are: lying down, sitting, or standing
@@ -1887,15 +1893,28 @@ function moveAxis(axis,d){
 }
 function physics(dt){
   const P=player;
+  // turn the pending mouse movement into view, a part each frame
+  const lk = 1 - Math.exp(-dt*24), lx = lookDX*lk, ly = lookDY*lk;
+  lookDX -= lx; lookDY -= ly;
+  P.yaw -= lx*0.0022*lookSens;
+  P.pitch = clamp(P.pitch - ly*0.0022*lookSens, -1.55, 1.55);
   let fw=(keys.KeyW?1:0)-(keys.KeyS?1:0), rt=(keys.KeyD?1:0)-(keys.KeyA?1:0);
   // flying: no gravity, Space rises, Shift descends, and you move faster; blocks still stop you
-  const sp = P.fly ? 9.0 : ((keys.ShiftLeft||keys.ShiftRight) ? 6.0 : 4.3);
-  P.vx=0; P.vz=0;
+  // sprint is its own key (Sprint on the stick), so Shift is only for going down while flying
+  const sp = P.fly ? 9.0 : ((keys.ShiftLeft||keys.ShiftRight||keys.Sprint) ? 6.0 : 4.3);
+  let tx=0, tz=0;
   if(fw||rt){
     const len=Math.hypot(fw,rt); fw/=len; rt/=len;
-    P.vx=(-Math.sin(P.yaw)*fw + Math.cos(P.yaw)*rt)*sp;
-    P.vz=(-Math.cos(P.yaw)*fw - Math.sin(P.yaw)*rt)*sp;
+    tx=(-Math.sin(P.yaw)*fw + Math.cos(P.yaw)*rt)*sp;
+    tz=(-Math.cos(P.yaw)*fw - Math.sin(P.yaw)*rt)*sp;
   }
+  // speed eases toward the wanted speed, so starting and stopping feel smooth instead of snapping
+  const ease = 1 - Math.exp(-dt*14);
+  P.vx += (tx - P.vx)*ease; P.vz += (tz - P.vz)*ease;
+  if(Math.abs(P.vx) < 0.01) P.vx = 0; if(Math.abs(P.vz) < 0.01) P.vz = 0;
+  const hs = Math.hypot(P.vx, P.vz);                                  // the stride, for the view bob
+  P.phase = (P.phase || 0) + hs*dt*1.6;
+  P.amt = (P.amt || 0) + (Math.min(1, hs/4) - (P.amt || 0))*(1 - Math.exp(-dt*10));
   if(P.fly || wallHacks){                // flying, or wall hacks (which also turn gravity off)
     P.vy =((keys.Space?1:0) - ((keys.ShiftLeft||keys.ShiftRight)?1:0)) * 8;
   } else {
@@ -2338,12 +2357,15 @@ function renderAdmin(){
 function adminAct(action, id){
   if(adminRole !== 'creator') return;
   mpSend({type:'admin', action, target:id});
+  if(action === 'tp') closeCode();             // you are going to them: the panel must not stay over the game and block your controls
   const o = mp.others.get(id);
   flashHud((action === 'tp' ? 'GOING TO ' : action === 'bring' ? 'BRINGING ' : 'MAKING JUMP ') + (o ? o.name.toUpperCase() : 'PLAYER'));
 }
 // the server tells you where to go; you land just beside the spot
 function teleportPlayer(x, y, z, exact){
   stopSpectate();
+  closeCode();                                                            // an open panel would freeze the controls after a move
+  for(const k in keys) keys[k] = false;                                   // no key or stick held from before the move keeps running
   if(exact){ player.x = x; player.y = y; player.z = z; }                  // TP: exactly where they stand
   else { player.x = x + 2; player.y = y; player.z = z; unstick(); }       // BRING: just beside the creator
   player.vx = 0; player.vy = 0; player.vz = 0;
@@ -2480,11 +2502,15 @@ addEventListener('keyup',e=>{ keys[e.code]=false; });
 addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; });
 addEventListener('wheel',e=>{ if(playing && !invOpen && !player.sleeping) selectSlot((sel+(e.deltaY>0?1:-1)+SLOTS)%SLOTS); },{passive:true});
 let lookFrom = 0;             // the mouse is read only from this moment on: right after it locks, the first movement can be a jump
+// how fast the view turns, set in SETTINGS and saved on this device
+const SENS_STEPS = [0.5, 0.75, 1, 1.5, 2];
+let lookSens = 1;
+try{ const s = +localStorage.getItem('br_sens'); if(SENS_STEPS.includes(s)) lookSens = s; }catch(e){}
+let lookDX = 0, lookDY = 0;   // mouse movement not yet turned into view: it is spread over a few frames so the look is smooth
 document.addEventListener('mousemove',e=>{
   if(!playing || document.pointerLockElement!==cv || performance.now() < lookFrom) return;
   const dx = clamp(e.movementX, -60, 60), dy = clamp(e.movementY, -60, 60);   // one event can never turn you far
-  player.yaw -= dx*0.0022;
-  player.pitch = clamp(player.pitch - dy*0.0022, -1.55, 1.55);
+  lookDX = clamp(lookDX + dx, -240, 240); lookDY = clamp(lookDY + dy, -240, 240);
 });
 function lockPointer(){
   try{ const p = cv.requestPointerLock(); if(p && p.catch) p.catch(()=>{}); }catch(e){}
@@ -2669,16 +2695,43 @@ function musicSet(on){
 /* ---------- multiplayer: a small server keeps the shared world and relays players and block changes ---------- */
 const mp = { ws:null, id:0, others:new Map(), sendT:0, dropped:false };
 const SKIN_RGB = hexRGB('#e8c39e'), LEGS_RGB = hexRGB('#2d3a5c'), FACE_RGB = hexRGB('#2a1a10');
-// each part of a player model: centre and size, relative to the feet and facing direction
-const PARTS = [
-  {c:[0,1.1,0],    s:[0.5,0.7,0.3],   col:'body'},
-  {c:[-0.44,1.1,0],s:[0.2,0.7,0.2],   col:'body'},
-  {c:[0.44,1.1,0], s:[0.2,0.7,0.2],   col:'body'},
-  {c:[-0.15,0.37,0],s:[0.28,0.75,0.3],col:'legs'},
-  {c:[0.15,0.37,0],s:[0.28,0.75,0.3], col:'legs'},
-  {c:[0,1.6,0],    s:[0.5,0.5,0.5],   col:'skin'},
-  {c:[0,1.6,-0.26],s:[0.3,0.12,0.02], col:'face'}
-];
+// jointed models: a limb turns around its joint, so a leg or an arm swings the way a real one does
+const Tr = (x,y,z) => [1,0,0,0, 0,1,0,0, 0,0,1,0, x,y,z,1];
+const Ry = a => { const c=Math.cos(a), s=Math.sin(a); return [c,0,-s,0, 0,1,0,0, s,0,c,0, 0,0,0,1]; };
+const Rx = a => { const c=Math.cos(a), s=Math.sin(a); return [1,0,0,0, 0,c,s,0, 0,-s,c,0, 0,0,0,1]; };
+const Sc = s => [s[0],0,0,0, 0,s[1],0,0, 0,0,s[2],0, 0,0,0,1];
+// one box, centred at c inside the frame M, with size s
+const boxIn = (M, c, s) => mul(mul(M, Tr(c[0],c[1],c[2])), Sc(s));
+const WHITE_RGB = [0.97,0.97,0.95], PUPIL_RGB = [0.08,0.06,0.05], SHOE_RGB = [0.1,0.09,0.1];
+// a player as [matrix, colour] for every box. o.phase (the stride) and o.amt (0 standing, 1 full walk) come from its movement
+function avatarBoxes(o){
+  const root = mul(Tr(o.x, o.y, o.z), Ry(o.yaw));
+  const sw = Math.sin(o.phase) * o.amt;                           // -1..1 through a stride
+  const body = mul(root, Tr(0, o.amt * 0.06 * Math.abs(Math.sin(o.phase)), 0));   // the body dips at each step
+  const out = [];
+  const add = (M, c, s, rgb) => out.push([boxIn(M, c, s), rgb]);
+  for(const side of [-1, 1]){                                     // legs swing from the hip, each against the other
+    const leg = mul(mul(root, Tr(side*0.14, 0.86, 0)), Rx(side < 0 ? 0.75*sw : -0.75*sw));
+    add(leg, [0,-0.43,0], [0.26,0.86,0.28], LEGS_RGB);
+    add(leg, [0,-0.8,-0.05], [0.28,0.12,0.36], SHOE_RGB);
+  }
+  add(body, [0,1.1,0], [0.5,0.7,0.3], o.rgb);                     // torso
+  for(const side of [-1, 1]){                                     // arms hang from the shoulders and swing against the legs
+    const sh = mul(body, Tr(side*0.33, 1.4, 0));
+    add(sh, [0,0,0], [0.22,0.22,0.22], o.rgb);                    // shoulder joint: it joins the arm to the body
+    const arm = mul(sh, Rx(side < 0 ? -0.6*sw : 0.6*sw));
+    add(arm, [0,-0.33,0], [0.18,0.66,0.2], o.rgb);
+    add(arm, [0,-0.7,0], [0.17,0.15,0.19], SKIN_RGB);             // hand
+  }
+  const head = mul(body, Tr(0, 1.6, 0));
+  add(head, [0,0,0], [0.5,0.5,0.5], SKIN_RGB);
+  for(const side of [-1, 1]){                                     // eyes: white with a dark pupil, on the front of the head
+    add(head, [side*0.12, 0.05, -0.256], [0.15,0.13,0.02], WHITE_RGB);
+    add(head, [side*0.12, 0.04, -0.27], [0.07,0.07,0.02], PUPIL_RGB);
+  }
+  add(head, [0,-0.13,-0.258], [0.22,0.05,0.02], FACE_RGB);        // mouth
+  return out;
+}
 function hexRGB(h){ const n=parseInt(h.slice(1),16); return [(n>>16&255)/255,(n>>8&255)/255,(n&255)/255]; }
 function partMatrix(px,py,pz,yaw,c,s){
   const cs=Math.cos(yaw), sn=Math.sin(yaw);
@@ -2929,7 +2982,7 @@ function setMove(x, y){
   const dead = 0.22;
   keys.KeyW = y < -dead; keys.KeyS = y > dead;
   keys.KeyA = x < -dead; keys.KeyD = x > dead;
-  keys.ShiftLeft = Math.hypot(x, y) > 0.9;
+  keys.Sprint = Math.hypot(x, y) > 0.9;
 }
 function stickMove(e){
   let dx = e.clientX - stickOrigin.x, dy = e.clientY - stickOrigin.y;
@@ -3000,8 +3053,8 @@ look.addEventListener('touchmove', e => {
     const dx = t.clientX - s.lx, dy = t.clientY - s.ly;
     s.lx = t.clientX; s.ly = t.clientY;
     if(!s.moved){ if(Math.hypot(t.clientX - s.sx, t.clientY - s.sy) <= 12) continue; s.moved = true; clearTimeout(s.timer); }   // small wobbles are still a tap
-    player.yaw -= dx * 0.0042;
-    player.pitch = clamp(player.pitch - dy * 0.0042, -1.55, 1.55);
+    player.yaw -= dx * 0.0042 * lookSens;
+    player.pitch = clamp(player.pitch - dy * 0.0042 * lookSens, -1.55, 1.55);
   }
 }, {passive:false});
 const lookEnd = e => {
@@ -3017,6 +3070,7 @@ look.addEventListener('touchcancel', lookEnd);
 const tBtns = [
   {el:$('tbreak'), down:() => { doBreak(); breakTimer = setInterval(() => { if(touchPlay()) doBreak(); }, 280); }, up:() => { clearInterval(breakTimer); breakTimer = 0; }},
   {el:$('tjump'), down:() => tapKey('Space', true), up:() => tapKey('Space', false)},
+  {el:$('tdown'), down:() => { keys.ShiftLeft = true; }, up:() => { keys.ShiftLeft = false; }},   // holds descent while flying
   {el:$('tlie'), down:() => tapKey('KeyZ', true)},
   {el:$('tbag'), down:() => tapKey('KeyE', true)},
   {el:$('tchat'), down:() => tapKey('KeyT', true)},
@@ -3050,6 +3104,7 @@ function syncTouch(){
   if(show !== touchShown){ touchShown = show; $('touch').hidden = !show; $('touchlook').hidden = !show; }
   if(!show) return;
   $('tlie').hidden = !(player.seat && player.seat.cell);
+  $('tdown').hidden = !player.fly;
   $('tchat').hidden = !mpMode;
   $('tmic').hidden = !mpMode;
 }
@@ -3099,6 +3154,17 @@ function pause(){
 $('settings').addEventListener('click',()=>{ sfx.init(); showSettings(); });
 $('setback').addEventListener('click',showMain);
 $('musicbtn').addEventListener('click',()=>{ sfx.init(); musicSet(!music.on); });
+// sensitivity: one button cycles through the steps for both mouse and touch
+function setSens(v){
+  lookSens = v;
+  try{ localStorage.setItem('br_sens', String(v)); }catch(e){}
+  $('sensbtn').textContent = 'SENSITIVITY: ' + v + 'x';
+}
+setSens(lookSens);
+$('sensbtn').addEventListener('click', () => {
+  const i = SENS_STEPS.indexOf(lookSens);
+  setSens(SENS_STEPS[(i + 1) % SENS_STEPS.length]);
+});
 $('drawbtn').addEventListener('click',()=>{
   sfx.init();
   RD = RD >= 6 ? 2 : RD + 1;                 // 2 to 6 chunks: fewer chunks to draw is the easiest way to keep the game smooth
@@ -3176,6 +3242,8 @@ function resize(){
   if(cv.width!==w||cv.height!==h){ cv.width=w; cv.height=h; }
   gl.viewport(0,0,cv.width,cv.height);
 }
+// the camera bobs a little with each step (only on the ground)
+function viewBob(){ return player.onGround ? player.amt * 0.035 * Math.abs(Math.sin(player.phase)) : 0; }
 function render(){
   resize();
   const dl=daylight();
@@ -3185,7 +3253,7 @@ function render(){
   gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
   // asleep, the camera sits low, as if lying on the mattress
-  const eye=[player.x, player.y+eyeNow(), player.z];
+  const eye=[player.x, player.y+eyeNow()+viewBob(), player.z];
   const d=camDir();
   const V=lookAt(eye,[eye[0]+d[0],eye[1]+d[1],eye[2]+d[2]],[0,1,0]);
   const Pm=perspective(70*Math.PI/180, cv.width/cv.height, 0.05, 600);
@@ -3239,10 +3307,9 @@ function render(){
     gl.bindVertexArray(cubeVAO);
     for(const o of mp.others.values()){
       if(o.hidden) continue;
-      for(const P of PARTS){
-        const col = P.col==='body' ? o.rgb : P.col==='legs' ? LEGS_RGB : P.col==='skin' ? SKIN_RGB : FACE_RGB;
-        gl.uniform3f(SU.uCol,col[0],col[1],col[2]);
-        gl.uniformMatrix4fv(SU.uModel,false,new Float32Array(partMatrix(o.x,o.y,o.z,o.yaw,P.c,P.s)));
+      for(const [M, rgb] of avatarBoxes(o)){
+        gl.uniform3f(SU.uCol, rgb[0], rgb[1], rgb[2]);
+        gl.uniformMatrix4fv(SU.uModel,false,new Float32Array(M));
         gl.drawArrays(gl.TRIANGLES,0,36);
       }
     }
@@ -3261,9 +3328,38 @@ function render(){
     gl.uniformMatrix4fv(SU.uVP,false,new Float32Array(VP));
     gl.uniform1f(SU.uLight,0.25+0.75*dl);
     gl.bindVertexArray(cubeVAO);
-    for(const P of COW_PARTS){
-      gl.uniform3f(SU.uCol,P.rgb[0],P.rgb[1],P.rgb[2]);
-      gl.uniformMatrix4fv(SU.uModel,false,new Float32Array(partMatrix(cow.x,cow.y,cow.z,cow.yaw,P.c,P.s)));
+    for(const [M, rgb] of cowBoxes()){
+      gl.uniform3f(SU.uCol, rgb[0], rgb[1], rgb[2]);
+      gl.uniformMatrix4fv(SU.uModel,false,new Float32Array(M));
+      gl.drawArrays(gl.TRIANGLES,0,36);
+    }
+    gl.enable(gl.CULL_FACE);
+  }
+  // the item in your hand, drawn over the world: a bare hand when the slot is empty
+  if(playing && !player.sleeping && !player.seat && !invOpen && !codeOpen && !fridgeOpen && spectate.id==null){
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.disable(gl.CULL_FACE);
+    gl.useProgram(solid);
+    gl.uniformMatrix4fv(SU.uVP,false,new Float32Array(Pm));
+    gl.uniform1f(SU.uLight,0.6+0.4*dl);
+    gl.bindVertexArray(cubeVAO);
+    const bobH = player.amt*Math.abs(Math.sin(player.phase))*0.02, sway = player.amt*Math.sin(player.phase)*0.02;
+    const hand = mul(mul(Tr(0.38+sway, -0.42-bobH, -0.6), Ry(-0.35)), Rx(0.2));
+    const parts = [
+      [boxIn(hand,[0,-0.22,0.2],[0.13,0.44,0.13]), [0.3,0.45,0.75]],      // sleeve
+      [boxIn(hand,[0,-0.02,0.04],[0.13,0.13,0.15]), SKIN_RGB]            // hand
+    ];
+    const id = HOTBAR[sel];
+    if(id === GLASS_CUP_ID || id === WATER_CUP_ID){                      // a glass: a clear case with what is in it
+      const within = id === WATER_CUP_ID ? [0.3,0.6,0.95] : [0.9,0.96,1];
+      parts.push([boxIn(hand,[0,0.12,-0.06],[0.1,0.18,0.1]), [0.72,0.86,0.92]],
+                 [boxIn(hand,[0,0.12,-0.06],[0.08,0.15,0.08]), within]);
+    } else if(id != null && BLOCKS[id]){                                  // a block: a cube in its colour
+      parts.push([boxIn(hand,[0,0.12,-0.06],[0.16,0.16,0.16]), hexRGB(BLOCKS[id].sw || '#888888')]);
+    }
+    for(const [M, rgb] of parts){
+      gl.uniform3f(SU.uCol, rgb[0], rgb[1], rgb[2]);
+      gl.uniformMatrix4fv(SU.uModel,false,new Float32Array(M));
       gl.drawArrays(gl.TRIANGLES,0,36);
     }
     gl.enable(gl.CULL_FACE);
@@ -3409,18 +3505,34 @@ function updateVoice(){
    In a multiplayer world the lowest-numbered connected player moves the cow and sends its position; everyone else
    is sent that position and shows the cow there. The server keeps the last position for players who join later. */
 const COW_WHITE = [0.95, 0.94, 0.92], COW_PINK = [0.95, 0.62, 0.66], COW_DARK = [0.12, 0.1, 0.1];
-const COW_PARTS = [
-  {c:[0, 0.75, 0],      s:[0.6, 0.5, 1.0],   rgb:COW_WHITE},   // body
-  {c:[0, 0.92, -0.66],  s:[0.44, 0.44, 0.42], rgb:COW_WHITE},  // head (the front is -z)
-  {c:[0, 0.8, -0.92],   s:[0.3, 0.2, 0.12],  rgb:COW_PINK},    // muzzle
-  {c:[-0.2, 0.25, -0.36], s:[0.16, 0.5, 0.16], rgb:COW_DARK},  // legs
-  {c:[0.2, 0.25, -0.36],  s:[0.16, 0.5, 0.16], rgb:COW_DARK},
-  {c:[-0.2, 0.25, 0.36],  s:[0.16, 0.5, 0.16], rgb:COW_DARK},
-  {c:[0.2, 0.25, 0.36],   s:[0.16, 0.5, 0.16], rgb:COW_DARK},
-  {c:[-0.24, 0.8, 0.1],   s:[0.2, 0.22, 0.3],  rgb:COW_DARK},  // spots
-  {c:[0.24, 0.86, 0.3],   s:[0.2, 0.2, 0.24],  rgb:COW_DARK}
-];
-const cow = { on:false, x:0, y:0, z:0, yaw:0, tx:0, ty:0, tz:0, tyaw:0, turn:0, timer:0, walking:true, sendT:0 };
+// the cow as [matrix, colour] for every box. Its legs move in diagonal pairs when it walks, its body dips with each step,
+// and its head drops to graze when it stands still. cow.phase and cow.amt come from how it moves
+function cowBoxes(){
+  const root = mul(Tr(cow.x, cow.y, cow.z), Ry(cow.yaw));
+  const sw = Math.sin(cow.phase) * cow.amt;
+  const body = mul(root, Tr(0, cow.amt * 0.05 * Math.abs(Math.sin(cow.phase)), 0));
+  const out = [];
+  const add = (M, c, s, rgb) => out.push([boxIn(M, c, s), rgb]);
+  add(body, [0,0.75,0], [0.6,0.5,1.0], COW_WHITE);                                // body
+  add(body, [-0.24,0.8,0.1], [0.2,0.22,0.3], COW_DARK);                           // spots
+  add(body, [0.24,0.86,0.3], [0.2,0.2,0.24], COW_DARK);
+  // legs: front-left with back-right, then front-right with back-left
+  for(const [x, z, a] of [[-0.2,-0.36, 0.42*sw], [0.2,-0.36, -0.42*sw], [-0.2,0.36, -0.42*sw], [0.2,0.36, 0.42*sw]]){
+    add(mul(mul(body, Tr(x, 0.5, z)), Rx(a)), [0,-0.25,0], [0.16,0.5,0.16], COW_DARK);
+  }
+  // head: it nods a little while walking, and drops to graze when it stands
+  const neck = mul(body, Tr(0, 0.92, -0.45));
+  const head = mul(neck, Rx(-0.9*cow.graze + 0.03*cow.amt*Math.sin(cow.phase*2)));
+  add(head, [0,0,-0.21], [0.44,0.44,0.42], COW_WHITE);
+  add(head, [0,-0.12,-0.26], [0.3,0.2,0.12], COW_PINK);                           // muzzle
+  for(const side of [-1, 1]){                                                     // eyes on the sides of the head
+    add(head, [side*0.225, 0.07, -0.12], [0.03,0.12,0.12], COW_DARK);            // socket
+    add(head, [side*0.238, 0.07, -0.12], [0.03,0.09,0.09], WHITE_RGB);           // white of the eye
+    add(head, [side*0.25, 0.07, -0.12], [0.03,0.05,0.05], PUPIL_RGB);            // pupil
+  }
+  return out;
+}
+const cow = { on:false, x:0, y:0, z:0, yaw:0, tx:0, ty:0, tz:0, tyaw:0, turn:0, timer:0, walking:true, sendT:0, goal:null, stop:0, home:null, phase:0, amt:0, graze:0, px:0, pz:0 };
 // true when this browser is the one that moves the cow
 function mobHost(){ if(!mpMode) return true; for(const id of mp.others.keys()) if(id < mp.id) return false; return true; }
 // a cow-sized box is blocked by any solid block, and by ground that is not loaded yet (it waits there)
@@ -3443,34 +3555,78 @@ function spawnCow(){
     if(isSolidId(b)){ y = yy + 1; break; }
   }
   if(y == null) return;
-  Object.assign(cow, {on:true, x, y, z, yaw:Math.random() * 6.28, tx:x, ty:y, tz:z, tyaw:0, turn:0, timer:0, walking:true});
+  Object.assign(cow, {on:true, x, y, z, yaw:Math.random() * 6.28, tx:x, ty:y, tz:z, tyaw:0, turn:0, timer:0, walking:true, goal:null, stop:0, home:null, phase:0, amt:0, graze:0, px:x, pz:z});
   cow.tyaw = cow.yaw;
   if(mpMode) mpSend({type:'mob', x, y, z, yaw:cow.yaw});
 }
 // the position the host sent: the first one places the cow, later ones are where it should go
 function cowReceive(m){
-  if(!cow.on){ cow.on = true; cow.x = cow.tx = +m.x; cow.y = cow.ty = +m.y; cow.z = cow.tz = +m.z; cow.yaw = cow.tyaw = +m.yaw; return; }
+  if(!cow.on){ cow.on = true; cow.x = cow.tx = +m.x; cow.y = cow.ty = +m.y; cow.z = cow.tz = +m.z; cow.yaw = cow.tyaw = +m.yaw; cow.px = cow.x; cow.pz = cow.z; return; }
   cow.tx = +m.x; cow.ty = +m.y; cow.tz = +m.z; cow.tyaw = +m.yaw;
+}
+// can the cow step to the spot ahead: clear space with ground under it, or one block up (a step it can take).
+// No ground means a drop, so it does not walk off edges
+function cowAhead(yaw, d){
+  const nx = cow.x - Math.sin(yaw) * d, nz = cow.z - Math.cos(yaw) * d;
+  if(cowBlocked(nx, cow.y, nz)) return !cowBlocked(nx, cow.y + 1, nz);
+  return cowBlocked(nx, cow.y - 0.05, nz);
+}
+// the legs, body and head follow how far the cow moved: a heavy stride when it walks, grazing when it stands still
+function cowAnimate(dt){
+  const mv = Math.hypot(cow.x - cow.px, cow.z - cow.pz);
+  cow.px = cow.x; cow.pz = cow.z;
+  const spd = mv / Math.max(dt, 1e-3);
+  cow.phase += mv * 5;
+  cow.amt += ((spd > 0.15 ? 1 : 0) - cow.amt) * (1 - Math.exp(-dt * 6));
+  cow.graze += ((spd > 0.15 ? 0 : 1) - cow.graze) * (1 - Math.exp(-dt * 3));
 }
 function cowUpdate(dt){
   if(!mobHost()){
-    if(cow.on){ const k = Math.min(1, dt * 8); cow.x += (cow.tx - cow.x) * k; cow.y += (cow.ty - cow.y) * k; cow.z += (cow.tz - cow.z) * k; cow.yaw = cow.tyaw; }
+    if(cow.on){
+      const k = Math.min(1, dt * 8);
+      cow.x += (cow.tx - cow.x) * k; cow.y += (cow.ty - cow.y) * k; cow.z += (cow.tz - cow.z) * k; cow.yaw = cow.tyaw;
+      cowAnimate(dt);
+    }
     return;
   }
   if(!cow.on){ spawnCow(); return; }
-  if(Math.hypot(cow.x - player.x, cow.z - player.z) > 60) return;    // far away from everyone: it waits
+  if(Math.hypot(cow.x - player.x, cow.z - player.z) > 60) return;   // far away from everyone: it waits
+  if(!cow.home) cow.home = {x:cow.x, z:cow.z};
+  if(cow.goal == null) cow.goal = cow.yaw;
+  // every few seconds the cow decides: walk on, or stand and graze for a while
   cow.timer -= dt;
-  if(cow.timer <= 0){ cow.timer = 2 + Math.random() * 4; cow.walking = Math.random() < 0.75; cow.turn = (Math.random() - 0.5) * 1.4; }
-  if(cow.walking){
-    cow.yaw += cow.turn * dt;
-    const sp = 0.9 * dt, nx = cow.x - Math.sin(cow.yaw) * sp, nz = cow.z - Math.cos(cow.yaw) * sp;
-    if(!cowBlocked(nx, cow.y, nz)){ cow.x = nx; cow.z = nz; }
-    else if(!cowBlocked(nx, cow.y + 1, nz)){ cow.x = nx; cow.z = nz; cow.y += 1; }     // a one-block step up
-    else { cow.turn = (Math.random() < 0.5 ? 1 : -1) * (1 + Math.random()); cow.timer = 0.5 + Math.random(); }   // a wall: turn away
+  if(cow.timer <= 0){
+    cow.timer = 2.5 + Math.random() * 4;
+    cow.walking = Math.random() < 0.7;
+    if(Math.hypot(cow.x - cow.home.x, cow.z - cow.home.z) > 10) cow.goal = Math.atan2(cow.x - cow.home.x, cow.z - cow.home.z);   // it has wandered far: head back home
+    else cow.goal = cow.yaw + (Math.random() - 0.5) * 2.4;          // otherwise a new heading, not far from the last
+  }
+  // it turns toward its heading slowly, the way a heavy animal does
+  let dy = cow.goal - cow.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+  const turn = 1.4 * dt;
+  cow.yaw += Math.max(-turn, Math.min(turn, dy));
+  if(cow.stop > 0) cow.stop -= dt;
+  if(cow.walking && cow.stop <= 0){
+    if(cowAhead(cow.yaw, 1.3)){
+      const nx = cow.x - Math.sin(cow.yaw) * dt, nz = cow.z - Math.cos(cow.yaw) * dt;
+      if(cowBlocked(nx, cow.y, nz)) cow.y += 1;                    // a one-block step up
+      cow.x = nx; cow.z = nz;
+    } else {
+      // something ahead: stop, and turn toward the first clear way round, starting on a random side
+      cow.stop = 0.5;
+      const side = Math.random() < 0.5 ? 1 : -1;
+      let best = null;
+      for(const o of [0.7, 1.4, 2.1, Math.PI]){
+        const a = cow.yaw + o * side;
+        if(cowAhead(a, 1.3)){ best = a; break; }
+      }
+      cow.goal = best ?? cow.yaw + Math.PI;
+    }
   }
   // gravity: it falls until something solid is underneath
   if(!cowBlocked(cow.x, cow.y - 0.05, cow.z)) cow.y -= Math.min(0.4, 8 * dt);
   else if(cowBlocked(cow.x, cow.y, cow.z)) cow.y += 0.1;                                  // pushed into a block: lift out
+  cowAnimate(dt);
   cow.tx = cow.x; cow.ty = cow.y; cow.tz = cow.z; cow.tyaw = cow.yaw;
   cow.sendT -= dt;
   if(cow.sendT <= 0){ cow.sendT = 0.2; if(mpMode) mpSend({type:'mob', x:cow.x, y:cow.y, z:cow.z, yaw:cow.yaw}); }
@@ -3497,6 +3653,11 @@ function frame(now){
     const k = 1 - Math.exp(-dt*12);
     o.x += (o.tx-o.x)*k; o.y += (o.ty-o.y)*k; o.z += (o.tz-o.z)*k;
     let d = o.tyaw - o.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); o.yaw += d*k;
+    // the stride follows how far they moved this frame
+    const mv = Math.hypot(o.x - (o.px ?? o.x), o.z - (o.pz ?? o.z)); o.px = o.x; o.pz = o.z;
+    const spd = mv / Math.max(dt, 1e-3);
+    o.phase = (o.phase || 0) + mv * 1.6;
+    o.amt = (o.amt || 0) + ((spd > 0.3 ? Math.min(1, spd / 4) : 0) - (o.amt || 0)) * (1 - Math.exp(-dt*10));
   }
   ensureChunks();
   if(lightDirty) relightLamps();
