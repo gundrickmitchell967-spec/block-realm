@@ -134,12 +134,12 @@ wss.on('connection', (ws) => {
 
     if (m.type === 'edit') {
       if (!isInt(m.x) || !isInt(m.y) || !isInt(m.z) || !isInt(m.id)) return;
-      if (m.y < 0 || m.y >= CH || m.id < 0 || m.id > 9) return;
+      if (m.y < 0 || m.y >= CH || m.id < 0 || m.id > 13) return;   // 0 = air, 1-13 = block types (see BLOCKS in index.html)
       const dx = m.x + 0.5 - p.x, dy = m.y + 0.5 - p.y, dz = m.z + 0.5 - p.z;
       if (dx * dx + dy * dy + dz * dz > REACH * REACH) return;   // too far from where this player last was
       edits.set(m.x + ',' + m.y + ',' + m.z, m.id);
       scheduleSave();
-      broadcast({ type: 'edit', x: m.x, y: m.y, z: m.z, id: m.id, by: id });
+      broadcast({ type: 'edit', x: m.x, y: m.y, z: m.z, id: m.id, by: id }, id);
       sendTo(p, { type: 'edit', x: m.x, y: m.y, z: m.z, id: m.id, by: id });
       return;
     }

@@ -12,10 +12,28 @@
   #cross:before{left:8px;top:0;width:2px;height:18px}
   #cross:after{top:8px;left:0;height:2px;width:18px}
   #hud{position:fixed;left:12px;top:10px;font-size:13px;line-height:1.55;text-shadow:1px 1px 0 #000;pointer-events:none}
-  #hotbar{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:6px}
-  .slot{position:relative;width:54px;height:54px;border:3px solid #3a3f4c;background:rgba(10,12,18,.55);display:flex;align-items:flex-end;justify-content:center;font-size:11px;padding-bottom:3px;box-sizing:border-box;cursor:pointer}
-  .slot i{position:absolute;left:6px;right:6px;top:6px;bottom:18px;border:2px solid rgba(0,0,0,.45)}
+  #hotbar{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:4px;max-width:100vw}
+  .slot{position:relative;width:76px;height:72px;border:3px solid #3a3f4c;background:rgba(10,12,18,.6);box-sizing:border-box;cursor:pointer;flex:0 0 auto;overflow:hidden}
+  .slot i{position:absolute;left:5px;right:5px;top:14px;bottom:26px;border:2px solid rgba(0,0,0,.45);background-repeat:no-repeat;image-rendering:pixelated}
+  .slot i.none{background:#1b1f2a}
+  .slot .key{position:absolute;left:3px;top:1px;font:bold 11px 'Courier New',monospace;color:#fff;text-shadow:1px 1px 0 #000}
+  .slot .nm{position:absolute;left:0;right:0;bottom:0;height:24px;padding:2px 2px 0;box-sizing:border-box;overflow:hidden;background:rgba(0,0,0,.35);font:bold 10px/12px 'Courier New',monospace;color:#fff;text-shadow:1px 1px 0 #000;text-align:center;word-break:break-word}
+  .slot .xbtn{position:absolute;top:1px;right:1px;width:18px;height:18px;padding:0;font:bold 13px/16px 'Courier New',monospace;background:#7a2a2a;color:#fff;border:1px solid #000;cursor:pointer;z-index:2}
   .slot.sel{border-color:#ffe066}
+  #inv{position:fixed;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;background:rgba(8,12,22,.86)}
+  #invbox{width:min(800px,100%);max-height:100%;overflow:auto;box-sizing:border-box;padding:14px 16px;background:#161b26;border:3px solid #5b6578;display:flex;flex-direction:column;gap:8px;align-items:center}
+  #invbox h2{margin:0;font-size:22px;letter-spacing:.14em;text-shadow:2px 2px 0 #000}
+  .hint{margin:0;font-size:13px;line-height:1.5;color:#c9d1e0;text-align:center}
+  .lbl{align-self:flex-start;font:bold 12px 'Courier New',monospace;letter-spacing:.1em;color:#ffe066}
+  #invslots{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+  #catalog{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;width:100%}
+  .cat{display:flex;align-items:center;gap:8px;padding:6px;background:#222938;border:2px solid #3a3f4c;color:#fff;font:13px 'Courier New',monospace;text-align:left;cursor:pointer}
+  .cat:hover,.cat:focus-visible{border-color:#ffe066;outline:none}
+  .cat i{flex:0 0 auto;width:36px;height:36px;border:2px solid rgba(0,0,0,.45);background-repeat:no-repeat;image-rendering:pixelated}
+  .cat small{color:#ffe066;font-size:11px}
+  #invmsg{min-height:1.4em;margin:0;font-size:13px;color:#ffe066;text-align:center}
+  #selname{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);white-space:nowrap;font:bold 14px 'Courier New',monospace;color:#fff;text-shadow:1px 1px 0 #000,0 0 6px rgba(0,0,0,.6);background:rgba(0,0,0,.35);padding:2px 8px;pointer-events:none}
+  @media (max-width:700px){ #hotbar{gap:2px} .slot{width:44px;height:50px} .slot i{left:3px;right:3px;top:12px;bottom:3px} .slot .nm{display:none} .slot .key{font-size:9px} #selname{bottom:66px;font-size:12px} }
   #menu{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(8,12,22,.72);padding:20px;text-align:center}
   #menu h1{font-size:clamp(28px,7vw,52px);letter-spacing:.14em;margin:0 0 6px;text-shadow:3px 3px 0 #000}
   #menu p{max-width:560px;line-height:1.6;color:#d4d9e6;font-size:14px;margin:6px 0}
@@ -26,11 +44,11 @@
   #mpbox input{font:14px 'Courier New',monospace;width:100%;box-sizing:border-box;padding:10px;background:#11151f;color:#fff;border:2px solid #5b6578}
   #mpstatus{min-height:1.5em;color:#ffb3a7;font-size:13px;margin:0}
   .tag{position:fixed;left:0;top:0;transform:translate(-50%,-100%);font-size:12px;background:rgba(0,0,0,.55);padding:2px 6px;white-space:nowrap;pointer-events:none;text-shadow:1px 1px 0 #000}
-  #chatlog{position:fixed;left:12px;bottom:80px;width:min(440px,70vw);max-height:260px;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;pointer-events:none;font-size:13px;line-height:1.35;text-shadow:1px 1px 0 #000;overflow:hidden}
+  #chatlog{position:fixed;left:12px;bottom:96px;width:min(440px,70vw);max-height:260px;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;pointer-events:none;font-size:13px;line-height:1.35;text-shadow:1px 1px 0 #000;overflow:hidden}
   .cl{background:rgba(0,0,0,.35);padding:2px 6px;word-break:break-word}
   .cl.sys{color:#c9d1e0;font-style:italic}
   .cl b{color:#ffe066;font-weight:bold}
-  #chatin{position:fixed;left:12px;bottom:80px;width:min(440px,70vw);box-sizing:border-box;font:14px 'Courier New',monospace;padding:8px;background:rgba(10,12,18,.9);color:#fff;border:2px solid #ffe066}
+  #chatin{position:fixed;left:12px;bottom:96px;width:min(440px,70vw);box-sizing:border-box;font:14px 'Courier New',monospace;padding:8px;background:rgba(10,12,18,.9);color:#fff;border:2px solid #ffe066}
   [hidden]{display:none!important}
 </style>
 </head>
@@ -41,6 +59,7 @@
 <div id="tags"></div>
 <div id="chatlog" aria-live="polite"></div>
 <input id="chatin" maxlength="120" hidden aria-label="Chat message" placeholder="Type a message, Enter to send, Esc to cancel">
+<div id="selname"></div>
 <div id="hotbar"></div>
 <div id="menu">
   <h1>BLOCK REALM</h1>
@@ -61,8 +80,23 @@
   </div>
   <p>Mouse: look &middot; WASD: move &middot; Space: jump &middot; Shift: run<br>
      Left click: break a block &middot; Right click: place the selected block<br>
-     1-9 or mouse wheel: choose a block &middot; M: sound on or off &middot; Esc: pause and save<br>
+     1-8 or mouse wheel: choose an inventory slot &middot; E: block catalog (add or remove blocks)<br>
+     Right click a door: open or close it<br>
+     M: sound on or off &middot; Esc: pause and save<br>
      Double-tap Space: fly (Space up, Shift down) &middot; T: chat with other players (multiplayer)</p>
+</div>
+
+<div id="inv" hidden>
+  <div id="invbox" role="dialog" aria-labelledby="invtitle">
+    <h2 id="invtitle">BLOCK CATALOG</h2>
+    <p class="hint">Click a block below to add it to your inventory. Click a slot to pick it, then add a block to replace it. Click the red × to remove a block.<br>Press <b>E</b> or <b>Esc</b> to close.</p>
+    <div class="lbl">YOUR INVENTORY (8 SLOTS)</div>
+    <div id="invslots"></div>
+    <div class="lbl">ALL BLOCKS</div>
+    <div id="catalog"></div>
+    <p id="invmsg" role="status"></p>
+    <button class="btn" id="invclose" type="button">CLOSE (E)</button>
+  </div>
 </div>
 
 <script>
@@ -86,9 +120,23 @@ const BLOCKS = [null,
   {name:'Sand',        top:7, side:7, bot:7, sw:'#dccf96'},
   {name:'Planks',      top:8, side:8, bot:8, sw:'#b08450'},
   {name:'Cobblestone', top:9, side:9, bot:9, sw:'#6e6e72'},
-  {name:'Brick',       top:10,side:10,bot:10,sw:'#96463a'}
+  {name:'Brick',       top:10,side:10,bot:10,sw:'#96463a'},
+  {name:'Glass',       top:11,side:11,bot:11,sw:'#9fd8e6'},   // id 10: see-through
+  {name:'Lamp',        top:12,side:12,bot:12,sw:'#ffd76a'},   // id 11: always bright
+  {name:'Door',        top:13,side:13,bot:13,sw:'#7a4f2a'},   // id 12: right-click to open
+  {name:'Open door',   top:13,side:13,bot:13,sw:'#b98a55'}    // id 13: thin panel you can walk through
 ];
-const HOTBAR = [1,2,3,4,5,6,7,8,9];
+const GLASS_ID = 10, LAMP_ID = 11, DOOR_ID = 12, DOOR_OPEN_ID = 13;
+// solid blocks stop the player (an open door does not, and -1 means a chunk that is not loaded yet)
+function isSolidId(b){ return b!==0 && b!==DOOR_OPEN_ID; }
+// opaque blocks hide the faces behind them; glass lets you see through it
+function isOpaqueId(b){ return isSolidId(b) && b!==GLASS_ID; }
+const SLOTS = 8;                                       // the inventory has 8 slots
+const CATALOG = [1,2,3,4,5,6,7,8,9,10,11,12];          // every block a player can carry (the open door is a state, not an item)
+const DEFAULT_INV = [1,2,3,7,10,11,12,8];              // Grass, Dirt, Stone, Planks, Glass, Lamp, Door, Cobblestone
+const HOTBAR = DEFAULT_INV.slice();                    // the 8 inventory slots; null = empty slot (filled in by loadInv)
+const KEYS = ['1','2','3','4','5','6','7','8'];
+const KEYMAP = {Digit1:0,Digit2:1,Digit3:2,Digit4:3,Digit5:4,Digit6:5,Digit7:6,Digit8:7};
 // the six faces: outward normal n, two in-plane axes t1 and t2, and the face's base brightness
 const FACES = [
   {n:[ 1,0,0], t1:[0,1,0], t2:[0,0,1], b:0.75},
@@ -176,7 +224,7 @@ function getBlock(wx,wy,wz){
   if(!ch) return -1;                          // not loaded yet: treated as solid
   return ch.data[(wx-cx*CS) + (wz-cz*CS)*CS + wy*CS*CS];
 }
-function solidAt(wx,wy,wz){ return getBlock(wx,wy,wz)!==0; }
+function solidAt(wx,wy,wz){ return isSolidId(getBlock(wx,wy,wz)); }
 // records the change even when the chunk is not loaded, so it is applied when the chunk is generated later
 function setBlock(wx,wy,wz,t){
   if(wy<0 || wy>=CH) return false;
@@ -195,17 +243,35 @@ function markDirty(cx,cz){ const c=chunks.get(chunkKey(cx,cz)); if(c) c.dirty=tr
 
 /* ---------- meshing: faces are only made where a block meets air, with simple corner shading ---------- */
 function tileOf(t,f){ const b=BLOCKS[t]; return f===2 ? b.top : f===3 ? b.bot : b.side; }
+// vertex layout: position (3), texture coordinates (2), tile (1), shade (1), glow (1) = 8 floats
 function buildMesh(ch){
   const bx=ch.cx*CS, bz=ch.cz*CS;
-  const V=[], I=[];
-  let nv=0;
+  const V=[], I=[];        // solid and lamp faces
+  const GV=[], GI=[];      // glass faces, drawn in a second, see-through pass
+  let nv=0, gnv=0;
   for(let y=0;y<CH;y++) for(let z=0;z<CS;z++) for(let x=0;x<CS;x++){
     const t=ch.data[x+z*CS+y*CS*CS]; if(!t) continue;
     const wx=bx+x, wz=bz+z;
+    if(t===DOOR_OPEN_ID){
+      // an open door is a thin panel across the middle of the block, visible from both sides
+      const b0=nv;
+      for(const [qx,qy] of [[0,0],[1,0],[1,1],[0,1]]){
+        V.push(x+qx, y+qy, z+0.5, qx, qy, BLOCKS[DOOR_ID].top, 1, 0);
+        nv++;
+      }
+      I.push(b0,b0+1,b0+2, b0,b0+2,b0+3, b0,b0+2,b0+1, b0,b0+3,b0+2);
+      continue;
+    }
+    const isGlass = t===GLASS_ID, isLamp = t===LAMP_ID;
     for(let f=0;f<6;f++){
       const F=FACES[f], n=F.n, t1=F.t1, t2=F.t2;
-      if(getBlock(wx+n[0], y+n[1], wz+n[2]) !== 0) continue;
-      const tile=tileOf(t,f), ao=[0,0,0,0], base=nv;
+      const nb = getBlock(wx+n[0], y+n[1], wz+n[2]);
+      if(isGlass){ if(nb===GLASS_ID || isOpaqueId(nb)) continue; }   // glass against glass or a wall: hidden
+      else if(isOpaqueId(nb)) continue;
+      const tile=tileOf(t,f), ao=[0,0,0,0];
+      const glow = isLamp ? 1 : 0;
+      const base = isGlass ? gnv : nv;
+      const OUT = isGlass ? GV : V, IDX = isGlass ? GI : I;
       for(let k=0;k<4;k++){
         const a=(k===1||k===2)?1:0, b=(k>=2)?1:0;
         const s1=a?1:-1, s2=b?1:-1;
@@ -213,23 +279,25 @@ function buildMesh(ch){
         const sd2=solidAt(wx+n[0]+s2*t2[0], y+n[1]+s2*t2[1], wz+n[2]+s2*t2[2]);
         const sdc=solidAt(wx+n[0]+s1*t1[0]+s2*t2[0], y+n[1]+s1*t1[1]+s2*t2[1], wz+n[2]+s1*t1[2]+s2*t2[2]);
         ao[k] = (sd1&&sd2) ? 0 : 3 - ((sd1?1:0)+(sd2?1:0)+(sdc?1:0));
+        if(isLamp) ao[k] = 3;                      // lamps are not darkened by their corners
         const px=x+(n[0]>0?1:0)+a*t1[0]+b*t2[0];
         const py=y+(n[1]>0?1:0)+a*t1[1]+b*t2[1];
         const pz=z+(n[2]>0?1:0)+a*t1[2]+b*t2[2];
-        V.push(px,py,pz, a,b, tile, F.b*AO_B[ao[k]]);
-        nv++;
+        const shade = isLamp ? 1 : F.b*AO_B[ao[k]];
+        OUT.push(px,py,pz, a,b, tile, shade, glow);
+        if(isGlass) gnv++; else nv++;
       }
       // the cross of the in-plane axes must point out of the block, or the face is wound the wrong way
       const cr=[t1[1]*t2[2]-t1[2]*t2[1], t1[2]*t2[0]-t1[0]*t2[2], t1[0]*t2[1]-t1[1]*t2[0]];
       const flip = (cr[0]*n[0]+cr[1]*n[1]+cr[2]*n[2]) < 0;
       const tris = (ao[0]+ao[2] > ao[1]+ao[3]) ? [[1,2,3],[1,3,0]] : [[0,1,2],[0,2,3]];
       for(const tr of tris){
-        if(flip) I.push(base+tr[0], base+tr[2], base+tr[1]);
-        else     I.push(base+tr[0], base+tr[1], base+tr[2]);
+        if(flip) IDX.push(base+tr[0], base+tr[2], base+tr[1]);
+        else     IDX.push(base+tr[0], base+tr[1], base+tr[2]);
       }
     }
   }
-  return {v:new Float32Array(V), i:new Uint32Array(I)};
+  return {v:new Float32Array(V), i:new Uint32Array(I), gv:new Float32Array(GV), gi:new Uint32Array(GI)};
 }
 
 /* ---------- WebGL 2 setup ---------- */
@@ -254,29 +322,32 @@ layout(location=0) in vec3 aPos;
 layout(location=1) in vec2 aUV;
 layout(location=2) in float aTile;
 layout(location=3) in float aShade;
+layout(location=4) in float aGlow;
 uniform mat4 uVP;
 uniform vec3 uOff;
 uniform vec3 uCam;
-out vec2 vUV; out float vTile; out float vShade; out float vDist;
+out vec2 vUV; out float vTile; out float vShade; out float vDist; out float vGlow;
 void main(){
   vec3 w = aPos + uOff;
   gl_Position = uVP * vec4(w,1.0);
-  vUV = aUV; vTile = aTile; vShade = aShade;
+  vUV = aUV; vTile = aTile; vShade = aShade; vGlow = aGlow;
   vDist = distance(w, uCam);
 }`, `#version 300 es
 precision highp float;
-in vec2 vUV; in float vTile; in float vShade; in float vDist;
+in vec2 vUV; in float vTile; in float vShade; in float vDist; in float vGlow;
 uniform sampler2D uAtlas;
 uniform float uLight;
+uniform float uAlpha;
 uniform vec3 uSky;
 uniform float uFogStart; uniform float uFogEnd;
 out vec4 o;
 void main(){
   vec2 tile = vec2(mod(vTile,4.0), floor(vTile/4.0));
   vec2 uvA = (tile + 0.03125 + clamp(vUV,0.0,1.0)*0.9375) / 4.0;
-  vec3 c = texture(uAtlas, uvA).rgb * vShade * uLight;
+  float lit = mix(uLight, 1.0, vGlow);          // lamps ignore the time of day
+  vec3 c = texture(uAtlas, uvA).rgb * vShade * lit;
   float f = clamp((vDist - uFogStart) / (uFogEnd - uFogStart), 0.0, 1.0);
-  o = vec4(mix(c, uSky, f), 1.0);
+  o = vec4(mix(c, uSky, f), uAlpha);
 }`);
 const line = program(`#version 300 es
 layout(location=0) in vec3 aPos;
@@ -286,7 +357,7 @@ precision highp float;
 uniform vec4 uCol; out vec4 o;
 void main(){ o = uCol; }`);
 const U = {};
-for(const n of ['uVP','uOff','uCam','uLight','uSky','uFogStart','uFogEnd','uAtlas']) U[n]=gl.getUniformLocation(prog,n);
+for(const n of ['uVP','uOff','uCam','uLight','uSky','uFogStart','uFogEnd','uAtlas','uAlpha']) U[n]=gl.getUniformLocation(prog,n);
 const LU = {uVP:gl.getUniformLocation(line,'uVP'), uOff:gl.getUniformLocation(line,'uOff'), uCol:gl.getUniformLocation(line,'uCol')};
 
 // other players are drawn as plain shaded boxes: one program, one unit cube reused for every part
@@ -328,14 +399,18 @@ gl.bindVertexArray(null);
 
 // the block atlas, drawn procedurally on a 64x64 canvas
 function makeAtlasCanvas(){
-  const c=document.createElement('canvas'); c.width=64; c.height=64;
+  // 128x128 atlas, 4x4 tiles of 32 pixels. Each pattern is written at 16x16 and scaled up 2x,
+  // then fine grain is added so the texture reads as more detailed than before.
+  const c=document.createElement('canvas'); c.width=128; c.height=128;
   const x=c.getContext('2d');
   const g=(n,base,amp)=>base+(n-0.5)*amp;
+  const cb=v=>Math.max(0,Math.min(255,v|0));
   function tile(i,fn){
-    const ox=(i%4)*16, oy=Math.floor(i/4)*16;
-    for(let py=0;py<16;py++) for(let px=0;px<16;px++){
-      const col=fn(px,py);
-      x.fillStyle=`rgb(${col[0]|0},${col[1]|0},${col[2]|0})`;
+    const ox=(i%4)*32, oy=Math.floor(i/4)*32;
+    for(let py=0;py<32;py++) for(let px=0;px<32;px++){
+      const col=fn(px>>1,py>>1);
+      const grain=(rnd2(px,py,40+i)-0.5)*10;
+      x.fillStyle=`rgb(${cb(col[0]+grain)},${cb(col[1]+grain)},${cb(col[2]+grain)})`;
       x.fillRect(ox+px,oy+py,1,1);
     }
   }
@@ -356,12 +431,22 @@ function makeAtlasCanvas(){
                     if(mortar) return [92,90,94]; return [g(cell,120,40)+(n-0.5)*12,g(cell,120,40)+(n-0.5)*12,g(cell,124,40)+(n-0.5)*12]; }); // cobblestone
   tile(10,(px,py)=>{ const row=py>>2, mortar=(py%4===0)||((px+(row%2)*4)%8===0); const n=rnd2(px,py,15);
                     if(mortar) return [206,198,190]; return [g(n,150,30),g(n,70,16),g(n,56,14)]; });                // brick
+  tile(11,(px,py)=>{ const edge=px<=1||px>=14||py<=1||py>=14; const shine=((px+py)%9===0);                         // glass
+                    if(edge) return [205,236,246]; if(shine) return [226,246,252]; return [150,206,224]; });
+  tile(12,(px,py)=>{ const d=Math.hypot(px-7.5,py-7.5); if(px<=1||px>=14||py<=1||py>=14) return [70,62,56];       // lamp
+                    if(d<3) return [255,252,224]; if(d<5.5) return [255,226,140]; return [222,168,80]; });
+  tile(13,(px,py)=>{ const n=rnd2(px,py,30); const seam=px%8===0;                                                 // wooden door
+                    const panel=((px>=2&&px<=6)||(px>=9&&px<=13))&&((py>=2&&py<=6)||(py>=9&&py<=13));
+                    if(px>=11&&px<=12&&py>=7&&py<=8) return [230,190,70];
+                    const base=seam?[90,56,30]:[134,88,48], d=panel?-14:0;
+                    return [g(n,base[0],14)+d, g(n,base[1],12)+d, g(n,base[2],10)+d]; });
   return c;
 }
 const atlasTex = gl.createTexture();
 gl.bindTexture(gl.TEXTURE_2D, atlasTex);
 gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, makeAtlasCanvas());
+const ATLAS_CV = makeAtlasCanvas();
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ATLAS_CV);
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -382,22 +467,35 @@ gl.enableVertexAttribArray(0);
 gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0);
 gl.bindVertexArray(null);
 
+const VERTEX_BYTES = 32;   // 8 floats per vertex
+function bindChunkAttribs(){
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,3,gl.FLOAT,false,VERTEX_BYTES,0);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1,2,gl.FLOAT,false,VERTEX_BYTES,12);
+  gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2,1,gl.FLOAT,false,VERTEX_BYTES,20);
+  gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3,1,gl.FLOAT,false,VERTEX_BYTES,24);
+  gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4,1,gl.FLOAT,false,VERTEX_BYTES,28);
+}
 function uploadChunk(ch, m){
+  // solid faces
   if(!ch.vao){ ch.vao=gl.createVertexArray(); ch.vbo=gl.createBuffer(); ch.ibo=gl.createBuffer(); }
   gl.bindVertexArray(ch.vao);
   gl.bindBuffer(gl.ARRAY_BUFFER, ch.vbo); gl.bufferData(gl.ARRAY_BUFFER, m.v, gl.STATIC_DRAW);
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ch.ibo); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, m.i, gl.STATIC_DRAW);
-  const S=28;
-  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,3,gl.FLOAT,false,S,0);
-  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1,2,gl.FLOAT,false,S,12);
-  gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2,1,gl.FLOAT,false,S,20);
-  gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3,1,gl.FLOAT,false,S,24);
-  gl.bindVertexArray(null);
+  bindChunkAttribs();
   ch.count = m.i.length;
+  // glass faces
+  if(!ch.gvao){ ch.gvao=gl.createVertexArray(); ch.gvbo=gl.createBuffer(); ch.gibo=gl.createBuffer(); }
+  gl.bindVertexArray(ch.gvao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, ch.gvbo); gl.bufferData(gl.ARRAY_BUFFER, m.gv, gl.STATIC_DRAW);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ch.gibo); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, m.gi, gl.STATIC_DRAW);
+  bindChunkAttribs();
+  ch.gcount = m.gi.length;
+  gl.bindVertexArray(null);
 }
 function disposeChunk(ch){
   if(ch.vao){ gl.deleteVertexArray(ch.vao); gl.deleteBuffer(ch.vbo); gl.deleteBuffer(ch.ibo); }
-  ch.vao=null;
+  if(ch.gvao){ gl.deleteVertexArray(ch.gvao); gl.deleteBuffer(ch.gvbo); gl.deleteBuffer(ch.gibo); }
+  ch.vao=null; ch.gvao=null;
 }
 
 /* ---------- matrices (column-major) ---------- */
@@ -434,7 +532,7 @@ function camDir(){
 function collides(x,y,z){
   const x0=Math.floor(x-PW), x1=Math.floor(x+PW-1e-4), z0=Math.floor(z-PW), z1=Math.floor(z+PW-1e-4);
   const y0=Math.floor(y), y1=Math.floor(y+PH-1e-4);
-  for(let yy=y0;yy<=y1;yy++) for(let zz=z0;zz<=z1;zz++) for(let xx=x0;xx<=x1;xx++) if(getBlock(xx,yy,zz)!==0) return true;
+  for(let yy=y0;yy<=y1;yy++) for(let zz=z0;zz<=z1;zz++) for(let xx=x0;xx<=x1;xx++) if(isSolidId(getBlock(xx,yy,zz))) return true;
   return false;
 }
 function moveAxis(axis,d){
@@ -510,30 +608,147 @@ function doBreak(){
   mpSend({type:'edit', x:h.x, y:h.y, z:h.z, id:0});
   flashHud('BROKE '+BLOCKS[h.id].name.toUpperCase());
 }
+// true if the box of block (x,y,z) overlaps the player
+function overlapsPlayer(x,y,z){
+  return x+1>player.x-PW && x<player.x+PW && z+1>player.z-PW && z<player.z+PW && y+1>player.y && y<player.y+PH;
+}
+// right-clicking a door opens it, or closes it again; a door will not close on the player
+function toggleDoor(h){
+  const closing = h.id===DOOR_OPEN_ID;   // an open door is what gets closed
+  if(closing && overlapsPlayer(h.x,h.y,h.z)) { flashHud('STEP OUT OF THE DOORWAY TO CLOSE IT'); return; }
+  const nid = closing ? DOOR_ID : DOOR_OPEN_ID;
+  setBlock(h.x,h.y,h.z,nid);
+  sfx.placeBlock(DOOR_ID);
+  mpSend({type:'edit', x:h.x, y:h.y, z:h.z, id:nid});
+  flashHud(closing ? 'DOOR CLOSED' : 'DOOR OPEN');
+}
 function doPlace(){
   const h=raycast(6); if(!h) return;
+  if(h.id===DOOR_ID || h.id===DOOR_OPEN_ID){ toggleDoor(h); return; }
+  const id=HOTBAR[sel];
+  if(id==null){ flashHud('EMPTY SLOT: press E to choose a block'); return; }
   const x=h.x+h.nx, y=h.y+h.ny, z=h.z+h.nz;
   if(getBlock(x,y,z)!==0) return;
   // never place a block inside the player
-  if(x+1>player.x-PW && x<player.x+PW && z+1>player.z-PW && z<player.z+PW && y+1>player.y && y<player.y+PH) return;
-  setBlock(x,y,z,HOTBAR[sel]);
-  sfx.placeBlock(HOTBAR[sel]);
-  mpSend({type:'edit', x, y, z, id:HOTBAR[sel]});
+  if(overlapsPlayer(x,y,z)) return;
+  setBlock(x,y,z,id);
+  sfx.placeBlock(id);
+  mpSend({type:'edit', x, y, z, id});
+}
+// ---------- inventory: 8 named slots along the bottom; E opens the block catalog ----------
+const INV_KEY = 'blockrealm_inv_v1';
+const ATLAS_URL = ATLAS_CV.toDataURL();      // the texture atlas as an image, used for the block icons
+// shows one 32-pixel tile of the atlas; a 400% background means each tile fills a quarter of the icon box
+function setIcon(el, t){
+  el.style.backgroundImage = 'url(' + ATLAS_URL + ')';
+  el.style.backgroundSize = '400% 400%';
+  el.style.backgroundPosition = ((t % 4) * 100 / 3) + '% ' + (Math.floor(t / 4) * 100 / 3) + '%';
+}
+function saveInv(){ try{ localStorage.setItem(INV_KEY, JSON.stringify(HOTBAR)); }catch(e){} }
+function loadInv(){
+  try{
+    const a = JSON.parse(localStorage.getItem(INV_KEY) || 'null');
+    if(Array.isArray(a) && a.length === SLOTS && a.every(v => v === null || (Number.isInteger(v) && v >= 1 && v <= 12))){
+      HOTBAR.splice(0, SLOTS, ...a); return;
+    }
+  }catch(e){}
+  HOTBAR.splice(0, SLOTS, ...DEFAULT_INV);
+}
+// one inventory slot; inInv adds the remove button used in the catalog
+function slotEl(i, inInv){
+  const id = HOTBAR[i];
+  const d = document.createElement('div');
+  d.className = 'slot';
+  d.title = id == null ? 'Empty slot' : BLOCKS[id].name;
+  const ic = document.createElement('i');
+  if(id == null) ic.className = 'none'; else setIcon(ic, BLOCKS[id].top);
+  d.appendChild(ic);
+  const k = document.createElement('span'); k.className = 'key'; k.textContent = KEYS[i]; d.appendChild(k);
+  const nm = document.createElement('span'); nm.className = 'nm';
+  nm.textContent = id == null ? 'EMPTY' : BLOCKS[id].name;
+  d.appendChild(nm);
+  if(inInv && id != null){
+    const x = document.createElement('button');
+    x.className = 'xbtn'; x.type = 'button'; x.textContent = '×'; x.title = 'Remove ' + BLOCKS[id].name;
+    x.onclick = e => { e.stopPropagation(); removeFromInv(i); };
+    d.appendChild(x);
+  }
+  d.onclick = () => { selectSlot(i); if(inInv) renderInv(); };
+  return d;
+}
+function markSel(){
+  document.querySelectorAll('#hotbar .slot').forEach((el, k) => el.classList.toggle('sel', k === sel));
+  document.querySelectorAll('#invslots .slot').forEach((el, k) => el.classList.toggle('sel', k === sel));
 }
 function selectSlot(i){
-  sel=i;
-  document.querySelectorAll('.slot').forEach((el,k)=>el.classList.toggle('sel',k===i));
+  sel = i;
+  markSel();
+  $('selname').textContent = HOTBAR[i] == null
+    ? 'Selected: empty slot   (key ' + KEYS[i] + ')'
+    : 'Selected: ' + BLOCKS[HOTBAR[i]].name + '   (key ' + KEYS[i] + ')';
 }
 function buildHotbar(){
-  const hb=$('hotbar'); hb.innerHTML='';
-  HOTBAR.forEach((id,i)=>{
-    const d=document.createElement('div'); d.className='slot';
-    d.innerHTML='<i style="background:'+BLOCKS[id].sw+'"></i>'+(i+1);
-    d.onclick=()=>selectSlot(i);
-    hb.appendChild(d);
-  });
+  const hb = $('hotbar'); hb.innerHTML = '';
+  for(let i = 0; i < SLOTS; i++) hb.appendChild(slotEl(i, false));
   selectSlot(sel);
 }
+function invMsg(text){ $('invmsg').textContent = text; }
+function renderInv(){
+  const slots = $('invslots'); slots.innerHTML = '';
+  for(let i = 0; i < SLOTS; i++) slots.appendChild(slotEl(i, true));
+  markSel();
+  const cat = $('catalog'); cat.innerHTML = '';
+  for(const id of CATALOG){
+    const b = document.createElement('button');
+    b.className = 'cat'; b.type = 'button'; b.title = BLOCKS[id].name;
+    const ic = document.createElement('i'); setIcon(ic, BLOCKS[id].top); b.appendChild(ic);
+    const t = document.createElement('span'); t.textContent = BLOCKS[id].name;
+    const at = HOTBAR.indexOf(id);
+    if(at >= 0){ const s = document.createElement('small'); s.textContent = '  key ' + KEYS[at]; t.appendChild(s); }
+    b.appendChild(t);
+    b.onclick = () => addToInv(id);
+    cat.appendChild(b);
+  }
+}
+function addToInv(id){
+  const name = BLOCKS[id].name;
+  if(HOTBAR.includes(id)){ invMsg(name + ' is already in your inventory'); return; }
+  let i = HOTBAR.indexOf(null);
+  if(i < 0){
+    i = sel;   // inventory is full: the selected slot gives way
+    invMsg('Inventory full: ' + (HOTBAR[i] == null ? 'empty' : BLOCKS[HOTBAR[i]].name) + ' replaced with ' + name);
+  } else invMsg('Added ' + name + ' to key ' + KEYS[i]);
+  HOTBAR[i] = id;
+  saveInv(); refreshInv();
+}
+function removeFromInv(i){
+  if(HOTBAR[i] == null) return;
+  invMsg('Removed ' + BLOCKS[HOTBAR[i]].name);
+  HOTBAR[i] = null;
+  saveInv(); refreshInv();
+}
+function refreshInv(){
+  buildHotbar();
+  if(invOpen) renderInv();
+}
+let invOpen = false;
+function openInv(){
+  if(!playing || chatOpen || invOpen) return;
+  invOpen = true;
+  for(const k in keys) keys[k] = false;
+  try{ document.exitPointerLock(); }catch(e){}
+  $('inv').hidden = false;
+  invMsg('');
+  renderInv();
+  $('invclose').focus();
+}
+function closeInv(){
+  if(!invOpen) return;
+  invOpen = false;
+  $('inv').hidden = true;
+  lockPointer();
+}
+$('invclose').addEventListener('click', closeInv);
 let flashT=0;
 function flashHud(text){ $('tm').textContent=text; flashT=2.0; }
 
@@ -541,7 +756,12 @@ addEventListener('keydown',e=>{
   if(chatOpen) return;                          // while typing in chat, keys belong to the chat box
   if(e.code==='Space') e.preventDefault();
   if(e.code==='KeyM' && !e.repeat && !(document.activeElement && document.activeElement.tagName==='INPUT')){ toggleSound(); return; }
+  if(invOpen){                                  // the catalog is open: only E or Esc do anything
+    if((e.code==='KeyE' || e.code==='Escape') && !e.repeat){ e.preventDefault(); closeInv(); }
+    return;
+  }
   if(e.code==='KeyT' && playing && mpMode && !e.repeat){ e.preventDefault(); openChat(); return; }
+  if(e.code==='KeyE' && playing && !e.repeat){ e.preventDefault(); openInv(); return; }
   if(!playing){ if(e.code==='Escape') pause(); return; }
   if(e.code==='Escape'){ pause(); return; }
   if(e.code==='Space' && !e.repeat){
@@ -554,11 +774,11 @@ addEventListener('keydown',e=>{
     player.lastSpace = now;
   }
   keys[e.code]=true;
-  if(e.code.startsWith('Digit')){ const n=+e.code.slice(5); if(n>=1&&n<=9) selectSlot(n-1); }
+  if(e.code in KEYMAP){ selectSlot(KEYMAP[e.code]); }
 });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
 addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; });
-addEventListener('wheel',e=>{ if(playing) selectSlot((sel+(e.deltaY>0?1:-1)+HOTBAR.length)%HOTBAR.length); },{passive:true});
+addEventListener('wheel',e=>{ if(playing && !invOpen) selectSlot((sel+(e.deltaY>0?1:-1)+SLOTS)%SLOTS); },{passive:true});
 document.addEventListener('mousemove',e=>{
   if(!playing || document.pointerLockElement!==cv) return;
   player.yaw -= e.movementX*0.0022;
@@ -568,14 +788,14 @@ function lockPointer(){
   try{ const p = cv.requestPointerLock(); if(p && p.catch) p.catch(()=>{}); }catch(e){}
 }
 cv.addEventListener('mousedown',e=>{
-  if(!playing) return;
+  if(!playing || invOpen) return;
   if(document.pointerLockElement!==cv) lockPointer();   // a click after a join or a pause captures the mouse
   if(document.pointerLockElement!==cv && e.button!==0) return;
   if(e.button===0) doBreak(); else if(e.button===2) doPlace();
 });
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('pointerlockchange',()=>{
-  if(!document.pointerLockElement && playing && !chatOpen) pause();   // releasing the mouse to type in chat is not a pause
+  if(!document.pointerLockElement && playing && !chatOpen && !invOpen) pause();   // releasing the mouse to type in chat or use the catalog is not a pause
 });
 
 /* ---------- sound: every effect is synthesised with Web Audio, so there are no sound files to load ---------- */
@@ -839,6 +1059,7 @@ function start(){
 }
 function pause(){
   if(!playing && !$('menu').hidden) return;
+  if(invOpen){ invOpen=false; $('inv').hidden=true; }
   playing=false; for(const k in keys) keys[k]=false;
   saveAll();
   menuState();
@@ -931,12 +1152,26 @@ function render(){
   gl.uniform1f(U.uFogStart,(RD-1)*CS);
   gl.uniform1f(U.uFogEnd,(RD+0.6)*CS);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,atlasTex); gl.uniform1i(U.uAtlas,0);
+  // opaque pass
+  gl.uniform1f(U.uAlpha,1.0);
   for(const ch of chunks.values()){
     if(!ch.count || !ch.vao) continue;
     gl.uniform3f(U.uOff,ch.cx*CS,0,ch.cz*CS);
     gl.bindVertexArray(ch.vao);
     gl.drawElements(gl.TRIANGLES,ch.count,gl.UNSIGNED_INT,0);
   }
+  // glass pass: blended, drawn after the opaque blocks, no depth writes
+  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+  gl.depthMask(false);
+  gl.uniform1f(U.uAlpha,0.45);
+  for(const ch of chunks.values()){
+    if(!ch.gcount || !ch.gvao) continue;
+    gl.uniform3f(U.uOff,ch.cx*CS,0,ch.cz*CS);
+    gl.bindVertexArray(ch.gvao);
+    gl.drawElements(gl.TRIANGLES,ch.gcount,gl.UNSIGNED_INT,0);
+  }
+  gl.depthMask(true);
+  gl.disable(gl.BLEND);
   // the outline of the block being looked at
   if(target){
     gl.disable(gl.CULL_FACE);
@@ -1026,6 +1261,7 @@ let saveT=0;
 
 /* ---------- start-up ---------- */
 loadEdits();
+loadInv();
 buildHotbar();
 {
   // generate the chunks under the player before the first frame, so there is ground to stand on
@@ -1055,7 +1291,10 @@ window.VOX = {
   chunks, player, keys, getBlock, setBlock, raycast, start, pause, selectSlot,
   get playing(){ return playing; }, get target(){ return target; },
   doBreak, doPlace, daylight, get worldTime(){ return worldTime; }, set worldTime(v){ worldTime=v; },
-  BLOCKS, HOTBAR, mp, sfx, connectMP, toggleSound, enterWorld,
+  BLOCKS, HOTBAR, KEYS, CATALOG, DEFAULT_INV, GLASS_ID, LAMP_ID, DOOR_ID, DOOR_OPEN_ID, toggleDoor, overlapsPlayer,
+  openInv, closeInv, addToInv, removeFromInv, get invOpen(){ return invOpen; },
+  get sel(){ return sel; }, get selLabel(){ return $('selname').textContent; },
+  mp, sfx, connectMP, toggleSound, enterWorld,
   get mpMode(){ return mpMode; }, get remotes(){ return mp.others.size; },
   // loudest sample in the last analyser window, to confirm that sound is actually produced
   sfxPeak(){
