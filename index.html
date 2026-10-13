@@ -56,6 +56,13 @@
   #codeask,#codeok{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%}
   #codein{font:20px 'Courier New',monospace;width:100%;box-sizing:border-box;padding:10px;text-align:center;letter-spacing:.3em;background:#11151f;color:#fff;border:2px solid #5b6578}
   #codemsg{min-height:1.4em;margin:0;font-size:13px;color:#ffb3a7;text-align:center}
+  #doorbox{position:fixed;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;background:rgba(8,12,22,.86)}
+  #doorpanel{display:flex;flex-direction:column;align-items:center;gap:10px;width:min(380px,100%);max-height:100%;overflow:auto;box-sizing:border-box;padding:18px;background:#161b26;border:3px solid #5b6578}
+  #doorpanel h2{margin:0;font-size:20px;letter-spacing:.14em;text-shadow:2px 2px 0 #000}
+  #doorowner,#doorvisit{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%}
+  #doorpanel input{font:16px 'Courier New',monospace;width:100%;box-sizing:border-box;padding:10px;text-align:center;letter-spacing:.2em;background:#11151f;color:#fff;border:2px solid #5b6578}
+  #doormsg{min-height:1.4em;margin:0;font-size:13px;color:#ffe066;text-align:center}
+  #tdoor{right:calc(184px + env(safe-area-inset-right));bottom:calc(24px + env(safe-area-inset-bottom));width:66px;height:66px;font-size:11px;background:rgba(120,90,40,.6)}
   .btn:focus-visible,.slot:focus-visible{outline:3px solid #ffe066;outline-offset:2px}
   #mpbox{display:flex;flex-direction:column;align-items:center;gap:8px;width:260px;max-width:80vw}
   #mpbox input{font:14px 'Courier New',monospace;width:100%;box-sizing:border-box;padding:10px;background:#11151f;color:#fff;border:2px solid #5b6578}
@@ -156,6 +163,7 @@
   <button class="tbtn" id="tbreak" type="button">BREAK</button>
   <button class="tbtn" id="tjump" type="button">JUMP</button>
   <button class="tbtn" id="tlie" type="button" hidden>LIE DOWN</button>
+    <button class="tbtn" id="tdoor" type="button" hidden>DOOR</button>
   <button class="tbtn" id="tdown" type="button" hidden>DOWN</button>
   <div id="ttop">
     <button class="tbtn" id="tadmin" type="button" hidden>ADMIN</button>
@@ -205,11 +213,12 @@
     <p class="help">Mouse: look &middot; WASD: move &middot; Space: jump &middot; Shift: run<br>
        Left click: break a block &middot; Right click: place the selected block<br>
        1-8 or mouse wheel: choose an inventory slot &middot; E: block catalog (add or remove blocks)<br>
-       Right click a door: open or close it &middot; Right click a bed at night: go to sleep<br>
+       Right click a door: open or close it &middot; Q at a door: set or open its password (multiplayer)<br>
+       Right click a bed at night: go to sleep<br>
        M: sound effects on or off &middot; Esc: pause and save<br>
        Double-tap Space: fly (Space up, Shift down) &middot; T: chat with other players (multiplayer)<br>
        V: talk to players close to you (voice chat, multiplayer)</p>
-    <p class="help touchhelp" hidden>Touch: drag the circle on the left to walk, drag anywhere else to look.<br>Tap anywhere to place the selected block there. Hold still on a block to break it. BREAK breaks the block in the middle of the screen. JUMP jumps. BAG opens the block catalog. MENU pauses.</p>
+    <p class="help touchhelp" hidden>Touch: drag the circle on the left to walk, drag anywhere else to look.<br>Tap anywhere to place the selected block there. Hold still on a block to break it. BREAK breaks the block in the middle of the screen. JUMP jumps. BAG opens the block catalog. DOOR (shown when you look at a door) sets or opens its password. MENU pauses.</p>
   </div>
 </div>
 
@@ -225,6 +234,8 @@
       <p class="hint" id="adminrole"></p>
       <button class="btn" id="invisbtn" type="button">INVISIBLE: OFF</button>
       <button class="btn" id="wallbtn" type="button">WALL HACKS: OFF</button>
+      <button class="btn" id="bypassbtn" type="button" hidden>BREAK ANY BLOCK: OFF</button>
+      <p class="hint" id="bypasshint" hidden>Game creator only. While this is on you can break any player's blocks and open any locked door.</p>
       <p class="hint">Wall hacks let you fly straight through walls and floors, and see other players through them.</p>
       <p class="hint">While you are invisible, other players cannot see you or your name, and you do not appear on their screens.</p>
       <div id="adminpanel" hidden>
@@ -240,6 +251,24 @@
     </div>
     <p id="codemsg" role="status"></p>
     <button class="btn" id="codeclose" type="button">CLOSE (P)</button>
+  </div>
+</div>
+
+<div id="doorbox" hidden>
+  <div id="doorpanel" role="dialog" aria-labelledby="doortitle">
+    <h2 id="doortitle">DOOR</h2>
+    <p class="hint" id="doorinfo"></p>
+    <div id="doorowner" hidden>
+      <input id="doorpw" type="password" maxlength="16" autocomplete="new-password" aria-label="New password for this door" placeholder="New password">
+      <button class="btn" id="doorset" type="button">SET PASSWORD</button>
+      <button class="btn" id="doorclear" type="button">REMOVE PASSWORD</button>
+    </div>
+    <div id="doorvisit" hidden>
+      <input id="doorunlock" type="password" maxlength="16" autocomplete="off" aria-label="Password for this door" placeholder="Password">
+      <button class="btn" id="doorgo" type="button">UNLOCK</button>
+    </div>
+    <p id="doormsg" role="status"></p>
+    <button class="btn" id="doorclose" type="button">CLOSE (Q)</button>
   </div>
 </div>
 
@@ -2301,6 +2330,7 @@ function doBreak(){
 }
 // right-clicking a door opens it, or closes it again; a door will not close on the player
 function toggleDoor(h){
+  if(doorIsLocked(h)){ askDoor(h.x, lowerHalfY(h), h.z); flashHud('THE DOOR IS LOCKED: TYPE ITS PASSWORD'); return; }
   const open = isOpenDoor(h.id);
   const p = partnerOf(h.x,h.y,h.z,h.id);
   if(open && (overlapsPlayer(h.x,h.y,h.z) || (p && overlapsPlayer(p[0],p[1],p[2])))) { flashHud('STEP OUT OF THE DOORWAY TO CLOSE IT'); return; }
@@ -2591,6 +2621,129 @@ function closeInv(){
 }
 $('invclose').addEventListener('click', closeInv);
 
+/* ---------- doors with passwords: whoever placed a door can give it a password (press Q at the door, or tap DOOR on a touch screen) ---------- */
+// this browser's player id: random, kept on this device, and sent when joining, so the server knows whose blocks and doors are whose
+let myPid = null;
+function playerId(){
+  if(myPid) return myPid;
+  try{ const s = localStorage.getItem('br_pid'); if(s && /^[A-Za-z0-9_-]{16,64}$/.test(s)){ myPid = s; return myPid; } }catch(e){}
+  const bytes = new Uint8Array(16); crypto.getRandomValues(bytes);
+  myPid = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  try{ localStorage.setItem('br_pid', myPid); }catch(e){}
+  return myPid;
+}
+// the locked doors the server has told us about, keyed by the lower half of each door: { ok } (ok: this player may open it)
+const doorLocks = new Map();
+let doorShown = false;     // the door panel is open
+let doorInfo = null;       // the door the panel is about: { x, y, z, placed, mine, locked, ok }
+let doorWait = null;       // the door we asked the server about, until it answers
+let adminBypass = false;   // the game creator's BREAK ANY BLOCK is on
+const doorKeyOf = (x, y, z) => x + ',' + y + ',' + z;
+// the lower half of a door block (its upper half is one block higher)
+const lowerHalfY = h => (h.id === DOOR_TOP_ID || h.id === DOOR_TOP_OPEN_ID) ? h.y - 1 : h.y;
+// a locked door this player may not open right now (the creator with BREAK ANY BLOCK on may)
+function doorIsLocked(h){
+  const L = doorLocks.get(doorKeyOf(h.x, lowerHalfY(h), h.z));
+  return !!L && !L.ok && !adminBypass;
+}
+function askDoor(x, y, z){
+  if(!mpMode){ flashHud('DOOR PASSWORDS NEED A MULTIPLAYER SERVER'); return; }
+  doorWait = doorKeyOf(x, y, z);
+  mpSend({type:'doorinfo', x, y, z});
+}
+// Q (or the DOOR button): asks about the door you are looking at
+function useDoorKey(){
+  if(!playing) return;
+  const h = raycast(6);
+  if(!h || !isDoorId(h.id)){ flashHud('LOOK AT A DOOR, THEN PRESS Q'); return; }
+  askDoor(h.x, lowerHalfY(h), h.z);
+}
+function onDoorInfo(m){
+  const key = doorKeyOf(+m.x, +m.y, +m.z);
+  if(m.placed && m.locked) doorLocks.set(key, {ok: !!m.ok}); else doorLocks.delete(key);
+  const shownHere = doorShown && doorInfo && doorKeyOf(doorInfo.x, doorInfo.y, doorInfo.z) === key;
+  if(!shownHere && doorWait !== key) return;      // an answer nobody is waiting for
+  doorWait = null;
+  doorInfo = {x:+m.x, y:+m.y, z:+m.z, placed:!!m.placed, mine:!!m.mine, locked:!!m.locked, ok:!!m.ok};
+  if(doorShown) renderDoor(); else showDoorPanel();
+}
+// the server changed a door's lock (for everyone; mine and ok are for this player)
+function onDoorLock(m){
+  const key = doorKeyOf(+m.x, +m.y, +m.z);
+  if(m.locked) doorLocks.set(key, {ok: !!m.ok}); else doorLocks.delete(key);
+  if(doorShown && doorInfo && doorKeyOf(doorInfo.x, doorInfo.y, doorInfo.z) === key){
+    Object.assign(doorInfo, {locked: !!m.locked, mine: !!m.mine, ok: !!m.ok});
+    renderDoor();
+  }
+}
+function onDoorResult(m){
+  const msg = String(m.msg || '');
+  if(doorShown) $('doormsg').textContent = msg; else flashHud(msg);
+}
+function showDoorPanel(){
+  doorShown = true;
+  for(const k in keys) keys[k] = false;
+  try{ document.exitPointerLock(); }catch(e){}
+  $('doorpw').value = ''; $('doorunlock').value = ''; $('doormsg').textContent = '';
+  $('doorbox').hidden = false;
+  renderDoor();
+  const d = doorInfo;
+  (d && d.placed && d.mine ? $('doorpw') : (d && d.locked && !d.ok) ? $('doorunlock') : $('doorclose')).focus();
+}
+function renderDoor(){
+  const d = doorInfo;
+  if(!d) return;
+  let text;
+  if(!d.placed) text = 'Only a door that a player placed can have a password.';
+  else if(!d.locked) text = d.mine ? 'This is your door. It has no password, so anyone can open it. Type a password below to lock it.' : 'This door has no password, so anyone can open it.';
+  else if(d.mine) text = 'This is your door. It has a password, and only players who type it can open it. Type a new password to change it, or remove it.';
+  else if(d.ok) text = 'This door has a password, and you know it, so you can open it.';
+  else text = 'This door is locked. Type its password to open it.';
+  $('doorinfo').textContent = text;
+  $('doorowner').hidden = !(d.placed && d.mine);
+  $('doorclear').hidden = !d.locked;
+  $('doorset').textContent = d.locked ? 'CHANGE PASSWORD' : 'SET PASSWORD';
+  $('doorvisit').hidden = !(d.placed && d.locked && !d.ok);
+}
+function closeDoor(){
+  if(!doorShown) return;
+  doorShown = false;
+  $('doorbox').hidden = true;
+  $('doorpw').value = ''; $('doorunlock').value = '';
+  if(playing) lockPointer();
+}
+function doorSet(){
+  if(!doorInfo || !doorInfo.mine) return;
+  const pass = $('doorpw').value.trim();
+  if(!pass){ $('doormsg').textContent = 'Type a password first.'; return; }
+  mpSend({type:'doorlock', x:doorInfo.x, y:doorInfo.y, z:doorInfo.z, action:'set', pass});
+  $('doorpw').value = ''; $('doormsg').textContent = 'Saving...';
+}
+function doorClear(){
+  if(!doorInfo || !doorInfo.mine) return;
+  mpSend({type:'doorlock', x:doorInfo.x, y:doorInfo.y, z:doorInfo.z, action:'clear'});
+  $('doormsg').textContent = 'Removing...';
+}
+function doorGo(){
+  if(!doorInfo) return;
+  const pass = $('doorunlock').value.trim();
+  if(!pass){ $('doormsg').textContent = 'Type the password first.'; return; }
+  mpSend({type:'unlock', x:doorInfo.x, y:doorInfo.y, z:doorInfo.z, pass});
+  $('doorunlock').value = ''; $('doormsg').textContent = 'Checking...';
+}
+$('doorset').addEventListener('click', doorSet);
+$('doorclear').addEventListener('click', doorClear);
+$('doorgo').addEventListener('click', doorGo);
+$('doorclose').addEventListener('click', closeDoor);
+for(const id of ['doorpw', 'doorunlock']){
+  $(id).addEventListener('keydown', e=>{
+    e.stopPropagation();                          // typing a password must not move the player
+    if(e.key === 'Enter'){ e.preventDefault(); (id === 'doorpw' ? doorSet : doorGo)(); }
+    else if(e.key === 'Escape'){ e.preventDefault(); closeDoor(); }
+  });
+}
+$('bypassbtn').addEventListener('click', ()=>{ if(adminRole === 'creator') mpSend({type:'bypass', on: !adminBypass}); });
+
 /* ---------- private panel: press P in the game, enter the code, then toggle invisibility ---------- */
 // the code is checked in the browser only; it keeps casual visitors out of the panel, it is not a real lock
 let codeOpen = false;
@@ -2601,6 +2754,7 @@ let wallHacks = false;                    // true: other players are drawn throu
 function syncInvisBtn(){
   $('invisbtn').textContent = 'INVISIBLE: ' + (player.invisible ? 'ON' : 'OFF');
   $('wallbtn').textContent = 'WALL HACKS: ' + (wallHacks ? 'ON' : 'OFF');
+  $('bypassbtn').textContent = 'BREAK ANY BLOCK: ' + (adminBypass ? 'ON' : 'OFF');
 }
 function openCode(){
   if(codeOpen || chatOpen || invOpen || fridgeOpen || player.sleeping) return;
@@ -2626,6 +2780,7 @@ function syncAdmin(){
   $('codetitle').textContent = a ? (creator ? 'GAME CREATOR' : 'GAME DESIGNER') : 'ADMIN CODE';
   $('adminrole').textContent = a ? 'Your admin powers are unlocked.' : '';
   $('adminpanel').hidden = !creator;
+  $('bypassbtn').hidden = !creator; $('bypasshint').hidden = !creator;
   $('tadmin').hidden = !a;
   syncInvisBtn();
   renderAdmin();
@@ -2778,6 +2933,10 @@ addEventListener('keydown',e=>{
     if(e.code==='Escape' && !e.repeat){ e.preventDefault(); closeCode(); }
     return;
   }
+  if(doorShown){                                  // the door panel is open: only Q or Esc does anything (typing in its boxes is left alone)
+    if(((e.code==='KeyQ' && !(document.activeElement && document.activeElement.tagName==='INPUT')) || e.code==='Escape') && !e.repeat){ e.preventDefault(); closeDoor(); }
+    return;
+  }
   if(e.code==='Space') e.preventDefault();
   if(e.code==='KeyM' && !e.repeat && !(document.activeElement && document.activeElement.tagName==='INPUT')){ toggleSound(); return; }
   if(invOpen){                                  // the catalog is open: only E or Esc do anything
@@ -2802,6 +2961,7 @@ addEventListener('keydown',e=>{
   }
   if(e.code==='KeyE' && !e.repeat){ e.preventDefault(); openInv(); return; }
   if(e.code==='KeyP' && !e.repeat){ e.preventDefault(); openCode(); return; }
+  if(e.code==='KeyQ' && !e.repeat){ e.preventDefault(); useDoorKey(); return; }
   if(e.code==='Space' && !e.repeat){
     // two quick taps of Space switch flying on or off
     const now=performance.now();
@@ -2836,7 +2996,7 @@ function lockPointer(){
   try{ const p = cv.requestPointerLock(); if(p && p.catch) p.catch(()=>{}); }catch(e){}
 }
 cv.addEventListener('mousedown',e=>{
-  if(!playing || invOpen || codeOpen || fridgeOpen || player.sleeping) return;
+  if(!playing || invOpen || codeOpen || fridgeOpen || doorShown || player.sleeping) return;
   if(document.pointerLockElement!==cv) lockPointer();   // a click after a join or a pause captures the mouse
   if(document.pointerLockElement!==cv && e.button!==0) return;
   if(e.button===0) doBreak(); else if(e.button===2) doPlace();
@@ -2844,7 +3004,7 @@ cv.addEventListener('mousedown',e=>{
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('pointerlockchange',()=>{
   if(document.pointerLockElement) lookFrom = performance.now() + 150;
-  if(!document.pointerLockElement && playing && !chatOpen && !invOpen && !codeOpen && !fridgeOpen) pause();   // releasing the mouse to type in chat or use the catalog is not a pause
+  if(!document.pointerLockElement && playing && !chatOpen && !invOpen && !codeOpen && !fridgeOpen && !doorShown) pause();   // releasing the mouse to type in chat or use the catalog is not a pause
 });
 
 /* ---------- sound: every effect is synthesised with Web Audio, so there are no sound files to load ---------- */
@@ -3139,7 +3299,7 @@ function connectMP(){
   const timer = setTimeout(()=>{
     if(!mpMode){ mpStatus('No answer from the server. Check the address and that the server is running.'); try{ ws.close(); }catch(e){} }
   }, 6000);
-  ws.onopen = ()=>{ ws.send(JSON.stringify({type:'hello', name, world, password})); };
+  ws.onopen = ()=>{ ws.send(JSON.stringify({type:'hello', name, world, password, pid: playerId()})); };
   ws.onmessage = ev=>{
     let m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
     if(m.type==='denied'){ denied = m.msg || 'Could not join.'; mpStatus(denied); return; }
@@ -3149,7 +3309,7 @@ function connectMP(){
   ws.onclose = ()=>{
     clearTimeout(timer);
     mp.ws = null;
-    adminRole = null; spectate.id = null;
+    adminRole = null; spectate.id = null; adminBypass = false; doorLocks.clear();
     if(mpMode){ mpDropped(); }
     else { mpStatus(denied || 'Could not connect. Check the address and that the server is running.'); }
   };
@@ -3174,6 +3334,9 @@ function enterWorld(m){
   start();
   tvSync(m.tvs, m.sources);                      // the TVs already on in this world start for you too
   adminRole = null; player.invisible = false;   // the server forgets admin powers when you reconnect
+  adminBypass = false;
+  doorLocks.clear();
+  for(const L of m.locks || []) doorLocks.set(doorKeyOf(L.x, L.y, L.z), {ok: !!L.ok});
 }
 function onServerMessage(m){
   if(m.type==='join'){ removeRemote(m.id); addRemote(m); renderAdmin(); }
@@ -3185,6 +3348,11 @@ function onServerMessage(m){
   else if(m.type==='mob'){ cowReceive(m); }
   else if(m.type==='jump'){ if(player.onGround && playing){ player.vy = 8.6; if(sfx.ctx) sfx.jump(); } }
   else if(m.type==='rtc'){ voiceSignal(m.from, m.data); }
+  else if(m.type==='fix'){ applyBlock(+m.x, +m.y, +m.z, +m.id); if(m.msg) flashHud(String(m.msg)); }   // the server refused a change: the block goes back
+  else if(m.type==='doorinfo'){ onDoorInfo(m); }
+  else if(m.type==='lock'){ onDoorLock(m); }
+  else if(m.type==='doorresult'){ onDoorResult(m); }
+  else if(m.type==='bypass'){ adminBypass = m.on === true; syncInvisBtn(); flashHud(adminBypass ? 'BREAK ANY BLOCK IS ON' : 'BREAK ANY BLOCK IS OFF'); }
   else if(m.type==='tv'){ tvSync(m.list, m.sources); }
   else if(m.type==='uploadTicket'){ const w=tvShareWait; tvShareWait=null; if(w){ if(m.token) w.ticket(m.token); else w.reject(new Error(m.error || 'not allowed')); } }
   else if(m.type==='chat'){ addChatLine(String(m.name||'Player'), String(m.text||''), 'chat'); }
@@ -3412,6 +3580,7 @@ const tBtns = [
   {el:$('tjump'), down:() => tapKey('Space', true), up:() => tapKey('Space', false)},
   {el:$('tdown'), down:() => { keys.ShiftLeft = true; }, up:() => { keys.ShiftLeft = false; }},   // holds descent while flying
   {el:$('tlie'), down:() => tapKey('KeyZ', true)},
+  {el:$('tdoor'), down:() => useDoorKey()},
   {el:$('tbag'), down:() => tapKey('KeyE', true)},
   {el:$('tchat'), down:() => tapKey('KeyT', true)},
   {el:$('tmic'), down:() => tapKey('KeyV', true)},
@@ -3440,13 +3609,14 @@ document.addEventListener('gesturestart', e => { if(isTouch) e.preventDefault();
 // the controls show only while you are playing and no panel is open; the chat and lie-down buttons only when they apply
 let touchShown = null;
 function syncTouch(){
-  const show = isTouch && playing && !invOpen && !fridgeOpen && !codeOpen && !chatOpen;
+  const show = isTouch && playing && !invOpen && !fridgeOpen && !codeOpen && !chatOpen && !doorShown;
   if(show !== touchShown){ touchShown = show; $('touch').hidden = !show; $('touchlook').hidden = !show; }
   if(!show) return;
   $('tlie').hidden = !(player.seat && player.seat.cell);
   $('tdown').hidden = !player.fly;
   $('tchat').hidden = !mpMode;
   $('tmic').hidden = !mpMode;
+  $('tdoor').hidden = !(target && isDoorId(target.id));
 }
 
 /* ---------- full screen: a button on the main menu ---------- */
@@ -3496,6 +3666,7 @@ function pause(){
   if(!playing && !$('menu').hidden) return;
   if(invOpen){ invOpen=false; $('inv').hidden=true; }
   if(codeOpen){ codeOpen=false; $('codebox').hidden=true; }
+  if(doorShown){ doorShown=false; $('doorbox').hidden=true; }
   playing=false; for(const k in keys) keys[k]=false;
   musicStop();
   saveAll();
@@ -4059,6 +4230,8 @@ buildHotbar();
   for(let i=0;i<40;i++){ remesh(); }
 }
 addEventListener('beforeunload',saveAll);
+addEventListener('pagehide',saveAll);
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') saveAll(); });
 menuState();
 try{
   if(sessionStorage.getItem('blockrealm_notice')){

@@ -46,7 +46,64 @@ const ADMIN_CODES = [
 ];
 const authTries = new Map();     // client address -> { n: wrong tries so far, until: time the lock ends }
 const pwTries = new Map();       // client address -> the same, for world passwords
+const doorTries = new Map();     // client address -> the same, for typing a door's password
 function codeDigest(s) { return crypto.createHash('sha256').update(String(s)).digest(); }
+
+// ---- who placed each block, and doors with passwords ----
+// a player's id (sent by their browser) is kept only as a hash, so the saved world holds no raw ids. A browser that sends
+// no usable id still plays, but its blocks cannot be claimed again after it reconnects.
+function pidFor(s) {
+  if (typeof s === 'string' && /^[A-Za-z0-9_-]{16,64}$/.test(s)) return codeDigest('pid:' + s).toString('hex');
+  return crypto.randomBytes(16).toString('hex');
+}
+// the game creator's BREAK ANY BLOCK switch: while it is on, the creator may break any block and open any locked door
+function canBypass(p) { return p.role === 'creator' && p.bypass === true; }
+function isDoorBlock(id) { return id >= 12 && id <= 15; }
+// two halves of one door that open or shut into each other (lower 12/13, upper 14/15)
+function sameDoorHalf(a, b) { return isDoorBlock(a) && isDoorBlock(b) && (a <= 13) === (b <= 13); }
+// the keys of the two blocks of a door, given its lower block [x,y,z]
+function lockKeys(lo) { return [lo.join(','), [lo[0], lo[1] + 1, lo[2]].join(',')]; }
+// the lower block [x,y,z] of the door that (x,y,z) is part of, if a player placed that door; otherwise null
+function doorPair(w, x, y, z) {
+  const id = w.edits.get(x + ',' + y + ',' + z);
+  const lo = (id === 14 || id === 15) ? [x, y - 1, z] : (id === 12 || id === 13) ? [x, y, z] : null;
+  if (!lo) return null;
+  const below = w.edits.get(lo.join(',')), above = w.edits.get(lockKeys(lo)[1]);
+  return (below === 12 || below === 13) && (above === 14 || above === 15) ? lo : null;
+}
+function passDigest(salt, pass) { return crypto.createHash('sha256').update(salt + ':' + pass).digest('hex'); }
+function cleanPass(s) { return typeof s === 'string' ? s.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 16) : ''; }
+// may this player open the lock: its owner, someone who typed the password, or the creator with BREAK ANY BLOCK on
+function lockOpenFor(p, lock) { return lock.owner === p.pid || lock.allowed.has(p.pid) || canBypass(p); }
+// what one player is told about a door's lock: whether it is locked, whether it is theirs, and whether they may open it
+function lockMsg(w, q, lo, lock) {
+  return { type: 'lock', x: lo[0], y: lo[1], z: lo[2], locked: !!lock, mine: w.owners.get(lo.join(',')) === q.pid, ok: !!lock && lockOpenFor(q, lock) };
+}
+function announceLock(w, lo, lock) {
+  for (const q of players.values()) if (q.world === w && q.joined) sendTo(q, lockMsg(w, q, lo, lock));
+}
+// a door's password is removed, or the door is broken: the lock is gone for everyone
+function dropLock(w, key) {
+  const L = w.locks.get(key);
+  if (!L) return;
+  for (const k of L.keys) w.locks.delete(k);
+  announceLock(w, L.lower, null);
+}
+// the locks a player sees when they join
+function lockList(w, p) {
+  const out = [], seen = new Set();
+  for (const L of w.locks.values()) {
+    if (seen.has(L)) continue;
+    seen.add(L);
+    out.push({ x: L.lower[0], y: L.lower[1], z: L.lower[2], ok: lockOpenFor(p, L) });
+  }
+  return out;
+}
+// the server will not allow a change: the block goes back to how it was, and the player is told why
+function fixBlock(p, w, key, msg) {
+  const [x, y, z] = key.split(',').map(Number);
+  sendTo(p, { type: 'fix', x, y, z, id: w.edits.get(key) || 0, msg });
+}
 function roleForCode(code) {
   const d = codeDigest(code);
   let role = null;
@@ -59,12 +116,21 @@ function roleForCode(code) {
 for (const w of Object.values(WORLDS)) {
   w.passDigest = w.password ? codeDigest(w.password) : null;
   w.edits = new Map();
+  w.owners = new Map();    // "x,y,z" -> hashed id of the player who placed the block there (land has no owner)
+  w.locks = new Map();     // "x,y,z" of each half of a door with a password -> the lock (both halves share one lock)
   w.mob = null;
   w.clock = { t: DAY_LEN * 0.3, at: Date.now() };    // the world time is w.clock.t at the moment w.clock.at; it then runs on in real time
   w.saveTimer = null;
   w.loaded = false;                                 // only a world that loaded cleanly is ever saved, so a bad file is never overwritten
   try {
-    for (const [k, v] of JSON.parse(fs.readFileSync(w.file, 'utf8'))) w.edits.set(k, v);
+    const data = JSON.parse(fs.readFileSync(w.file, 'utf8'));
+    const list = Array.isArray(data) ? data : data.edits;          // older saves were just the list of edits
+    for (const [k, v, o] of list) { w.edits.set(k, v); if (o !== undefined) w.owners.set(k, o); }
+    for (const L of Array.isArray(data) ? [] : (data.locks || [])) {
+      const lo = L.lower.split(',').map(Number);
+      const lock = { lower: lo, owner: L.owner, salt: L.salt, digest: L.digest, allowed: new Set(L.allowed || []), keys: lockKeys(lo) };
+      for (const k of lock.keys) w.locks.set(k, lock);
+    }
     w.loaded = true;
     console.log(`${w.name}: loaded ${w.edits.size} block edits from ${w.file}`);
   } catch (e) {
@@ -78,9 +144,11 @@ function setWorldTime(w, t) { w.clock = { t, at: Date.now() }; }
 function saveWorld(w) {
   w.saveTimer = null;
   if (!w.loaded) return;
+  const edits = [...w.edits].map(([k, v]) => (w.owners.has(k) ? [k, v, w.owners.get(k)] : [k, v]));
+  const locks = [...new Set(w.locks.values())].map(L => ({ lower: L.lower.join(','), owner: L.owner, salt: L.salt, digest: L.digest, allowed: [...L.allowed] }));
   const tmp = w.file + '.tmp';
   try {
-    fs.writeFileSync(tmp, JSON.stringify([...w.edits]));
+    fs.writeFileSync(tmp, JSON.stringify({ edits, locks }));
     fs.renameSync(tmp, w.file);
   } catch (e) {
     console.error(`${w.name}: could not save the world:`, e.message);
@@ -95,6 +163,7 @@ function flushAndExit() {
 }
 process.on('SIGINT', flushAndExit);
 process.on('SIGTERM', flushAndExit);
+process.on('SIGHUP', flushAndExit);
 
 // HTTPS: browsers only allow the microphone on secure (https) pages. Give the server a certificate
 // with TLS_CERT and TLS_KEY (paths to the PEM files), or put it behind a host that provides https.
@@ -263,13 +332,13 @@ function hello(p, id, m) {
     }
     pwTries.delete(ip);
   }
-  p.world = w; p.joined = true;
+  p.world = w; p.joined = true; p.pid = pidFor(m.pid);
   p.name = cleanName(m.name);
   const list = [];
   for (const [oid, o] of players) if (oid !== id && o.joined && o.world === w) list.push({ id: oid, name: o.name, color: o.color, x: o.x, y: o.y, z: o.z, yaw: o.yaw, sleeping: o.sleeping, hidden: o.hidden, role: o.role });
   const all = [];
   for (const [k, v] of w.edits) { const [x, y, z] = k.split(',').map(Number); all.push([x, y, z, v]); }
-  sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, edits: all, players: list, time: worldTime(w), mob: w.mob, tvs: tvList(w), sources: tvSources(w) });
+  sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, edits: all, players: list, time: worldTime(w), mob: w.mob, tvs: tvList(w), sources: tvSources(w), locks: lockList(w, p) });
   broadcast(w, { type: 'join', id, name: p.name, color: p.color, x: p.x, y: p.y, z: p.z, yaw: p.yaw, role: p.role }, id);
   broadcast(w, { type: 'system', text: p.name + ' joined' }, id);
 }
@@ -278,7 +347,7 @@ wss.on('connection', (ws) => {
   if (players.size >= MAX_PLAYERS) { ws.close(1013, 'server full'); return; }
   const id = nextId++;
   const p = { ws, world: null, name: 'Builder' + id, color: COLORS[id % COLORS.length], x: 8.5, y: 40, z: 8.5, yaw: 0, pitch: 0,
-              tokens: 60, lastTick: Date.now(), joined: false, sleeping: false, hidden: false, role: null };
+              tokens: 60, lastTick: Date.now(), joined: false, sleeping: false, hidden: false, role: null, pid: null, bypass: false };
   players.set(id, p);
 
   ws.on('message', (raw) => {
@@ -417,12 +486,91 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    if (m.type === 'doorinfo') {
+      // the Q key or the DOOR button: is this door placed by a player, locked, and may this player open it
+      if (!isInt(m.x) || !isInt(m.y) || !isInt(m.z)) return;
+      const lo = doorPair(w, m.x, m.y, m.z), lk = lo ? lo.join(',') : null;
+      const owner = lk ? w.owners.get(lk) : undefined, lock = lk ? w.locks.get(lk) : null;
+      return sendTo(p, { type: 'doorinfo', x: m.x, y: m.y, z: m.z, placed: owner !== undefined,
+        mine: owner !== undefined && owner === p.pid, locked: !!lock, ok: !!lock && lockOpenFor(p, lock) });
+    }
+    if (m.type === 'doorlock') {
+      // the player who placed a door sets, changes or removes its password (a new password means everyone must type it again)
+      const fail = msg => sendTo(p, { type: 'doorresult', ok: false, msg });
+      if (!isInt(m.x) || !isInt(m.y) || !isInt(m.z)) return;
+      const lo = doorPair(w, m.x, m.y, m.z);
+      if (!lo) return fail('ONLY A DOOR A PLAYER PLACED CAN HAVE A PASSWORD');
+      const [a, b] = lockKeys(lo);
+      if (w.owners.get(a) !== p.pid) return fail('ONLY THE PLAYER WHO PLACED THIS DOOR CAN SET ITS PASSWORD');
+      const dx = lo[0] + 0.5 - p.x, dy = lo[1] + 1 - p.y, dz = lo[2] + 0.5 - p.z;
+      if (dx * dx + dy * dy + dz * dz > REACH * REACH) return fail('STAND CLOSER TO THE DOOR');
+      if (m.action === 'clear') {
+        if (!w.locks.has(a)) return fail('THIS DOOR HAS NO PASSWORD');
+        dropLock(w, a);
+        scheduleSave(w);
+        return sendTo(p, { type: 'doorresult', ok: true, msg: 'PASSWORD REMOVED' });
+      }
+      if (m.action !== 'set') return;
+      const pass = cleanPass(m.pass);
+      if (!pass) return fail('TYPE A PASSWORD FIRST');
+      const salt = crypto.randomBytes(12).toString('hex');
+      const lock = { lower: lo, owner: p.pid, salt, digest: passDigest(salt, pass), allowed: new Set(), keys: [a, b] };
+      w.locks.set(a, lock); w.locks.set(b, lock);
+      scheduleSave(w);
+      announceLock(w, lo, lock);
+      return sendTo(p, { type: 'doorresult', ok: true, msg: 'PASSWORD SET. ONLY PLAYERS WHO TYPE IT CAN OPEN THIS DOOR' });
+    }
+    if (m.type === 'unlock') {
+      // someone types a door's password: once it is right, that player may open the door (wrong guesses are slowed down per address)
+      const fail = msg => sendTo(p, { type: 'doorresult', ok: false, msg });
+      if (!isInt(m.x) || !isInt(m.y) || !isInt(m.z)) return;
+      const lo = doorPair(w, m.x, m.y, m.z), lock = lo ? w.locks.get(lo.join(',')) : null;
+      if (!lock) return fail('THAT DOOR HAS NO PASSWORD');
+      const dx = lo[0] + 0.5 - p.x, dy = lo[1] + 1 - p.y, dz = lo[2] + 0.5 - p.z;
+      if (dx * dx + dy * dy + dz * dz > REACH * REACH) return fail('STAND CLOSER TO THE DOOR');
+      if (lockOpenFor(p, lock)) return sendTo(p, { type: 'doorresult', ok: true, msg: 'YOU CAN OPEN THIS DOOR' });
+      const ip = clientAddress(ws), now = Date.now();
+      const t = doorTries.get(ip) || { n: 0, until: 0 };
+      if (t.until > now) return fail('TOO MANY TRIES. WAIT A MINUTE AND TRY AGAIN');
+      const given = passDigest(lock.salt, cleanPass(m.pass));
+      if (!crypto.timingSafeEqual(Buffer.from(given), Buffer.from(lock.digest))) {
+        t.n += 1;
+        if (t.n >= 5) { t.until = now + 60000; t.n = 0; }
+        doorTries.set(ip, t);
+        return fail('THAT PASSWORD IS NOT RIGHT');
+      }
+      doorTries.delete(ip);
+      lock.allowed.add(p.pid);
+      scheduleSave(w);
+      sendTo(p, lockMsg(w, p, lo, lock));
+      return sendTo(p, { type: 'doorresult', ok: true, msg: 'THE DOOR IS UNLOCKED FOR YOU' });
+    }
+    if (m.type === 'bypass') {
+      // the game creator's BREAK ANY BLOCK switch (only the creator's own connection can turn it on)
+      if (p.role !== 'creator') return;
+      p.bypass = m.on === true;
+      return sendTo(p, { type: 'bypass', on: p.bypass });
+    }
     if (m.type === 'edit') {
       if (!isInt(m.x) || !isInt(m.y) || !isInt(m.z) || !isInt(m.id)) return;
       if (m.y < 0 || m.y >= CH || m.id < 0 || m.id > MAX_BLOCK_ID) return;   // 0 = air, 1-25 = block types (see BLOCKS in index.html)
       const dx = m.x + 0.5 - p.x, dy = m.y + 0.5 - p.y, dz = m.z + 0.5 - p.z;
       if (dx * dx + dy * dy + dz * dz > REACH * REACH) return;   // too far from where this player last was
-      w.edits.set(m.x + ',' + m.y + ',' + m.z, m.id);
+      const key = m.x + ',' + m.y + ',' + m.z;
+      const cur = w.edits.has(key) ? w.edits.get(key) : null;     // null: land that no player has changed
+      const owner = w.owners.get(key);                            // undefined: no player placed this block
+      if (owner !== undefined && owner !== p.pid && !canBypass(p)) {
+        // someone else's block: it can only be opened or shut, and only by a player who may open its door
+        if (m.id === 0 || !sameDoorHalf(cur, m.id)) return fixBlock(p, w, key, 'THAT BLOCK BELONGS TO ANOTHER PLAYER');
+        const lock = w.locks.get(key);
+        if (lock && !lockOpenFor(p, lock)) return fixBlock(p, w, key, 'THAT DOOR HAS A PASSWORD');
+      }
+      if (m.id === 0) { dropLock(w, key); w.owners.delete(key); }
+      else {
+        if (w.locks.has(key) && !isDoorBlock(m.id)) dropLock(w, key);
+        if (owner === undefined && (cur === null || cur === 0)) w.owners.set(key, p.pid);   // a new block is the placer's
+      }
+      w.edits.set(key, m.id);
       scheduleSave(w);
       broadcast(w, { type: 'edit', x: m.x, y: m.y, z: m.z, id: m.id, by: id }, id);
       sendTo(p, { type: 'edit', x: m.x, y: m.y, z: m.z, id: m.id, by: id });
