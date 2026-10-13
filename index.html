@@ -1022,7 +1022,7 @@ function relightLamps(){
 /* ---------- meshing: faces are only made where a block meets air, with simple corner shading ---------- */
 function tileOf(t,f){ const b=BLOCKS[t]; return f===2 ? b.top : f===3 ? b.bot : b.side; }
 // adds a closed box (six quads) to the mesh, for shapes that are not a full block; returns the new vertex count
-function emitBox(V, I, nv, lo, hi, tl, glow){
+function emitBox(V, I, nv, lo, hi, tl, glow, soft){
   for(let f=0;f<6;f++){
     const F=FACES[f], n=F.n, t1=F.t1, t2=F.t2;
     const an=n.findIndex(v=>v!==0), a1=t1.findIndex(v=>v!==0), a2=t2.findIndex(v=>v!==0);
@@ -1034,7 +1034,7 @@ function emitBox(V, I, nv, lo, hi, tl, glow){
       P[an] = n[an]>0 ? hi[an] : lo[an];
       P[a1] = a ? hi[a1] : lo[a1];
       P[a2] = b ? hi[a2] : lo[a2];
-      V.push(P[0],P[1],P[2], a,b, tile, F.b, glow);
+      V.push(P[0],P[1],P[2], a,b, tile, soft ? 0.7+0.3*F.b : F.b, glow);   // soft: furniture, lit less harshly
       nv++;
     }
     const cr=[t1[1]*t2[2]-t1[2]*t2[1], t1[2]*t2[0]-t1[0]*t2[2], t1[0]*t2[1]-t1[1]*t2[0]];
@@ -1087,7 +1087,7 @@ function emitFurn(V, I, nv, x, y, z, b){
     let x0 = p[0], x1 = p[3];
     if(ty.wide){ x0 = Math.max(x0, c); x1 = Math.min(x1, c+1); if(x1 <= x0) continue; }
     const r = rotBoxAt([x0,p[1],p[2]], [x1,p[4],p[5]], f, ty.wide ? c+0.5 : 0.5);
-    nv = emitBox(V, I, nv, [x+r.lo[0], y+r.lo[1], z+r.lo[2]], [x+r.hi[0], y+r.hi[1], z+r.hi[2]], {top:p[6], side:p[7], bot:p[8]}, p[9]);
+    nv = emitBox(V, I, nv, [x+r.lo[0], y+r.lo[1], z+r.lo[2]], [x+r.hi[0], y+r.hi[1], z+r.hi[2]], {top:p[6], side:p[7], bot:p[8]}, p[9], true);
   }
   return nv;
 }
@@ -1752,8 +1752,8 @@ function makeAtlasCanvas(){
   // ---- furniture textures (64 onward) ----
   tile(64,(px,py)=>{ const n=rnd2(px,py,120); return [g(n,236,6),g(n,236,6),g(n,232,6)]; });   // white ceramic
   tile(65,(px,py)=>{ const n=rnd2(px,py,121); const streak=(py%6===0)?-8:0; return [g(n,186,10)+streak,g(n,188,10)+streak,g(n,194,10)+streak]; });   // brushed steel
-  tile(66,(px,py)=>{ const n=rnd2(px,py,122); const edge=(px<=1||px>=30||py<=1||py>=30)?14:0; return [g(n,44,8)+edge,g(n,46,8)+edge,g(n,52,8)+edge]; });   // dark steel and black glass
-  tile(67,(px,py)=>{ const n=rnd2(px,py,123); const frame=(px<=2||px>=29||py<=2||py>=29); return frame?[30,30,34]:[g(n,18,6),g(n,22,6),g(n,34,6)]; });   // black screen frame
+  tile(66,(px,py)=>{ const n=rnd2(px,py,122); const edge=(px<=1||px>=30||py<=1||py>=30)?14:0; return [g(n,92,8)+edge,g(n,96,8)+edge,g(n,106,8)+edge]; });   // dark steel and black glass
+  tile(67,(px,py)=>{ const n=rnd2(px,py,123); const frame=(px<=2||px>=29||py<=2||py>=29); return frame?[52,52,58]:[g(n,58,6),g(n,62,6),g(n,74,6)]; });   // black screen frame
   tile(68,(px,py)=>{ const n=rnd2(px,py,124); const line=(py%8===0)?30:0; const shine=((px+py)%24<3)?30:0; return [g(n,40,6)+line+shine,g(n,110,10)+line+shine,g(n,220,10)+line+shine]; });   // lit blue display
   tile(69,(px,py)=>{ const n=rnd2(px,py,125); return [g(n,50,16),g(n,80,16),g(n,170,16)]; });   // blue fabric
   tile(70,(px,py)=>{ const n=rnd2(px,py,126); const w=((px+py)%4===0)?-6:0; return [g(n,96,14)+w,g(n,98,14)+w,g(n,104,14)+w]; });   // grey fabric
@@ -3242,6 +3242,20 @@ function resize(){
   if(cv.width!==w||cv.height!==h){ cv.width=w; cv.height=h; }
   gl.viewport(0,0,cv.width,cv.height);
 }
+// the textured mesh of a block or item in the hand: a cube a little smaller than one in the world, with the real faces from the atlas
+const heldCache = new Map();
+function heldMesh(id){
+  let m = heldCache.get(id); if(m) return m;
+  const b = BLOCKS[id], V = [], I = [], h = 0.08;
+  emitBox(V, I, 0, [-h,-h,-h], [h,h,h], {top:b.top, side:b.side, bot:b.bot}, 0);
+  const vao = gl.createVertexArray(), vbo = gl.createBuffer(), ibo = gl.createBuffer();
+  gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(V), gl.STATIC_DRAW);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(I), gl.STATIC_DRAW);
+  bindChunkAttribs();
+  gl.bindVertexArray(null);
+  m = {vao, count: I.length}; heldCache.set(id, m); return m;
+}
 // the camera bobs a little with each step (only on the ground)
 function viewBob(){ return player.onGround ? player.amt * 0.035 * Math.abs(Math.sin(player.phase)) : 0; }
 function render(){
@@ -3339,28 +3353,32 @@ function render(){
   if(playing && !player.sleeping && !player.seat && !invOpen && !codeOpen && !fridgeOpen && spectate.id==null){
     gl.clear(gl.DEPTH_BUFFER_BIT);
     gl.disable(gl.CULL_FACE);
+    const bobH = player.amt*Math.abs(Math.sin(player.phase))*0.02, sway = player.amt*Math.sin(player.phase)*0.02;
+    const hand = mul(mul(Tr(0.38+sway, -0.42-bobH, -0.6), Ry(-0.35)), Rx(0.2));
+    // the sleeve and the hand, in plain colour
     gl.useProgram(solid);
     gl.uniformMatrix4fv(SU.uVP,false,new Float32Array(Pm));
     gl.uniform1f(SU.uLight,0.6+0.4*dl);
     gl.bindVertexArray(cubeVAO);
-    const bobH = player.amt*Math.abs(Math.sin(player.phase))*0.02, sway = player.amt*Math.sin(player.phase)*0.02;
-    const hand = mul(mul(Tr(0.38+sway, -0.42-bobH, -0.6), Ry(-0.35)), Rx(0.2));
-    const parts = [
-      [boxIn(hand,[0,-0.22,0.2],[0.13,0.44,0.13]), [0.3,0.45,0.75]],      // sleeve
-      [boxIn(hand,[0,-0.02,0.04],[0.13,0.13,0.15]), SKIN_RGB]            // hand
-    ];
-    const id = HOTBAR[sel];
-    if(id === GLASS_CUP_ID || id === WATER_CUP_ID){                      // a glass: a clear case with what is in it
-      const within = id === WATER_CUP_ID ? [0.3,0.6,0.95] : [0.9,0.96,1];
-      parts.push([boxIn(hand,[0,0.12,-0.06],[0.1,0.18,0.1]), [0.72,0.86,0.92]],
-                 [boxIn(hand,[0,0.12,-0.06],[0.08,0.15,0.08]), within]);
-    } else if(id != null && BLOCKS[id]){                                  // a block: a cube in its colour
-      parts.push([boxIn(hand,[0,0.12,-0.06],[0.16,0.16,0.16]), hexRGB(BLOCKS[id].sw || '#888888')]);
-    }
-    for(const [M, rgb] of parts){
+    for(const [M, rgb] of [[boxIn(hand,[0,-0.22,0.2],[0.13,0.44,0.13]), [0.3,0.45,0.75]], [boxIn(hand,[0,-0.02,0.04],[0.13,0.13,0.15]), SKIN_RGB]]){
       gl.uniform3f(SU.uCol, rgb[0], rgb[1], rgb[2]);
       gl.uniformMatrix4fv(SU.uModel,false,new Float32Array(M));
       gl.drawArrays(gl.TRIANGLES,0,36);
+    }
+    // the block or item in the hand, with its real textures from the atlas
+    const id = HOTBAR[sel];
+    if(id != null && BLOCKS[id]){
+      const m = heldMesh(id);
+      gl.useProgram(prog);
+      gl.uniformMatrix4fv(U.uVP,false,new Float32Array(mul(Pm, mul(hand, Tr(0,0.12,-0.06)))));
+      gl.uniform3f(U.uOff,0,0,0);
+      gl.uniform3f(U.uCam,0,0,0);
+      gl.uniform1f(U.uFogStart,1e9); gl.uniform1f(U.uFogEnd,2e9);
+      gl.uniform1f(U.uLight,0.6+0.4*dl);
+      gl.uniform1f(U.uAlpha,1.0);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,atlasTex); gl.uniform1i(U.uAtlas,0);
+      gl.bindVertexArray(m.vao);
+      gl.drawElements(gl.TRIANGLES, m.count, gl.UNSIGNED_INT, 0);
     }
     gl.enable(gl.CULL_FACE);
   }
