@@ -1,0 +1,10 @@
+{
+  "name": "block-realm-server",
+  "version": "1.0.0",
+  "description": "Multiplayer server for Block Realm: serves the game and keeps the shared world.",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "ws": "^8.21.3" },
+  "license": "UNLICENSED",
+  "private": true
+}
