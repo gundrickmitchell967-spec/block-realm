@@ -20,6 +20,7 @@
   .slot .nm{position:absolute;left:0;right:0;bottom:0;height:24px;padding:2px 2px 0;box-sizing:border-box;overflow:hidden;background:rgba(0,0,0,.35);font:bold 10px/12px 'Courier New',monospace;color:#fff;text-shadow:1px 1px 0 #000;text-align:center;word-break:break-word}
   .slot .xbtn{position:absolute;top:1px;right:1px;width:18px;height:18px;padding:0;font:bold 13px/16px 'Courier New',monospace;background:#7a2a2a;color:#fff;border:1px solid #000;cursor:pointer;z-index:2}
   .slot.sel{border-color:#ffe066}
+  .slot .qty{position:absolute;right:3px;bottom:26px;font:bold 12px 'Courier New',monospace;color:#ffe066;text-shadow:1px 1px 0 #000}
   #inv{position:fixed;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;background:rgba(8,12,22,.86)}
   #invbox{width:min(800px,100%);max-height:100%;overflow:auto;box-sizing:border-box;padding:14px 16px;background:#161b26;border:3px solid #5b6578;display:flex;flex-direction:column;gap:8px;align-items:center}
   #invbox h2{margin:0;font-size:22px;letter-spacing:.14em;text-shadow:2px 2px 0 #000}
@@ -100,6 +101,11 @@
   .btn.cashbtn:hover{background:linear-gradient(#4fc26a,#34914d)}
   #givebox .btn{width:auto;flex:0 0 auto;padding:8px 10px}
   #offerlist .btn{width:auto;flex:0 0 auto;padding:6px 8px;font-size:12px}
+  #cutbox{position:fixed;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;background:rgba(8,12,22,.86)}
+  #cutpanel{display:flex;flex-direction:column;align-items:center;gap:10px;width:min(380px,100%);box-sizing:border-box;padding:18px;background:#161b26;border:3px solid #5b6578}
+  #cutpanel h2{margin:0;font-size:20px;letter-spacing:.14em;text-shadow:2px 2px 0 #000}
+  #cutpanel input{font:15px 'Courier New',monospace;width:100%;box-sizing:border-box;padding:10px;text-align:center;background:#0d111b;color:#fff;border:2px solid #ffe066}
+  #cutpanel .btn{width:100%}
   .splitform{display:flex;flex-wrap:wrap;gap:6px;width:100%;margin-top:4px;padding-top:8px;border-top:1px dashed #3a4560}
   .splitform select,.splitform input{flex:1 1 110px;min-width:0;font:13px 'Courier New',monospace;padding:8px;background:#0d111b;color:#fff;border:2px solid #3a4560;box-sizing:border-box}
   .splitform .btn{width:100%}
@@ -316,6 +322,8 @@
        1-8 or mouse wheel: choose an inventory slot &middot; E: block catalog (add or remove blocks)<br>
        Right click a door: open or close it &middot; Q at a door: set or open its password (multiplayer)<br>
        Right click a bed at night: go to sleep &middot; Right click the shopkeeper: open the shop<br>
+       <b>Cutting land:</b> hold the Land Surveyor. Right-click one corner block inside your plot, then right-click the opposite corner.<br>
+       A yellow outline shows the part. Press CUT, name the new plot, and it becomes its own plot. Your other land stays yours.<br>
        M: sound effects on or off &middot; Esc: pause and save<br>
        Double-tap Space: fly (Space up, Shift down) &middot; T: chat with other players (multiplayer)<br>
        V: talk to players close to you (voice chat, multiplayer)</p>
@@ -338,6 +346,17 @@
   </div>
 </div>
 
+<div id="cutbox" hidden>
+  <div id="cutpanel" role="dialog" aria-labelledby="cuttitle">
+    <h2 id="cuttitle">CUT OUT A PART</h2>
+    <p class="hint" id="cutinfo"></p>
+    <p class="hint">The part becomes its own plot, which you can sell or trade on its own.</p>
+    <input id="cutname" maxlength="24" placeholder="NAME THE NEW PLOT" aria-label="Name for the new plot">
+    <button class="btn buybig" id="cutgo" type="button">CUT</button>
+    <button class="btn ghost" id="cutback" type="button">CANCEL</button>
+    <p id="cutmsg" role="status"></p>
+  </div>
+</div>
 <div id="codebox" hidden>
   <div id="codepanel" role="dialog" aria-labelledby="codetitle">
     <h2 id="codetitle">ADMIN CODE</h2>
@@ -1007,8 +1026,7 @@ const CATS = [
   {name:'Light & Glass',ids:[10,11,47]},
   {name:'Furniture',    ids:[12,16,...FURN_BASES.filter((_, t) => !DECOR_T.has(t))]},
   {name:'Food',         ids:ITEM_IDS},
-  {name:'Gadgets',      ids:[REMOTE_ID, SURVEY_ID]},
-  {name:'Security',     ids:[CAMERA_ID, SCREEN_ID]}
+  {name:'Gadgets',      ids:[REMOTE_ID, SURVEY_ID]}
 ];
 const CATALOG = CATS.flatMap(c => c.ids);      // every block a player can carry
 // the rooms the Furniture tab can be filtered by
@@ -2562,7 +2580,7 @@ function mpSend(msg){ if(mp.ws && mp.ws.readyState===1) mp.ws.send(JSON.stringif
 // sets one block and tells the server
 function placeCell(x,y,z,id){
   if(mpMode && id!==0 && getBlock(x,y,z)===0) blockOwner.set(doorKeyOf(x,y,z), true);   // a new block is this player's
-  applyBlock(x,y,z,id); mpSend({type:'edit', x, y, z, id});
+  applyBlock(x,y,z,id); const em = {type:'edit', x, y, z, id}; if(id === CAMERA_ID || id === SCREEN_ID) em.dir = placeFace; mpSend(em);
 }
 // the other half of a door or a bed, if there is one next to this block
 function partnerOf(x,y,z,id){
@@ -2728,6 +2746,7 @@ function doPlace(){
   const h=raycast(6);
   if(HOTBAR[sel]===REMOTE_ID){ remotePress(h); return; }   // the remote in your hand: right-click starts or pauses the TV you aim at
   if(h && h.id===SCREEN_ID){ openFeed(h); return; }   // a view screen: right-click watches the nearest camera
+  if(!h && HOTBAR[sel]===SCREEN_ID){ openFeed(null); return; }   // holding a view screen in the air: watch your cameras from anywhere
   // holding a glass of water: right-click drinks it, unless you are working a door, a light, the fridge or a bed
   if(HOTBAR[sel]===WATER_CUP_ID && !(h && (isDoorId(h.id) || isLampId(h.id) || isFurn(h.id) || h.id===BED_FOOT_ID || h.id===BED_HEAD_ID))){ drinkWater(); return; }
   if(!h) return;
@@ -2759,6 +2778,7 @@ function doPlace(){
   if(mt === 'ceiling' && h.ny !== -1){ flashHud('HANG THE LIGHT UNDER A CEILING'); return; }
   if(mt === 'wall' && h.ny !== 0){ flashHud('A SWITCH GOES ON A WALL'); return; }
   const face = mt === 'wall' ? (h.nz === 1 ? 0 : h.nx === -1 ? 1 : h.nz === -1 ? 2 : 3) : undefined;
+  placeFace = [h.nx, h.ny, h.nz];
   if(!placeItem(id,x,y,z,undefined,face)){ flashHud('NO ROOM HERE'); return; }
   sfx.placeBlock(id);
 }
@@ -2792,6 +2812,7 @@ function slotEl(i, inInv){
   if(id == null) ic.className = 'none'; else setIcon(ic, BLOCKS[id].top);
   d.appendChild(ic);
   const k = document.createElement('span'); k.className = 'key'; k.textContent = KEYS[i]; d.appendChild(k);
+  if(id === CAMERA_ID || id === SCREEN_ID){ const q = document.createElement('span'); q.className = 'qty'; q.textContent = 'x' + (id === CAMERA_ID ? (myGear.cam || 0) : (myGear.scr || 0)); d.appendChild(q); }
   const nm = document.createElement('span'); nm.className = 'nm';
   nm.textContent = id == null ? 'EMPTY' : BLOCKS[id].name;
   d.appendChild(nm);
@@ -2814,6 +2835,18 @@ function selectSlot(i){
   $('selname').textContent = HOTBAR[i] == null
     ? 'Selected: empty slot   (key ' + KEYS[i] + ')'
     : 'Selected: ' + BLOCKS[HOTBAR[i]].name + '   (key ' + KEYS[i] + ')';
+}
+// keeps the camera and the view screen in the inventory while you own some: a new purchase goes into an empty slot
+function syncGearSlots(){
+  let changed = false;
+  for(const [id, k] of [[CAMERA_ID, 'cam'], [SCREEN_ID, 'scr']]){
+    const n = myGear[k] || 0, at = HOTBAR.indexOf(id);
+    if(n > 0 && at < 0 && n > gearShown[k]){ const e = HOTBAR.indexOf(null); if(e >= 0){ HOTBAR[e] = id; changed = true; } }
+    if(n === 0 && at >= 0){ HOTBAR[at] = null; changed = true; }
+    gearShown[k] = n;
+  }
+  if(changed) saveInv();
+  refreshInv();
 }
 function buildHotbar(){
   const hb = $('hotbar'); hb.innerHTML = '';
@@ -3195,8 +3228,8 @@ function shopAim(){
 const SHOP_ITEMS = [
   {id:'hacktool', name:'HACKER TOOL', price:10000, art:'<svg width="220" height="150" viewBox="0 0 240 170" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="hf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f9a64"/><stop offset="1" stop-color="#1f5235"/></linearGradient><linearGradient id="ht" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#2f7d50"/><stop offset="1" stop-color="#6bc68c"/></linearGradient><linearGradient id="hs" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#173f28"/><stop offset="1" stop-color="#0e2a1a"/></linearGradient><linearGradient id="scr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0b2315"/><stop offset="1" stop-color="#06140c"/></linearGradient><radialGradient id="sh" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#000" stop-opacity="0.45"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient></defs><ellipse cx="122" cy="150" rx="92" ry="11" fill="url(#sh)"/><polygon points="172.0,86.0 206.0,60.0 206.0,110.0 172.0,136.0" fill="url(#hs)" stroke="#0a2014" stroke-width="1.5"/><polygon points="60.0,86.0 172.0,86.0 206.0,60.0 94.0,60.0" fill="url(#ht)" stroke="#0a2014" stroke-width="1.5"/><polygon points="60.0,86.0 172.0,86.0 172.0,136.0 60.0,136.0" fill="url(#hf)" stroke="#0a2014" stroke-width="1.5"/><line x1="60" y1="87" x2="172" y2="87" stroke="#9be8b5" stroke-opacity="0.6" stroke-width="1.5"/><polygon points="80.9,80.3 163.8,80.3 183.5,65.2 100.6,65.2" fill="url(#scr)" stroke="#7dffa8" stroke-width="1" stroke-opacity="0.8"/><line x1="90.4" y1="78.2" x2="139.6" y2="78.2" stroke="#7dffa8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.95"/><line x1="93.8" y1="75.6" x2="161.0" y2="75.6" stroke="#7dffa8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.95"/><line x1="97.2" y1="73.0" x2="133.0" y2="73.0" stroke="#7dffa8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.95"/><line x1="100.6" y1="70.4" x2="158.8" y2="70.4" stroke="#7dffa8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.95"/><line x1="104.0" y1="67.8" x2="146.5" y2="67.8" stroke="#7dffa8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.95"/><rect x="151.6" y="74.2" width="4" height="7" fill="#e8ff9a"/><circle cx="84.6" cy="112.0" r="7" fill="#e04b3c" stroke="#0a2014" stroke-width="1.2"/><circle cx="82.6" cy="109.5" r="2.2" fill="#ffffff" fill-opacity="0.55"/><circle cx="111.5" cy="112.0" r="7" fill="#f2c33c" stroke="#0a2014" stroke-width="1.2"/><circle cx="109.5" cy="109.5" r="2.2" fill="#ffffff" fill-opacity="0.55"/><circle cx="138.4" cy="112.0" r="7" fill="#4bd6e6" stroke="#0a2014" stroke-width="1.2"/><circle cx="136.4" cy="109.5" r="2.2" fill="#ffffff" fill-opacity="0.55"/><line x1="80.2" y1="126.0" x2="80.2" y2="132.0" stroke="#0a2014" stroke-width="2" stroke-linecap="round" stroke-opacity="0.7"/><line x1="88.0" y1="126.0" x2="88.0" y2="132.0" stroke="#0a2014" stroke-width="2" stroke-linecap="round" stroke-opacity="0.7"/><line x1="95.8" y1="126.0" x2="95.8" y2="132.0" stroke="#0a2014" stroke-width="2" stroke-linecap="round" stroke-opacity="0.7"/><line x1="103.7" y1="126.0" x2="103.7" y2="132.0" stroke="#0a2014" stroke-width="2" stroke-linecap="round" stroke-opacity="0.7"/><line x1="187.6" y1="62.1" x2="193.6" y2="16.1" stroke="#2b2f36" stroke-width="3" stroke-linecap="round"/><circle cx="193.6" cy="14.1" r="4.5" fill="#f2c33c" stroke="#0a2014" stroke-width="1"/></svg>',
    text:'Use it once. Equip it in your inventory, then right-click a locked door. For 30 seconds that door opens for anyone, then its password lock comes back on. The tool is used up when you use it.'},
-  {id:'camera', name:'SECURITY CAMERA', price:2000, text:'Place it like a block. You can buy as many as you like. A camera watches the way you were facing when you placed it. Breaking it gives it back to you. Only players with a View Screen can watch it.'},
-  {id:'screen', name:'VIEW SCREEN', price:1500, text:'Buying a view screen unlocks the security cameras for you. Place it, then right-click it to watch the nearest camera live. Tap the picture to change the camera, and right-click to leave.'}
+  {id:'camera', name:'SECURITY CAMERA', price:2000, text:'Buy as many as you like. It goes into your inventory, and the number you have is shown on its slot. Place it on a wall, a ceiling, a floor or a corner. It looks out of the face it is on. Only you can watch your own cameras, and only with a View Screen.'},
+  {id:'screen', name:'VIEW SCREEN', price:1500, text:'Buying a view screen unlocks your security cameras. Place it and right-click it to watch, or hold it in your inventory and right-click in the air to watch from anywhere. Tap the picture to change camera, move the mouse to look around, and right-click to leave.'}
 ];
 // the coin logo: a gold coin with a dollar sign
 const COIN_SVG = '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#f5c542" stroke="#8a5a00" stroke-width="1.5"/><circle cx="12" cy="12" r="8.2" fill="none" stroke="#c28a12" stroke-width="1"/><text x="12" y="16.6" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="13" fill="#7a4d00">$</text></svg>';
@@ -3204,7 +3237,9 @@ $('givecoin').innerHTML = COIN_SVG;
 $('cashcoin').innerHTML = COIN_SVG;
 let myGear = {cam:0, camPlaced:0, scr:0, scrPlaced:0, licensed:false};   // your security cameras and view screens
 let camList = [];                                                          // the cameras you can watch (empty without a view screen)
-let feedCam = null, feedIdx = 0;                                           // the camera you are watching, and its place in the list
+let feedCam = null, feedIdx = 0, feedBase = null;   // feedBase: where the mouse started when the camera was opened
+let placeFace = [0, 0, 1];        // the face of the block a camera or screen is being put on
+let gearShown = {cam: 0, scr: 0};  // the spare counts the inventory last showed                                           // the camera you are watching, and its place in the list
 let myCoins = 0;            // your cash in this world (the multiplayer server keeps it)
 let myTools = 0;           // how many hacker tools you own
 let shopOpen = false;
@@ -3295,21 +3330,32 @@ function setShopTab(name){
 for(const b of document.querySelectorAll('#shoptabs .tab')) b.addEventListener('click', () => setShopTab(b.dataset.tab));
 // the camera feed: right-click a view screen to watch the nearest camera; tap to switch, right-click to leave
 const FEED_PITCH = -0.12;
+// where a camera looks at first: out of its face, or steeply down from a ceiling (up from a floor)
+function baseAngles(c){
+  if(c.dir[1] !== 0) return {yaw: c.yaw, pitch: c.dir[1] * 0.9};
+  return {yaw: Math.atan2(-c.dir[0], -c.dir[2]), pitch: FEED_PITCH};
+}
+// the picture from a camera: the mouse turns it around (the first frame remembers where the mouse started)
 function feedViewOf(c){
-  const cp = Math.cos(FEED_PITCH);
-  const dir = [-Math.sin(c.yaw)*cp, Math.sin(FEED_PITCH), -Math.cos(c.yaw)*cp];
-  return { dir, eye: [c.x + 0.5 + dir[0]*0.62, c.y + 0.5 + dir[1]*0.62, c.z + 0.5 + dir[2]*0.62] };
+  const b = baseAngles(c);
+  if(!feedBase) feedBase = {yaw: b.yaw, pitch: b.pitch, py: player.yaw, pp: player.pitch};
+  const yaw = feedBase.yaw + (player.yaw - feedBase.py);
+  const pitch = clamp(feedBase.pitch + (player.pitch - feedBase.pp), -1.4, 1.4);
+  const cp = Math.cos(pitch);
+  const eye = [c.x + 0.5 + c.dir[0]*0.62, c.y + 0.5 + c.dir[1]*0.62, c.z + 0.5 + c.dir[2]*0.62];
+  return { eye, dir: [-Math.sin(yaw)*cp, Math.sin(pitch), -Math.cos(yaw)*cp] };
 }
 function openFeed(h){
   if(!myGear.licensed){ flashHud('BUY A VIEW SCREEN IN THE SHOP TO WATCH THE CAMERAS'); return; }
-  if(!camList.length){ flashHud('NO SECURITY CAMERAS ARE PLACED YET'); return; }
+  if(!camList.length){ flashHud('YOU HAVE NO SECURITY CAMERAS PLACED YET'); return; }
+  const hx = h ? h.x : player.x, hy = h ? h.y : player.y, hz = h ? h.z : player.z;
   let best = 0, bd = Infinity;
-  camList.forEach((c, i) => { const d = (c.x-h.x)**2 + (c.y-h.y)**2 + (c.z-h.z)**2; if(d < bd){ bd = d; best = i; } });
-  feedIdx = best; feedCam = camList[best];
+  camList.forEach((c, i) => { const d = (c.x-hx)**2 + (c.y-hy)**2 + (c.z-hz)**2; if(d < bd){ bd = d; best = i; } });
+  feedIdx = best; feedCam = camList[best]; feedBase = null;
   for(const k in keys) keys[k] = false;
   if(document.pointerLockElement){ try{ document.exitPointerLock(); }catch(e){} }
 }
-function cycleFeed(){ if(!camList.length){ feedCam = null; return; } feedIdx = (feedIdx + 1) % camList.length; feedCam = camList[feedIdx]; }
+function cycleFeed(){ if(!camList.length){ feedCam = null; return; } feedIdx = (feedIdx + 1) % camList.length; feedCam = camList[feedIdx]; feedBase = null; }
 function closeFeed(){ feedCam = null; }
 function renderShop(){
   const cl = $('shopcoins'); cl.textContent = '';
@@ -3372,27 +3418,15 @@ function renderShop(){
       mpSend({type:'plotsell', x0: pl.x0, z0: pl.z0, x1: pl.x1, z1: pl.z1});
       shopNote('SELLING...');
     });
-    // cut a strip off this plot: pick the edge, how many blocks deep, and a name for the part
-    const form = document.createElement('div'); form.className = 'splitform';
-    const fl = document.createElement('p'); fl.className = 'hint'; fl.style.width = '100%';
-    fl.textContent = 'CUT OUT PART OF THIS PLOT. The part becomes its own plot, which you can sell or trade.';
-    const sideSel = document.createElement('select'); sideSel.setAttribute('aria-label', 'Edge to cut from');
-    for(const [v, lab] of [['n','FROM NORTH EDGE'], ['s','FROM SOUTH EDGE'], ['w','FROM WEST EDGE'], ['e','FROM EAST EDGE']]){ const o = document.createElement('option'); o.value = v; o.textContent = lab; sideSel.appendChild(o); }
-    const depthIn = document.createElement('input'); depthIn.type = 'number'; depthIn.min = '3'; depthIn.step = '1'; depthIn.placeholder = 'BLOCKS DEEP'; depthIn.setAttribute('aria-label', 'Blocks to cut');
-    const partName = document.createElement('input'); partName.maxLength = 24; partName.placeholder = 'NAME THE PART'; partName.setAttribute('aria-label', 'Name for the cut-out part');
-    for(const el of [depthIn, partName]) el.addEventListener('keydown', e => e.stopPropagation());
-    const cutBtn = document.createElement('button'); cutBtn.className = 'btn'; cutBtn.type = 'button'; cutBtn.textContent = 'CUT OUT PART'; cutBtn.disabled = !mpMode;
-    cutBtn.addEventListener('click', () => mpSend({type:'plotsplit', plot:[pl.x0, pl.z0, pl.x1, pl.z1], side: sideSel.value, depth: Math.trunc(Number(depthIn.value)), name: partName.value}));
-    form.appendChild(fl); form.appendChild(sideSel); form.appendChild(depthIn); form.appendChild(partName); form.appendChild(cutBtn);
     const mate = plotList.find(o => o.mine && o !== pl && canMerge(pl, o));
     if(mate){
       const mb = document.createElement('button'); mb.className = 'btn'; mb.type = 'button';
       mb.textContent = 'MERGE WITH ' + (mate.name || 'PLOT').toUpperCase();
       mb.disabled = !mpMode;
       mb.addEventListener('click', () => mpSend({type:'plotmerge', a:[pl.x0, pl.z0, pl.x1, pl.z1], b:[mate.x0, mate.z0, mate.x1, mate.z1]}));
-      row.appendChild(head); row.appendChild(txt); row.appendChild(mb); row.appendChild(sb); row.appendChild(form); plotsPane.appendChild(row);
+      row.appendChild(head); row.appendChild(txt); row.appendChild(mb); row.appendChild(sb); plotsPane.appendChild(row);
     } else {
-      row.appendChild(head); row.appendChild(txt); row.appendChild(sb); row.appendChild(form); plotsPane.appendChild(row);
+      row.appendChild(head); row.appendChild(txt); row.appendChild(sb); plotsPane.appendChild(row);
     }
   }
   // your security gear: how many you own, with SELL for a spare
@@ -3446,9 +3480,35 @@ function surveyBox(){
   return {x0, z0, x1, z1, w, d, area: w * d, price: w * d * PLOT_RATE, fixed: !!survey.b};
 }
 function surveyFits(s){ return Math.min(s.w, s.d) >= PLOT_MIN && Math.max(s.w, s.d) <= PLOT_MAX; }
+// the cut panel: name the new plot, then press CUT
+let cutPending = null, cutOpen = false, cutLine = null, cutLineKey = '';
+function rectLineVerts(x0, z0, x1, z1){
+  const out = [];
+  const seg = (ax, az, bx, bz, sx, sz) => { const y = heightAt(sx, sz) + 0.08; out.push(ax, y, az, bx, y, bz); };
+  for(let x = x0; x <= x1; x++){ seg(x, z0, x + 1, z0, x, z0); seg(x, z1 + 1, x + 1, z1 + 1, x, z1); }
+  for(let z = z0; z <= z1; z++){ seg(x0, z, x0, z + 1, x0, z); seg(x1 + 1, z, x1 + 1, z + 1, x1, z); }
+  return out;
+}
+function openCutPanel(){
+  const c = cutPending, cw = Math.abs(c.a[0] - c.b[0]) + 1, cd = Math.abs(c.a[1] - c.b[1]) + 1;
+  $('cutinfo').textContent = 'The part is ' + cw + ' x ' + cd + ' blocks (' + (cw * cd) + ' in all). The rest of your land stays yours.';
+  $('cutname').value = ''; $('cutmsg').textContent = '';
+  $('cutbox').hidden = false; cutOpen = true;
+  for(const k in keys) keys[k] = false;
+  if(document.pointerLockElement){ try{ document.exitPointerLock(); }catch(e){} }
+  $('cutname').focus();
+}
+function closeCut(){ cutOpen = false; cutPending = null; $('cutbox').hidden = true; }
+$('cutgo').addEventListener('click', () => {
+  if(!cutPending) return;
+  mpSend({type:'plotcut', plot: cutPending.plot, a: cutPending.a, b: cutPending.b, name: $('cutname').value});
+  closeCut(); flashHud('CUTTING THE PART OUT...');
+});
+$('cutback').addEventListener('click', () => { closeCut(); flashHud('CUT CANCELLED'); });
+$('cutname').addEventListener('keydown', e => { e.stopPropagation(); if(e.key === 'Enter'){ e.preventDefault(); $('cutgo').click(); } });
 function surveyText(){
-  if(cutPt) return 'CUT: CORNER 1 SET. RIGHT-CLICK THE OPPOSITE CORNER';
-  if(!survey.a) return 'LAND SURVEYOR: CLICK A BLOCK TO SET THE FIRST CORNER';
+  if(cutPt) return 'CUT: CORNER 1 SET. RIGHT-CLICK THE OPPOSITE CORNER OF THE PART';
+  if(!survey.a) return 'LAND SURVEYOR:  LEFT-CLICK = MEASURE LAND TO BUY   |   RIGHT-CLICK YOUR OWN LAND = CUT OUT A PART';
   const s = surveyBox();
   if(!s) return 'LAND SURVEYOR: MOVE TO THE OTHER CORNER';
   const size = s.w + ' x ' + s.d + ' = ' + s.area + ' BLOCKS, ' + s.price + ' CASH';
@@ -3472,8 +3532,9 @@ function surveyRight(h){
   if(!p || !p.mine){ surveyCancel(); return; }
   const key = [p.x0, p.z0, p.x1, p.z1].join(',');
   if(!cutPt || cutPt.plot !== key){ cutPt = {plot: key, x: h.x, z: h.z}; flashHud('CUT CORNER 1 SET. RIGHT-CLICK THE OPPOSITE CORNER OF THE PART'); return; }
-  mpSend({type:'plotcut', plot:[p.x0, p.z0, p.x1, p.z1], a:[cutPt.x, cutPt.z], b:[h.x, h.z]});
-  cutPt = null; flashHud('CUTTING THE PART OUT...');
+  cutPending = {plot:[p.x0, p.z0, p.x1, p.z1], a:[cutPt.x, cutPt.z], b:[h.x, h.z]};
+  cutPt = null;
+  openCutPanel();
 }
 // why a block can't be changed here: you may only build on a plot you have bought (the server checks it too)
 function landBlock(x, z){                    // why this block can't be changed here, or null when it can
@@ -4165,7 +4226,7 @@ function connectMP(){
   ws.onclose = ()=>{
     clearTimeout(timer);
     mp.ws = null;
-    adminRole = null; spectate.id = null; adminBypass = false; doorLocks.clear(); myCoins = 0; myTools = 0; myGear = {cam:0, camPlaced:0, scr:0, scrPlaced:0, licensed:false}; camList = []; feedCam = null; plotList = [];
+    adminRole = null; spectate.id = null; adminBypass = false; doorLocks.clear(); myCoins = 0; myTools = 0; myGear = {cam:0, camPlaced:0, scr:0, scrPlaced:0, licensed:false}; camList = []; feedCam = null; feedBase = null; gearShown = {cam: 0, scr: 0}; plotList = [];
     if(mpMode){ mpDropped(); }
     else { mpStatus(denied || 'Could not connect. Check the address and that the server is running.'); }
   };
@@ -4213,7 +4274,7 @@ function onServerMessage(m){
   else if(m.type==='lock'){ onDoorLock(m); }
   else if(m.type==='doorresult'){ onDoorResult(m); }
   else if(m.type==='wallet'){
-    myCoins = +m.cash || 0; myTools = +m.tools || 0; myGear = m.gear || myGear; syncTool(); syncCash(); if(shopOpen) renderShop();
+    myCoins = +m.cash || 0; myTools = +m.tools || 0; myGear = m.gear || myGear; syncGearSlots(); syncTool(); syncCash(); if(shopOpen) renderShop();
     if(cashVisible()){ renderCash(); mpSend({type:'cashlog'}); }
   }
   else if(m.type==='plots'){ plotList = m.list || []; if(shopOpen) renderShop(); }
@@ -4562,6 +4623,7 @@ function start(){
 }
 function pause(){
   feedCam = null;
+  closeCut();
   if(!playing && !$('menu').hidden) return;
   if(invOpen){ invOpen=false; $('inv').hidden=true; }
   if(codeOpen){ codeOpen=false; $('codebox').hidden=true; }
@@ -4748,6 +4810,20 @@ function render(){
     gl.bindVertexArray(plotLineOther.vao); gl.drawArrays(gl.LINES,0,plotLineOther.n);
     gl.bindVertexArray(null);
     gl.enable(gl.CULL_FACE);
+  }
+  // the part you are cutting out, outlined in yellow while you aim at the second corner
+  if(mpMode && cutPt && target && HOTBAR[sel]===SURVEY_ID && !cutOpen){
+    const tp = plotAtClient(target.x, target.z);
+    if(tp && [tp.x0, tp.z0, tp.x1, tp.z1].join(',') === cutPt.plot){
+      const x0 = Math.min(cutPt.x, target.x), x1 = Math.max(cutPt.x, target.x), z0 = Math.min(cutPt.z, target.z), z1 = Math.max(cutPt.z, target.z);
+      const k = [x0, z0, x1, z1].join(',');
+      if(!cutLine) cutLine = makeLineVAO();
+      if(k !== cutLineKey){ uploadLines(cutLine, rectLineVerts(x0, z0, x1, z1)); cutLineKey = k; }
+      gl.disable(gl.CULL_FACE); gl.useProgram(line);
+      gl.uniformMatrix4fv(LU.uVP,false,new Float32Array(VP)); gl.uniform3f(LU.uOff,0,0,0); gl.uniform4f(LU.uCol,1,0.9,0.2,1);
+      gl.bindVertexArray(cutLine.vao); gl.drawArrays(gl.LINES,0,cutLine.n); gl.bindVertexArray(null);
+      gl.enable(gl.CULL_FACE);
+    }
   }
   drawSkyBodies(VP, eye);
   // other players
@@ -5114,8 +5190,8 @@ function frame(now){
     worldTime+=dt;
     if(music.on && !music.timer) musicStart();   // the tune keeps going while you play
     if(spectate.id!=null) followSpectate();
-    if(spectate.id==null && !feedCam) applyLook(dt);
-    if(!player.sleeping && !player.seat && spectate.id==null && !feedCam) physics(dt);      // asleep or sitting, the player stays where they are
+    if(spectate.id==null && !cutOpen) applyLook(dt);
+    if(!player.sleeping && !player.seat && spectate.id==null && !feedCam && !cutOpen) physics(dt);      // asleep or sitting, the player stays where they are
     target=raycast(6);
     cowUpdate(dt);
     tvUpdate();

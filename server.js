@@ -126,11 +126,15 @@ function gearOf(w, pid) {
   if (!w.gear.has(pid)) w.gear.set(pid, { cam: 0, camPlaced: 0, scr: 0, scrPlaced: 0, licensed: false });
   return w.gear.get(pid);
 }
+// the way a camera or screen faces: the face of the block it is mounted on (one of the six directions)
+function faceDir(v) {
+  return Array.isArray(v) && v.length === 3 && v.every(x => x === -1 || x === 0 || x === 1) && v.filter(x => x !== 0).length === 1 ? v : [0, 0, 1];
+}
 const snapYaw = y => Math.round((y || 0) / (Math.PI / 2)) * (Math.PI / 2);
-// the cameras a player can watch: only players who have bought a view screen get the list
+// the cameras a player can watch: only players who have bought a view screen, and only the cameras that player bought
 function devicesMsg(w, q) {
   const list = gearOf(w, q.pid).licensed
-    ? [...w.devices].filter(([, d]) => d.kind === 'cam').map(([k, d]) => { const [x, y, z] = k.split(',').map(Number); return { key: k, x, y, z, yaw: d.yaw, name: d.name }; })
+    ? [...w.devices].filter(([, d]) => d.kind === 'cam' && d.pid === q.pid).map(([k, d]) => { const [x, y, z] = k.split(',').map(Number); return { key: k, x, y, z, yaw: d.yaw, dir: d.dir || [0, 0, 1], name: d.name }; })
     : [];
   return { type: 'devices', list };
 }
@@ -897,7 +901,7 @@ wss.on('connection', (ws) => {
       if (cut.x1 < pl.x1) rest.push({ x0: cut.x1 + 1, x1: pl.x1, z0: cut.z0, z1: cut.z1 });
       if (rest.some(r => Math.min(r.x1 - r.x0 + 1, r.z1 - r.z0 + 1) < PLOT_MIN)) return fail('THE LAND LEFT AROUND THE PART MUST BE AT LEAST ' + PLOT_MIN + ' BLOCKS ON EACH SIDE. PICK A DIFFERENT PART');
       const total = pl.price || 0, area = W * D, cutArea = cw * cd, restTotal = total - Math.round(total * cutArea / area);
-      const restArea = area - cutArea, cutName = (pl.name || 'PLOT') + ' PART';
+      const restArea = area - cutArea, cutName = cleanPlotName(m.name) || (pl.name || 'PLOT') + ' PART';
       const parts = [Object.assign({}, pl, cut, { name: cutName, price: Math.round(total * cutArea / area) })];
       let left = restTotal;
       rest.forEach((r, k) => {
@@ -941,7 +945,7 @@ wss.on('connection', (ws) => {
         if (nk && gearOf(w, p.pid)[nk] < 1) return fixBlock(p, w, key, 'BUY A ' + GEAR[nk].name.toUpperCase() + ' IN THE SHOP FIRST');
         const old = w.devices.get(key);
         if (old) { const og = gearOf(w, old.pid); og[old.kind]++; og[old.kind + 'Placed']--; w.devices.delete(key); devicesChanged = true; }
-        if (nk) { const g = gearOf(w, p.pid); g[nk]--; g[nk + 'Placed']++; w.devices.set(key, { kind: nk, pid: p.pid, name: p.name, yaw: snapYaw(p.yaw + Math.PI) }); devicesChanged = true; }
+        if (nk) { const g = gearOf(w, p.pid); g[nk]--; g[nk + 'Placed']++; w.devices.set(key, { kind: nk, pid: p.pid, name: p.name, dir: faceDir(m.dir), yaw: snapYaw(p.yaw + Math.PI) }); devicesChanged = true; }
       }
       if (m.id === 0) { dropLock(w, key); w.owners.delete(key); }
       else {
@@ -949,7 +953,7 @@ wss.on('connection', (ws) => {
         if (owner === undefined && (cur === null || cur === 0)) w.owners.set(key, p.pid);   // a new block is the placer's
       }
       w.edits.set(key, m.id);
-      if (devicesChanged) announceDevices(w);
+      if (devicesChanged) { announceDevices(w); sendTo(p, walletMsg(w, p)); }
       scheduleSave(w);
       broadcast(w, { type: 'edit', x: m.x, y: m.y, z: m.z, id: m.id, by: id }, id);
       sendTo(p, { type: 'edit', x: m.x, y: m.y, z: m.z, id: m.id, by: id });
