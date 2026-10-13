@@ -1209,7 +1209,7 @@ function furnUse(h){
 /* ---------- the TV: right-click it to turn it on and play the video (media/tv.mp4) on its screen ---------- */
 // the video is one file the game loads; it is only played on the screen of the player who turned the TV on
 const TV_VIDEO_URL = 'media/tv.mp4';
-const tv = { on:false, x:0, y:0, z:0, el:null, node:null, gain:null, prog:null, vao:null, vbo:null, tex:null, loc:null, url:null, lastUse:-1e9 };
+const tv = { on:false, x:0, y:0, z:0, el:null, node:null, gain:null, prog:null, vao:null, vbo:null, tex:null, loc:null, url:null, lastUse:-1e9, held:false };
 const TV_NO_VIDEO = 'NO VIDEO FOUND: RIGHT-CLICK THE TV AGAIN TO CHOOSE ONE';
 const TV_DOUBLE_MS = 400;   // two right clicks (or taps) this close together open the file picker to choose a different video
 function tvVideo(){
@@ -1232,7 +1232,14 @@ function tvUse(h){
   const now = performance.now(), quick = now - tv.lastUse < TV_DOUBLE_MS;
   tv.lastUse = quick ? -1e9 : now;
   if(quick || v.error){ tvChooseFile(h); return true; }   // also when no video file was found: a right click lets you choose one from your computer
-  tvStart(h);
+  // the TV that is on: one right click pauses it, and the next one plays it again
+  if(tv.on && tv.x === h.x && tv.y === h.y && tv.z === h.z && !v.ended){
+    if(v.paused){ tv.held = false; tvPlay(); flashHud('TV PLAYING'); }
+    else { tv.held = true; v.pause(); flashHud('TV PAUSED'); }
+    sfx.click();
+    return true;
+  }
+  tvStart(h);   // a TV that is off, or has finished, starts again from the beginning
   return true;
 }
 function tvStart(h){
@@ -1243,10 +1250,15 @@ function tvStart(h){
   }
   Object.assign(tv, {on:true, x:h.x, y:h.y, z:h.z});
   if(v.currentTime > 0) v.currentTime = 0;
-  const p = v.play();
-  if(p && p.catch) p.catch(() => { tvOff(); flashHud(v.error ? TV_NO_VIDEO : 'THE TV WOULD NOT PLAY'); });
+  tv.held = false;
+  tvPlay();
   sfx.click();
   flashHud('TV ON');
+}
+// starts the picture and sound; if the browser refuses the video, the TV switches off and says why
+function tvPlay(){
+  const v = tv.el, p = v.play();
+  if(p && p.catch) p.catch(() => { tvOff(); flashHud(v.error ? TV_NO_VIDEO : 'THE TV WOULD NOT PLAY'); });
 }
 // no video file was found: this opens a picker for a video from your computer. It plays only in this browser and is not uploaded
 function tvChooseFile(h){
@@ -1276,7 +1288,7 @@ function tvUpdate(){
   if(!tv.on || !tv.el) return;
   if(!tvStillThere()){ tvOff(); return; }
   if(!playing){ if(!tv.el.paused) tv.el.pause(); return; }
-  if(tv.el.paused && !tv.el.ended) tv.el.play().catch(() => {});
+  if(tv.el.paused && !tv.el.ended && !tv.held) tv.el.play().catch(() => {});   // a TV you paused stays paused until you play it
   const d = Math.hypot(player.x - (tv.x + 0.5), player.y - (tv.y + 0.5), player.z - (tv.z + 0.5));
   const t = Math.min(1, Math.max(0, (d - 3) / 19)), g = (1 - t) * (1 - t);
   if(tv.gain && sfx.ctx) tv.gain.gain.setTargetAtTime(g, sfx.ctx.currentTime, 0.08);
@@ -2055,13 +2067,16 @@ function moveAxis(axis,d){
     }
   }
 }
-function physics(dt){
+// turns the pending mouse movement into view, a part each frame. It runs even when you are sitting or in bed, when the body does not move
+function applyLook(dt){
   const P=player;
-  // turn the pending mouse movement into view, a part each frame
   const lk = 1 - Math.exp(-dt*24), lx = lookDX*lk, ly = lookDY*lk;
   lookDX -= lx; lookDY -= ly;
   P.yaw -= lx*0.0022*lookSens;
   P.pitch = clamp(P.pitch - ly*0.0022*lookSens, -1.55, 1.55);
+}
+function physics(dt){
+  const P=player;
   let fw=(keys.KeyW?1:0)-(keys.KeyS?1:0), rt=(keys.KeyD?1:0)-(keys.KeyA?1:0);
   // flying: no gravity, Space rises, Shift descends, and you move faster; blocks still stop you
   // sprint is its own key (Sprint on the stick), so Shift is only for going down while flying
@@ -3847,6 +3862,7 @@ function frame(now){
     worldTime+=dt;
     if(music.on && !music.timer) musicStart();   // the tune keeps going while you play
     if(spectate.id!=null) followSpectate();
+    if(spectate.id==null) applyLook(dt);
     if(!player.sleeping && !player.seat && spectate.id==null) physics(dt);      // asleep or sitting, the player stays where they are
     target=raycast(6);
     cowUpdate(dt);
