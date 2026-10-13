@@ -1112,26 +1112,33 @@ function heightAt(wx,wz){
 /* ---------- the shop: a building with a counter, a doorway and a shopkeeper inside. It is worked out from the seed like the trees, so every world has it in the same place ---------- */
 const SHOP_W = 9, SHOP_D = 7, SHOP_H = 4;          // the footprint is 9 by 7 blocks; the room inside is 4 blocks high
 // the nearest spot to a point east of the spawn where the ground is flat and above the beach; the floor sits on the highest ground under it
-const SHOP = (() => {
+// a shop site: the nearest spot to the anchor where the ground is flat and above the beach; the floor sits on the highest ground under it
+function findShopSite(ax, az){
   let site = null;
   for(let r = 0; r <= 80 && !site; r++) for(let dz = -r; dz <= r && !site; dz++) for(let dx = -r; dx <= r && !site; dx++){
     if(Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;         // walk outward in rings
-    const x0 = 22 + dx, z0 = 14 + dz;
+    const x0 = ax + dx, z0 = az + dz;
     let lo = 1e9, hi = -1e9;
     for(let z = 0; z < SHOP_D; z++) for(let x = 0; x < SHOP_W; x++){ const h = heightAt(x0 + x, z0 + z); lo = Math.min(lo, h); hi = Math.max(hi, h); }
     if(lo >= 24 && hi - lo <= 3) site = { x0, z0, floorY: hi };
   }
-  if(!site){ site = { x0: 22, z0: 14, floorY: 0 }; for(let z = 0; z < SHOP_D; z++) for(let x = 0; x < SHOP_W; x++) site.floorY = Math.max(site.floorY, heightAt(22 + x, 14 + z)); }
+  if(!site){ site = { x0: ax, z0: az, floorY: 0 }; for(let z = 0; z < SHOP_D; z++) for(let x = 0; x < SHOP_W; x++) site.floorY = Math.max(site.floorY, heightAt(ax + x, az + z)); }
   site.doorX = 4;                                   // the doorway: the middle of the front wall
   site.counterZ = 3;                                // the counter runs across the room
   site.npcX = site.x0 + 4; site.npcZ = site.z0 + 4; // the shopkeeper stands behind the counter
   return site;
-})();
+}
+const SHOP = findShopSite(22, 14);                  // the first shop
+const SHOP_HOUSE_A = findShopSite(22, -18);         // ShopkeeperHouseA: a second shop, north of the first
+const SHOP_SITES = [SHOP, SHOP_HOUSE_A];
+function insideShop(wx, wz){ return SHOP_SITES.some(S => wx >= S.x0 && wz >= S.z0 && wx < S.x0 + SHOP_W && wz < S.z0 + SHOP_D); }
+// does a rectangle of blocks (inclusive corners) touch either shop: plots cannot be bought there
+function rectTouchesShop(x0, z0, x1, z1){ return SHOP_SITES.some(S => x0 <= S.x0 + SHOP_W - 1 && x1 >= S.x0 && z0 <= S.z0 + SHOP_D - 1 && z1 >= S.z0); }
 // what the shop puts in the block at (wx,wy,wz), given the ground height h of that column; -1 when the shop does not change it
-function shopBlockAt(wx, wy, wz, h){
-  const lx = wx - SHOP.x0, lz = wz - SHOP.z0;
+function shopBlockAtSite(S, wx, wy, wz, h){
+  const lx = wx - S.x0, lz = wz - S.z0;
   if(lx < 0 || lz < 0 || lx >= SHOP_W || lz >= SHOP_D) return -1;
-  const F = SHOP.floorY;
+  const F = S.floorY;
   if(wy < F) return wy >= h ? 3 : -1;               // stone foundation, down to the ground
   if(wy === F) return 7;                            // planks floor
   const hy = wy - F;                                // 1..SHOP_H is inside the walls
@@ -1139,10 +1146,10 @@ function shopBlockAt(wx, wy, wz, h){
   if(hy > SHOP_H + 1) return 0;
   const wall = lx === 0 || lz === 0 || lx === SHOP_W - 1 || lz === SHOP_D - 1;
   if(!wall){
-    if(hy === 1 && lz === SHOP.counterZ && lx >= 2 && lx <= SHOP_W - 3) return 7;   // the counter
+    if(hy === 1 && lz === S.counterZ && lx >= 2 && lx <= SHOP_W - 3) return 7;   // the counter
     return 0;                                       // the room is empty
   }
-  if(lz === 0 && lx === SHOP.doorX){                // the doorway in the front wall
+  if(lz === 0 && lx === S.doorX){                // the doorway in the front wall
     if(hy === 1) return DOOR_ID;
     if(hy === 2) return DOOR_TOP_ID;
     return 8;
@@ -1154,6 +1161,7 @@ function shopBlockAt(wx, wy, wz, h){
   if(windowRow && (sideWindow || backWindow)) return 10;
   return 8;                                         // cobblestone walls
 }
+function shopBlockAt(wx, wy, wz, h){ for(const S of SHOP_SITES){ const v = shopBlockAtSite(S, wx, wy, wz, h); if(v !== -1) return v; } return -1; }
 
 /* ---------- world storage: chunks are generated from the seed; edits are kept apart ---------- */
 const chunks = new Map();     // "cx,cz" -> chunk
@@ -1210,7 +1218,7 @@ function genChunk(cx,cz){
   // the shop: after the trees, so it stands over anything that grew inside its walls
   for(let z=0;z<CS;z++) for(let x=0;x<CS;x++){
     const wx=cx*CS+x, wz=cz*CS+z, h=heights[x+z*CS];
-    if(wx<SHOP.x0 || wz<SHOP.z0 || wx>=SHOP.x0+SHOP_W || wz>=SHOP.z0+SHOP_D) continue;
+    if(!insideShop(wx,wz)) continue;
     for(let y=0;y<CH;y++){ const v=shopBlockAt(wx,y,wz,h); if(v>=0) data[x+z*CS+y*CS*CS]=v; }
   }
   const e = edits[chunkKey(cx,cz)];
@@ -3243,12 +3251,13 @@ $('takego').addEventListener('click', ()=>{
 /* ---------- the shopkeeper, and the shop panel ---------- */
 // the shopkeeper: he stands behind the counter, facing the doorway. He is drawn like a player, with the same figure
 const SHOPKEEPER = { x: SHOP.npcX + 0.5, y: SHOP.floorY + 1, z: SHOP.npcZ + 0.5, yaw: 0, phase: 0, amt: 0, rgb: [0.55, 0.32, 0.12] };
+const SHOPKEEPER2 = { x: SHOP_HOUSE_A.npcX + 0.5, y: SHOP_HOUSE_A.floorY + 1, z: SHOP_HOUSE_A.npcZ + 0.5, yaw: 0, phase: 0, amt: 0, rgb: [0.3, 0.42, 0.6] };
 const shopTag = document.createElement('div'); shopTag.className = 'tag'; shopTag.hidden = true; shopTag.textContent = 'SHOPKEEPER';
 $('tags').appendChild(shopTag);
 // the distance along the view to the shopkeeper's body, or -1 when the view does not reach it
-function shopkeeperDist(){
+function shopkeeperDistOf(K){
   const o = [player.x, player.y + eyeNow(), player.z], d = camDir();
-  const b0 = [SHOPKEEPER.x - 0.36, SHOPKEEPER.y, SHOPKEEPER.z - 0.36], b1 = [SHOPKEEPER.x + 0.36, SHOPKEEPER.y + 1.85, SHOPKEEPER.z + 0.36];
+  const b0 = [K.x - 0.36, K.y, K.z - 0.36], b1 = [K.x + 0.36, K.y + 1.85, K.z + 0.36];
   let tmin = 0, tmax = 1e9;
   for(let i = 0; i < 3; i++){
     if(Math.abs(d[i]) < 1e-9){ if(o[i] < b0[i] || o[i] > b1[i]) return -1; continue; }
@@ -3259,6 +3268,7 @@ function shopkeeperDist(){
   }
   return tmin;
 }
+function shopkeeperDist(){ const a = shopkeeperDistOf(SHOPKEEPER), b = shopkeeperDistOf(SHOPKEEPER2); return a < 0 ? b : b < 0 ? a : Math.min(a, b); }
 // true when the shopkeeper is what you are looking at, within reach (a block in front of him hides him)
 function shopAim(){
   if(!playing) return false;
@@ -3552,9 +3562,10 @@ function surveyBox(){
   const w = x1 - x0 + 1, d = z1 - z0 + 1;
   return {x0, z0, x1, z1, w, d, area: w * d, price: w * d * PLOT_RATE, fixed: !!survey.b};
 }
-function surveyFits(s){ return Math.min(s.w, s.d) >= PLOT_MIN && Math.max(s.w, s.d) <= PLOT_MAX; }
+function surveyFits(s){ return Math.min(s.w, s.d) >= PLOT_MIN && Math.max(s.w, s.d) <= PLOT_MAX && !rectTouchesShop(s.x0, s.z0, s.x1, s.z1); }
 // the cut panel: name the new plot, then press CUT
 let cutPending = null, cutOpen = false, cutLine = null, cutLineKey = '';
+let surveyLine = null, surveyLineKey = '';
 function rectLineVerts(x0, z0, x1, z1){
   const out = [];
   const seg = (ax, az, bx, bz, sx, sz) => { const y = heightAt(sx, sz) + 0.08; out.push(ax, y, az, bx, y, bz); };
@@ -3654,6 +3665,7 @@ function buyPlot(){
   if(!mpMode){ shopNote('BUYING LAND NEEDS THE MULTIPLAYER SERVER'); return; }
   const s = surveyBox();
   if(!survey.b || !s){ shopNote('MEASURE THE LAND WITH THE LAND SURVEYOR FIRST'); return; }
+  if(rectTouchesShop(s.x0, s.z0, s.x1, s.z1)){ shopNote('A SHOP IS BUILT THERE. PICK LAND AWAY FROM THE SHOPS'); return; }
   if(!surveyFits(s)){ shopNote('A PLOT IS ' + PLOT_MIN + ' TO ' + PLOT_MAX + ' BLOCKS ON EACH SIDE'); return; }
   if(myCoins < s.price){ shopNote('NOT ENOUGH CASH. THE PLOT COSTS ' + fmtCash(s.price)); return; }
   buyPending = true;
@@ -3937,7 +3949,7 @@ cv.addEventListener('mousedown',e=>{
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('pointerlockchange',()=>{
   if(document.pointerLockElement) lookFrom = performance.now() + 150;
-  if(!document.pointerLockElement && playing && !chatOpen && !invOpen && !codeOpen && !fridgeOpen && !doorShown && !shopOpen) pause();   // releasing the mouse to type in chat or use the catalog is not a pause
+  if(!document.pointerLockElement && playing && !chatOpen && !invOpen && !codeOpen && !fridgeOpen && !doorShown && !shopOpen && !cutOpen) pause();   // releasing the mouse to type in chat or use the catalog is not a pause
 });
 
 /* ---------- sound: every effect is synthesised with Web Audio, so there are no sound files to load ---------- */
@@ -4915,6 +4927,21 @@ function render(){
       gl.enable(gl.CULL_FACE);
     }
   }
+  // the plot you are measuring to buy, outlined in green (red when it does not fit)
+  if(mpMode && survey.a && HOTBAR[sel]===SURVEY_ID && !cutOpen && !cutPt){
+    const sb = surveyBox();
+    if(sb){
+      const fits = surveyFits(sb);
+      const k = [sb.x0, sb.z0, sb.x1, sb.z1].join(',') + (fits ? 'g' : 'r');
+      if(!surveyLine) surveyLine = makeLineVAO();
+      if(k !== surveyLineKey){ uploadLines(surveyLine, rectLineVerts(sb.x0, sb.z0, sb.x1, sb.z1)); surveyLineKey = k; }
+      gl.disable(gl.CULL_FACE); gl.useProgram(line);
+      gl.uniformMatrix4fv(LU.uVP,false,new Float32Array(VP)); gl.uniform3f(LU.uOff,0,0,0);
+      gl.uniform4f(LU.uCol, fits ? 0.35 : 1, fits ? 1 : 0.3, fits ? 0.4 : 0.3, 1);
+      gl.bindVertexArray(surveyLine.vao); gl.drawArrays(gl.LINES,0,surveyLine.n); gl.bindVertexArray(null);
+      gl.enable(gl.CULL_FACE);
+    }
+  }
   drawSkyBodies(VP, eye);
   // other players
   if(mpMode && mp.others.size){
@@ -4947,14 +4974,17 @@ function render(){
   gl.uniformMatrix4fv(SU.uVP,false,new Float32Array(VP));
   gl.uniform1f(SU.uLight,0.25+0.75*dl);
   gl.bindVertexArray(cubeVAO);
-  for(const [M, rgb] of avatarBoxes(SHOPKEEPER)){
+  for(const K of [SHOPKEEPER, SHOPKEEPER2]) for(const [M, rgb] of avatarBoxes(K)){
     gl.uniform3f(SU.uCol, rgb[0], rgb[1], rgb[2]);
     gl.uniformMatrix4fv(SU.uModel,false,new Float32Array(M));
     gl.drawArrays(gl.TRIANGLES,0,36);
   }
   gl.enable(gl.CULL_FACE);
-  const npNear = playing && Math.hypot(SHOPKEEPER.x - player.x, SHOPKEEPER.z - player.z) < 40;
-  const np = npNear ? projectPoint(VP, SHOPKEEPER.x, SHOPKEEPER.y + 2.05, SHOPKEEPER.z) : null;
+  const nearK = Math.hypot(SHOPKEEPER2.x - player.x, SHOPKEEPER2.z - player.z) < Math.hypot(SHOPKEEPER.x - player.x, SHOPKEEPER.z - player.z) ? SHOPKEEPER2 : SHOPKEEPER;
+  const npNear = playing && Math.hypot(nearK.x - player.x, nearK.z - player.z) < 40;
+  const np = npNear ? projectPoint(VP, nearK.x, nearK.y + 2.05, nearK.z) : null;
+  const tagText = nearK === SHOPKEEPER ? 'SHOPKEEPER' : 'SHOPKEEPER: HOUSE A';
+  if(shopTag.textContent !== tagText) shopTag.textContent = tagText;
   if(np){ shopTag.hidden = false; shopTag.style.left = np[0] + 'px'; shopTag.style.top = np[1] + 'px'; }
   else shopTag.hidden = true;
   if(cow.on){                                    // the cow
