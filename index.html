@@ -67,6 +67,12 @@
   .cl b{color:#ffe066;font-weight:bold}
   #chatin{position:fixed;left:12px;bottom:96px;width:min(440px,70vw);box-sizing:border-box;font:14px 'Courier New',monospace;padding:8px;background:rgba(10,12,18,.9);color:#fff;border:2px solid #ffe066}
   [hidden]{display:none!important}
+  #fridge{position:fixed;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;background:rgba(8,12,22,.86)}
+  #fridge[hidden]{display:none}
+  #fridgebox{width:min(800px,100%);max-height:100%;overflow:auto;box-sizing:border-box;padding:14px 16px;background:#161b26;border:3px solid #5b6578;display:flex;flex-direction:column;gap:8px;align-items:center}
+  #fridgebox h2{margin:0;font-size:22px;letter-spacing:.14em;text-shadow:2px 2px 0 #000}
+  #fridgeslots{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;width:100%}
+  #fridgemsg{min-height:1.4em;margin:0;font-size:13px;color:#ffe066;text-align:center}
 </style>
 </head>
 <body>
@@ -93,6 +99,7 @@
     <div id="settingsbox" hidden>
       <h2>SETTINGS</h2>
       <button class="btn" id="musicbtn">MUSIC: ON</button>
+      <button class="btn" id="drawbtn" type="button">DRAW DISTANCE: 4</button>
       <button class="btn" id="sound">SOUND EFFECTS: ON</button>
       <button class="btn ghost" id="setback">BACK</button>
     </div>
@@ -132,6 +139,17 @@
   </div>
 </div>
 
+<div id="fridge" hidden>
+  <div id="fridgebox" role="dialog" aria-labelledby="fridgetitle">
+    <h2 id="fridgetitle">FRIDGE</h2>
+    <p class="hint">Click food to take it into your inventory. To put food in, hold it and right-click the open fridge.<br>Press <b>E</b> or <b>Esc</b> to close.</p>
+    <div id="fridgeslots"></div>
+    <p id="fridgemsg" role="status"></p>
+    <button class="btn" id="fridgeshut" type="button">SHUT THE DOOR</button>
+    <button class="btn" id="fridgeclose" type="button">CLOSE (E)</button>
+  </div>
+</div>
+
 <div id="inv" hidden>
   <div id="invbox" role="dialog" aria-labelledby="invtitle">
     <h2 id="invtitle">BLOCK CATALOG</h2>
@@ -150,7 +168,8 @@
 'use strict';
 /* ---------- settings and block types ---------- */
 const CS = 16, CH = 64;                 // chunk width and height in blocks
-const RD = 4;                           // render distance, in chunks
+let RD = 4;
+try{ RD = Math.max(2, Math.min(6, Number(localStorage.getItem('blockrealm_draw_v1')) || 4)); }catch(e){}                           // render distance, in chunks
 const SEED = 1337;
 const DAY_LEN = 480;                    // seconds for one full day
 const PW = 0.3, PH = 1.8, EYE = 1.62;   // player width, height and eye height
@@ -248,7 +267,7 @@ const CARCASS = (open, t=25) => open
 // the quartz top of a base unit: every counter top sits at the same height (0.9), so they line up
 const QTOP = [B(0,0.86,0,1,0.9,1,54)];
 const FURN_A = [
-  {name:'Toilet', icon:64, sw:'#f2f2ee', fn: () => [
+  {name:'Toilet', icon:64, sw:'#f2f2ee', seat:{u:0.5,v:0.45,h:0.46}, fn: () => [
     B(0.22,0,0.18,0.78,0.42,0.8,64),          // bowl
     B(0.2,0.42,0.2,0.8,0.46,0.82,64),         // rim
     B(0.3,0.44,0.48,0.7,0.47,0.74,66),        // dark water
@@ -265,7 +284,7 @@ const FURN_A = [
     B(0.2,0.8,0.3,0.8,0.82,0.84,66),          // dark basin plate
     B(0.46,0.8,0.1,0.54,0.92,0.16,65),        // tap
     B(0.46,0.9,0.16,0.54,0.94,0.3,65),        // spout
-    ...(f.water ? [B(0.24,0.82,0.34,0.76,0.86,0.8,68,64,64)] : [])   // water in the basin
+    ...(f.water ? [B(0.24,0.82,0.34,0.76,0.86,0.8,68,64,64), B(0.47,0.82,0.24,0.53,0.9,0.28,68,68,68,0.5)] : [])   // water in the basin, and the stream from the tap
   ]},
   // two blocks long: the tap is on the back wall of the left half, the plug is in the bottom
   {name:'Bathtub', icon:64, sw:'#f2f2ee', wide:true, states:[{lv:0},{lv:1},{lv:2},{lv:3}],
@@ -284,42 +303,50 @@ const FURN_A = [
     ...(f.lv ? [B(0.1,0.1,0.1,1.9,0.1+0.42*f.lv/3,0.9,68,64,64)] : [])   // the water, higher as the bath fills
   ]},
   // the tap is on the top of the basin: aim at it from above and right-click to turn the water on or off
-  {name:'Kitchen Sink', icon:54, sw:'#ece6dc', states:[{},{open:1},{water:1},{open:1,water:1}],
+  {name:'Kitchen Sink', icon:54, sw:'#ece6dc', noOpen:true, states:[{},{open:1},{water:1},{open:1,water:1}],
    acts:[{box:[0.35,0.6,0,0.65,1.01,0.4], flag:'water', on:'WATER ON', off:'WATER OFF'}],
    fn: f => [
-    ...CARCASS(f.open),
+    ...CARCASS(false),
     ...QTOP,
     B(0,0.9,0,1,1.0,0.07,54),                 // backsplash
     B(0.2,0.9,0.25,0.8,0.92,0.8,66),          // basin
     B(0.46,0.9,0.1,0.54,1.0,0.16,65),         // tap post
     B(0.46,0.96,0.16,0.54,0.98,0.36,65),      // spout, arched over the basin
-    ...(f.water ? [B(0.24,0.92,0.3,0.76,0.95,0.75,68,64,64)] : []),
-    ...(f.open ? [
-      OPEN_DOOR(0.03,0.47,0.94,0.1,0.82,24),
-      OPEN_RIGHT(0.53,0.97,0.94,0.1,0.82,24),
-      B(0.1,0.4,0.1,0.9,0.44,0.9,65)          // a shelf inside
-    ] : [
-      B(0.03,0.1,0.94,0.47,0.82,0.99,24),     // left door
-      B(0.53,0.1,0.94,0.97,0.82,0.99,24),     // right door
-      B(0.4,0.6,0.99,0.44,0.7,1.0,65),
-      B(0.56,0.6,0.99,0.6,0.7,1.0,65)
-    ])
+    ...(f.water ? [B(0.24,0.92,0.3,0.76,0.95,0.75,68,64,64), B(0.47,0.92,0.26,0.53,0.96,0.3,68,68,68,0.5)] : []),   // running water: a stream from the tap into the basin
+    // the doors under the sink stay shut
+    B(0.03,0.1,0.94,0.47,0.82,0.99,24),       // left door
+    B(0.53,0.1,0.94,0.97,0.82,0.99,24),       // right door
+    B(0.4,0.6,0.99,0.44,0.7,1.0,65),
+    B(0.56,0.6,0.99,0.6,0.7,1.0,65)
   ]},
   {name:'Fridge', icon:65, sw:'#c8ccd2', tall:true, states:[{},{open:1},{top:1},{top:1,open:1}],
-   fn: f => [
-    ...(f.top ? [B(0.02,0.96,0.02,0.98,1,0.92,65)] : [B(0.04,0,0.04,0.96,0.06,0.88,66)]),   // a steel roof trim on top, a dark plinth at the bottom
+   fn: f => f.top ? [
+    B(0.02,0,0.02,0.98,1,0.92,64),            // white body, joined to the fridge below
+    B(0.02,0.96,0.02,0.98,1,0.92,65),         // steel roof trim
+    ...(f.open ? [
+      ...SHELL(0.02,0,0.02,0.98,1,0.92,64,0.05),
+      B(0.07,0.5,0.07,0.93,0.53,0.9,65),      // a shelf inside
+      OPEN_DOOR(0.03,0.97,0.92,0.01,0.99,65),
+      B(0.03,0.12,1.75,0.12,0.4,1.79,66)      // handle
+    ] : [
+      B(0.03,0.01,0.92,0.97,0.99,0.99,65),    // freezer door
+      B(0.03,0.985,0.99,0.97,1.015,1.0,66),   // the seam between the freezer and the fridge
+      B(0.86,0.15,0.99,0.9,0.4,1.02,66)       // handle
+    ])
+   ] : [
+    B(0.04,0,0.04,0.96,0.06,0.88,66),         // dark plinth at the bottom
+    B(0.02,0.06,0.02,0.98,1,0.92,64),         // white body
     ...(f.open ? [
       ...SHELL(0.02,0.06,0.02,0.98,1,0.92,64,0.05),
       B(0.07,0.5,0.07,0.93,0.53,0.9,65),      // a shelf inside
       OPEN_DOOR(0.03,0.97,0.92,0.01,0.99,65),
       B(0.03,0.5,1.75,0.12,0.75,1.79,66)      // handle
     ] : [
-      B(0.02,0.06,0.02,0.98,1,0.92,64),       // white body
-      B(0.03,0.07,0.92,0.97,0.99,0.99,65),    // door
-      B(0.03,0.5,0.99,0.97,0.51,1.0,66),      // the seam of the door
+      B(0.03,0.07,0.92,0.97,0.99,0.99,65),    // fridge door
+      B(0.03,0.985,0.99,0.97,1.015,1.0,66),   // the seam
       B(0.86,0.6,0.99,0.9,0.85,1.02,66)       // handle
     ])
-  ]},
+   ]},
   {name:'Microwave', icon:65, sw:'#c8ccd2', states:[{},{open:1}], fn: f => [
     ...(f.open ? [
       ...SHELL(0.02,0,0.08,0.98,0.58,0.96,65,0.05),
@@ -433,7 +460,7 @@ const FURN_B = [
     B(0.06,0,0.86,0.14,0.8,0.94,24),
     B(0.86,0,0.86,0.94,0.8,0.94,24)
   ]},
-  {name:'Chair', icon:71, sw:'#d6c49a', fn: () => [
+  {name:'Chair', icon:71, sw:'#d6c49a', seat:{u:0.5,v:0.5,h:0.5}, fn: () => [
     B(0.16,0.44,0.2,0.84,0.5,0.86,71),        // seat
     B(0.16,0.5,0.06,0.84,1.0,0.16,24),        // backrest, at the back
     B(0.18,0,0.22,0.24,0.44,0.28,24),         // legs
@@ -441,7 +468,7 @@ const FURN_B = [
     B(0.18,0,0.72,0.24,0.44,0.8,24),
     B(0.76,0,0.72,0.82,0.44,0.8,24)
   ]},
-  {name:'Sofa', icon:69, sw:'#3a5fb4', fn: () => [
+  {name:'Sofa', icon:69, sw:'#3a5fb4', seat:{u:0.5,v:0.55,h:0.5}, fn: () => [
     B(0.02,0.1,0.1,0.98,0.42,0.98,69),        // base
     B(0.02,0.42,0.02,0.98,0.9,0.22,69),       // back
     B(0.02,0.42,0.22,0.16,0.7,0.98,69),       // left arm
@@ -611,6 +638,15 @@ function isOpaqueId(b){ return b!==0 && isSolidId(b) && b!==GLASS_ID && b!==BED_
 const SLOTS = 8;                                       // the inventory has 8 slots
 // every block a player can carry: the door, the bed and the lamp are placed as two blocks each
 // the catalog's tabs: each category lists its blocks. The door and the bed are placed as two blocks each, the lamp too.
+// food: items you carry and put in the fridge. They have numbers of their own, and can never be placed as blocks
+const ITEMS = [
+  {name:'Apple',  icon:78, sw:'#c83a2c'}, {name:'Bread',  icon:79, sw:'#c89a5c'}, {name:'Milk',   icon:80, sw:'#f2f2f8'},
+  {name:'Cheese', icon:81, sw:'#f2c84a'}, {name:'Carrot', icon:82, sw:'#e8822c'}, {name:'Juice',  icon:83, sw:'#f4a028'}
+];
+const ITEM_BASE = 1000;
+const ITEM_IDS = ITEMS.map((_, i) => ITEM_BASE + i);
+ITEMS.forEach((it, i) => { BLOCKS[ITEM_BASE + i] = {name:it.name, top:it.icon, side:it.icon, bot:it.icon, sw:it.sw}; });
+const isItem = b => b >= ITEM_BASE;
 const CATS = [
   {name:'Nature',       ids:[1,2,6,18,19,20,5,36,37,33,55,56,57]},
   {name:'Wood',         ids:[4,7,27,28,29,30,31,32,23]},
@@ -618,7 +654,8 @@ const CATS = [
   {name:'Colors',       ids:[25,41,42,43,44,45,46]},
   {name:'Ores & Metal', ids:[24,48,49,50,21,22,51,52]},
   {name:'Light & Glass',ids:[10,11,47]},
-  {name:'Furniture',    ids:[12,16,...FURN_BASES]}
+  {name:'Furniture',    ids:[12,16,...FURN_BASES]},
+  {name:'Food',         ids:ITEM_IDS}
 ];
 const CATALOG = CATS.flatMap(c => c.ids);      // every block a player can carry
 let catFilter = 'All';                         // the catalog tab that is open
@@ -667,6 +704,7 @@ function heightAt(wx,wz){
 /* ---------- world storage: chunks are generated from the seed; edits are kept apart ---------- */
 const chunks = new Map();     // "cx,cz" -> chunk
 let edits = {};               // "cx,cz" -> { index: blockType }
+let editsDirty = false;       // true when the edits have changed since they were last saved
 function chunkKey(cx,cz){ return cx+','+cz; }
 function loadEdits(){ try{ edits = JSON.parse(localStorage.getItem('blockrealm_edits_v1')||'{}') || {}; }catch(e){ edits = {}; } }
 function saveEdits(){ if(mpMode) return; try{ localStorage.setItem('blockrealm_edits_v1', JSON.stringify(edits)); }catch(e){} }
@@ -720,7 +758,7 @@ function setBlock(wx,wy,wz,t,quiet){
   if(wy<0 || wy>=CH) return false;
   const cx=Math.floor(wx/CS), cz=Math.floor(wz/CS);
   const lx=wx-cx*CS, lz=wz-cz*CS, idx=lx+lz*CS+wy*CS*CS;
-  const k=chunkKey(cx,cz); if(!quiet) (edits[k]||(edits[k]={}))[idx]=t;
+  const k=chunkKey(cx,cz); if(!quiet){ (edits[k]||(edits[k]={}))[idx]=t; editsDirty=true; }
   // the light only needs working out again when a lamp is involved, or a lit cell is next to the change
   const prev = getBlock(wx,wy,wz);
   if(prev !== t && (LIGHT_SRC[t] || LIGHT_SRC[prev] || litNear(wx,wy,wz))) lightDirty = true;
@@ -889,7 +927,7 @@ function furnPartner(x,y,z,b){
 }
 // the point the player is looking at (from the last raycast)
 function hitPoint(h){
-  const o = [player.x, player.y+EYE, player.z], d = camDir();
+  const o = [player.x, player.y+eyeNow(), player.z], d = camDir();
   return [o[0]+d[0]*h.t, o[1]+d[1]*h.t, o[2]+d[2]*h.t];
 }
 // the same point in the piece's own coordinates: 0 to 1 across a block, and 0 to 2 across a wide piece
@@ -929,6 +967,7 @@ function furnAct(h){
       furnChange(h, f => { on = !f[a.flag]; f[a.flag] = on; return f; });
       flashHud(on ? a.on : a.off);
       sfx.click();
+      if(on && a.flag === 'water') sfx.noise(1.0, 0.1, 'bandpass', 1500, 0.5);   // the tap running
     } else {
       const from = furnState(h.id).f.lv;
       const level = a.toggle ? (from ? 0 : 3) : a.level;   // a toggle fills an empty bath and drains a full one
@@ -943,7 +982,7 @@ function furnAct(h){
 // right-clicking an openable piece opens it, or shuts it again
 function furnOpenToggle(h){
   const v = furnState(h.id);
-  if(!FURN[v.t].states.some(s => s.open)) return false;
+  if(FURN[v.t].noOpen || !FURN[v.t].states.some(s => s.open)) return false;
   const opening = !v.f.open;
   if(!furnChange(h, f => { f.open = opening; return f; })) return false;
   sfx.door(opening);
@@ -989,6 +1028,110 @@ function toggleSwitch(h){
   flashHud(on ? 'LIGHTS ON' : 'LIGHTS OFF');
   return true;
 }
+/* ---------- sitting: right-click a sofa, a chair, a toilet or a bed to sit on it. On a bed, press Z to lie down ---------- */
+const LIE_KEY = 'KeyZ';
+// puts the player on a seat: x, y (the feet), z, and the way they face; cell is the bed they sit on, if any
+function seatPlayer(x, y, z, yaw, cell, front){
+  for(const k in keys) keys[k] = false;
+  Object.assign(player, {x, y, z, yaw, vx:0, vy:0, vz:0});
+  player.seat = {cell, front, x, y, z};
+  flashHud(cell ? 'SITTING ON THE BED: press Z to lie down' : 'SITTING: press Space or a move key to stand up');
+}
+// sits on a sofa, a chair or a toilet, facing the way its front faces
+function sitOnFurniture(h){
+  const v = furnState(h.id), s = FURN[v.t].seat, f = furnFacing(h.id);
+  let u = s.u - 0.5, w = s.v - 0.5, fx = 0, fz = 1;
+  for(let i = 0; i < f; i++){ [u, w] = [-w, u]; [fx, fz] = [-fz, fx]; }   // turned as the piece is turned
+  seatPlayer(h.x + 0.5 + u, h.y + s.h, h.z + 0.5 + w, Math.atan2(-fx, -fz), null, [fx, fz]);
+}
+function sitOnBed(h){
+  seatPlayer(h.x + 0.5, h.y + 0.5625, h.z + 0.5, player.yaw, {x:h.x, y:h.y, z:h.z}, null);
+}
+// gets up: a sofa, chair or toilet puts you on the floor in front of it, if there is room
+function standUp(){
+  const s = player.seat;
+  if(!s) return;
+  player.seat = null;
+  if(s.front){
+    for(const d of [1.0, 0.7, 0.4]){
+      const x = s.x + s.front[0]*d, z = s.z + s.front[1]*d;
+      for(const dy of [0, 0.6, 1.2]) if(!collides(x, s.y + dy, z)){ player.x = x; player.y = s.y + dy; player.z = z; player.vy = 0; return; }
+    }
+  }
+}
+
+/* ---------- food: hold food and right-click an open fridge to put it in. Open the fridge to take food out ---------- */
+const FRIDGE_KEY = 'blockrealm_fridge_v1', FRIDGE_SLOTS = 12;
+const fridges = new Map();      // "x,y,z" of a fridge's bottom half -> its food: an item number per slot, 0 when empty
+try{ const o = JSON.parse(localStorage.getItem(FRIDGE_KEY) || '{}'); for(const k in o) if(Array.isArray(o[k])) fridges.set(k, o[k]); }catch(e){}
+function saveFridges(){ try{ localStorage.setItem(FRIDGE_KEY, JSON.stringify(Object.fromEntries(fridges))); }catch(e){} }
+const isFridge = b => isFurn(b) && FURN[furnState(b).t].name === 'Fridge';
+const fridgeKey = h => furnState(h.id).f.top ? h.x+','+(h.y-1)+','+h.z : h.x+','+h.y+','+h.z;
+function fridgeFood(key){
+  if(!fridges.has(key)) fridges.set(key, new Array(FRIDGE_SLOTS).fill(0));
+  return fridges.get(key);
+}
+let fridgeOpen = null;          // the fridge whose shelves are showing: {key, x, y, z}, or null
+// right-clicking a fridge: a closed door opens; with food in your hand it goes in; otherwise the shelves show
+function fridgeUse(h){
+  if(!furnState(h.id).f.open){ furnOpenToggle(h); return; }
+  if(isItem(HOTBAR[sel])){ putFood(h, HOTBAR[sel]); return; }
+  openFridge(h);
+}
+function putFood(h, food){
+  const slots = fridgeFood(fridgeKey(h)), i = slots.indexOf(0);
+  if(i < 0){ flashHud('THE FRIDGE IS FULL'); return; }
+  slots[i] = food; saveFridges();
+  sfx.click();
+  flashHud('PUT ' + BLOCKS[food].name.toUpperCase() + ' IN THE FRIDGE');
+}
+function openFridge(h){
+  fridgeOpen = {key: fridgeKey(h), x:h.x, y:h.y, z:h.z};
+  for(const k in keys) keys[k] = false;
+  try{ document.exitPointerLock(); }catch(e){}
+  $('fridge').hidden = false;
+  $('fridgemsg').textContent = '';
+  renderFridge();
+  $('fridgeclose').focus();
+}
+function renderFridge(){
+  const box = $('fridgeslots'); box.innerHTML = '';
+  fridgeFood(fridgeOpen.key).forEach((food, i) => {
+    const b = document.createElement('button'); b.className = 'cat'; b.type = 'button';
+    if(food){
+      b.title = BLOCKS[food].name;
+      const ic = document.createElement('i'); setIcon(ic, BLOCKS[food].top); b.appendChild(ic);
+      const t = document.createElement('span'); t.textContent = BLOCKS[food].name; b.appendChild(t);
+      b.onclick = () => takeFood(i);
+    } else {
+      const t = document.createElement('span'); t.textContent = 'empty'; t.style.opacity = '.5'; b.appendChild(t);
+      b.disabled = true;
+    }
+    box.appendChild(b);
+  });
+}
+function takeFood(i){
+  const slots = fridgeFood(fridgeOpen.key), food = slots[i];
+  if(!food) return;
+  const free = HOTBAR.indexOf(null);
+  if(free < 0){ $('fridgemsg').textContent = 'Your inventory is full: free a slot first'; return; }
+  HOTBAR[free] = food; slots[i] = 0;
+  saveFridges(); saveInv(); buildHotbar();
+  $('fridgemsg').textContent = 'Took ' + BLOCKS[food].name + ' out of the fridge';
+  renderFridge();
+}
+// closes the shelves; shut also closes the door
+function closeFridge(shut){
+  if(!fridgeOpen) return;
+  const f = fridgeOpen;
+  fridgeOpen = null;
+  if(shut){ const b = getBlock(f.x, f.y, f.z); if(isFridge(b) && furnState(b).f.open) furnOpenToggle({x:f.x, y:f.y, z:f.z, id:b}); }
+  $('fridge').hidden = true;
+  lockPointer();
+}
+$('fridgeclose').addEventListener('click', ()=>closeFridge(false));
+$('fridgeshut').addEventListener('click', ()=>closeFridge(true));
+
 // right-clicking a lamp switches it on or off, both of its halves together
 function toggleLamp(h){
   const on = !isLampOn(h.id);
@@ -1393,6 +1536,12 @@ function makeAtlasCanvas(){
   tile(77,(px,py)=>{ const n=rnd2(px,py,133); const edge=px<=1||px>=14||py<=1||py>=14;                          // a cream light switch plate
                     if((px===3||px===12)&&py===8) return [150,146,138];
                     return edge ? [196,190,176] : [g(n,236,8),g(n,230,8),g(n,216,8)]; });
+  tile(78,(px,py)=>{ if(Math.hypot(px-10,py-2.5)<1.8) return [84,170,70]; if(Math.hypot(px-7.5,py-8.5)<5.2) return Math.hypot(px-5.5,py-6)<1.6 ? [246,160,150] : [196,30,36]; return [206,220,228]; });   // apple
+  tile(79,(px,py)=>{ const d=Math.hypot((px-7.5)/6.5,(py-8)/4.6); if(d<1) return d>0.8 ? [170,102,44] : [226,172,92]; return [236,226,206]; });   // bread
+  tile(80,(px,py)=>{ if(px>=4&&px<=11&&py>=3&&py<=14) return py<=5 ? [60,110,200] : (px===4||px===11 ? [214,220,232] : [242,242,248]); return [200,214,226]; });   // milk
+  tile(81,(px,py)=>{ if(py>=5&&py<=12&&px>=2&&px<=13-(py-5)*(11/7)) return Math.hypot(px-8,py-9)<1.3 ? [222,172,44] : [246,206,70]; return [200,214,226]; });   // cheese
+  tile(82,(px,py)=>{ if(py<=4&&px>=8&&px<=12) return [70,150,60]; if(py>=5&&py<=14&&Math.abs(px-(py*0.5+3))<2.6) return [240,130,40]; return [200,214,228]; });   // carrot
+  tile(83,(px,py)=>{ if(py>=2&&py<=4&&px>=5&&px<=10) return [200,60,50]; if(py>=5&&py<=14&&px>=4&&px<=11) return py<=6 ? [222,140,50] : [244,160,40]; return [200,214,228]; });   // juice
   return c;
 }
 const atlasTex = gl.createTexture();
@@ -1475,9 +1624,11 @@ function mul(a,b){
 }
 
 /* ---------- player, physics and controls ---------- */
-const player = {x:8.5, y:40, z:8.5, vx:0, vy:0, vz:0, yaw:0, pitch:0, onGround:false, fly:false, lastSpace:0, sleeping:false, invisible:false, bed:null};
+const player = {x:8.5, y:40, z:8.5, vx:0, vy:0, vz:0, yaw:0, pitch:0, onGround:false, fly:false, lastSpace:0, sleeping:false, invisible:false, bed:null, seat:null};
 let playing=false, sel=0, target=null, worldTime=DAY_LEN*0.3;
 const keys = {};
+// how high the eyes are: lying down, sitting, or standing
+function eyeNow(){ return player.sleeping ? 0.42 : player.seat ? 1.0 : EYE; }
 function camDir(){
   const cp=Math.cos(player.pitch);
   return [-Math.sin(player.yaw)*cp, Math.sin(player.pitch), -Math.cos(player.yaw)*cp];
@@ -1540,7 +1691,7 @@ function physics(dt){
   }
 }
 function raycast(maxD){
-  const o=[player.x, player.y+EYE, player.z], d=camDir();
+  const o=[player.x, player.y+eyeNow(), player.z], d=camDir();
   let x=Math.floor(o[0]), y=Math.floor(o[1]), z=Math.floor(o[2]);
   const sx=d[0]>0?1:-1, sy=d[1]>0?1:-1, sz=d[2]>0?1:-1;
   const tdx=Math.abs(1/(d[0]||1e-9)), tdy=Math.abs(1/(d[1]||1e-9)), tdz=Math.abs(1/(d[2]||1e-9));
@@ -1698,14 +1849,17 @@ function doPlace(){
   const h=raycast(6); if(!h) return;
   if(isDoorId(h.id)){ toggleDoor(h); return; }
   if(isLampId(h.id)){ toggleLamp(h); return; }                     // right-click switches a lamp on or off
+  if(isFridge(h.id)){ fridgeUse(h); return; }                        // a fridge: its door, and the food in it
   if(isFurn(h.id) && (furnAct(h) || furnOpenToggle(h) || furnUse(h))) return;   // right-click works a tap, a plug, a door or a switch
+  if(isFurn(h.id) && FURN[furnState(h.id).t].seat){ sitOnFurniture(h); return; }   // right-click a sofa, a chair or a toilet to sit on it
   if(h.id===BED_FOOT_ID || h.id===BED_HEAD_ID){
     // holding a bed and aiming at the top of a bed stacks another bed on it; otherwise you lie down to sleep
     if(HOTBAR[sel]===BED_FOOT_ID && h.ny===1){ placeBunk(h); return; }
-    trySleep(h); return;
+    sitOnBed(h); return;
   }
   const id=HOTBAR[sel];
   if(id==null){ flashHud('EMPTY SLOT: press E to choose a block'); return; }
+  if(isItem(id)){ flashHud('FOOD GOES IN THE FRIDGE: open one, then right-click it'); return; }
   const x=h.x+h.nx, y=h.y+h.ny, z=h.z+h.nz;
   const mt = isFurnBase(id) ? FURN[furnState(id).t].mount : null;
   if(mt === 'ceiling' && h.ny !== -1){ flashHud('HANG THE LIGHT UNDER A CEILING'); return; }
@@ -1912,6 +2066,10 @@ function flashHud(text){ $('tm').textContent=text; flashT=2.0; }
 
 addEventListener('keydown',e=>{
   if(chatOpen) return;                          // while typing in chat, keys belong to the chat box
+  if(fridgeOpen){                               // the fridge shelves are open: only E or Esc do anything
+    if((e.code==='KeyE' || e.code==='Escape') && !e.repeat){ e.preventDefault(); closeFridge(false); }
+    return;
+  }
   if(codeOpen){                                 // the private panel is open: only Esc does anything
     if(e.code==='Escape' && !e.repeat){ e.preventDefault(); closeCode(); }
     return;
@@ -1926,6 +2084,14 @@ addEventListener('keydown',e=>{
   if(e.code==='KeyV' && playing && mpMode && !e.repeat){ e.preventDefault(); toggleMic(); return; }
   if(!playing){ if(e.code==='Escape') pause(); return; }
   if(e.code==='Escape'){ pause(); return; }
+  if(player.seat){                              // sitting: Z lies down on a bed; a move key or Space gets you up
+    if(e.code===LIE_KEY && !e.repeat && player.seat.cell){
+      e.preventDefault();
+      if(!isNight()){ flashHud('YOU CAN ONLY LIE DOWN TO SLEEP AT NIGHT'); return; }
+      const c = player.seat.cell; standUp(); trySleep(c); return;
+    }
+    if(!e.repeat && ['Space','KeyW','KeyA','KeyS','KeyD'].includes(e.code)){ e.preventDefault(); standUp(); return; }
+  }
   if(player.sleeping){                          // asleep in a bed: Space gets you up, nothing else works
     if(e.code==='Space' && !e.repeat) wakeUp();
     return;
@@ -1947,23 +2113,26 @@ addEventListener('keydown',e=>{
 addEventListener('keyup',e=>{ keys[e.code]=false; });
 addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; });
 addEventListener('wheel',e=>{ if(playing && !invOpen && !player.sleeping) selectSlot((sel+(e.deltaY>0?1:-1)+SLOTS)%SLOTS); },{passive:true});
+let lookFrom = 0;             // the mouse is read only from this moment on: right after it locks, the first movement can be a jump
 document.addEventListener('mousemove',e=>{
-  if(!playing || document.pointerLockElement!==cv) return;
-  player.yaw -= e.movementX*0.0022;
-  player.pitch = clamp(player.pitch - e.movementY*0.0022, -1.55, 1.55);
+  if(!playing || document.pointerLockElement!==cv || performance.now() < lookFrom) return;
+  const dx = clamp(e.movementX, -60, 60), dy = clamp(e.movementY, -60, 60);   // one event can never turn you far
+  player.yaw -= dx*0.0022;
+  player.pitch = clamp(player.pitch - dy*0.0022, -1.55, 1.55);
 });
 function lockPointer(){
   try{ const p = cv.requestPointerLock(); if(p && p.catch) p.catch(()=>{}); }catch(e){}
 }
 cv.addEventListener('mousedown',e=>{
-  if(!playing || invOpen || codeOpen || player.sleeping) return;
+  if(!playing || invOpen || codeOpen || fridgeOpen || player.sleeping) return;
   if(document.pointerLockElement!==cv) lockPointer();   // a click after a join or a pause captures the mouse
   if(document.pointerLockElement!==cv && e.button!==0) return;
   if(e.button===0) doBreak(); else if(e.button===2) doPlace();
 });
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('pointerlockchange',()=>{
-  if(!document.pointerLockElement && playing && !chatOpen && !invOpen && !codeOpen) pause();   // releasing the mouse to type in chat or use the catalog is not a pause
+  if(document.pointerLockElement) lookFrom = performance.now() + 150;
+  if(!document.pointerLockElement && playing && !chatOpen && !invOpen && !codeOpen && !fridgeOpen) pause();   // releasing the mouse to type in chat or use the catalog is not a pause
 });
 
 /* ---------- sound: every effect is synthesised with Web Audio, so there are no sound files to load ---------- */
@@ -2081,15 +2250,6 @@ function musicStep(){
     music.nextT += 0.5; music.step++;
   }
 }
-// a 4-second impulse of decaying noise: the convolver turns it into a soft room echo
-function roomImpulse(c){
-  const len = Math.floor(c.sampleRate * 4), buf = c.createBuffer(2, len, c.sampleRate);
-  for(let ch = 0; ch < 2; ch++){
-    const d = buf.getChannelData(ch);
-    for(let i = 0; i < len; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 3);
-  }
-  return buf;
-}
 function musicStart(){
   sfx.init();
   const c = sfx.ctx;
@@ -2098,13 +2258,15 @@ function musicStart(){
   music.bus = c.createGain();
   music.bus.gain.setValueAtTime(0.0001, c.currentTime);
   music.bus.gain.exponentialRampToValueAtTime(0.7, c.currentTime + 3);     // fades in slowly
-  // the dry sound, plus a wet copy through the room echo
+  // the dry sound, plus a soft echo: a feedback delay, which is cheap enough not to make the sound cut out
   const dry = c.createGain(); dry.gain.value = 0.55;
-  const conv = c.createConvolver(); conv.buffer = roomImpulse(c);
-  const wet = c.createGain(); wet.gain.value = 0.7;
+  const dl = c.createDelay(1.0); dl.delayTime.value = 0.42;
+  const fb = c.createGain(); fb.gain.value = 0.42;
+  const dark = c.createBiquadFilter(); dark.type = 'lowpass'; dark.frequency.value = 1800;
+  const wet = c.createGain(); wet.gain.value = 0.5;
   music.bus.connect(dry); dry.connect(c.destination);
-  music.bus.connect(conv); conv.connect(wet); wet.connect(c.destination);
-  music.nodes = [dry, conv, wet];
+  music.bus.connect(dl); dl.connect(dark); dark.connect(fb); fb.connect(dl); dark.connect(wet); wet.connect(c.destination);
+  music.nodes = [dry, dl, dark, fb, wet];
   music.nextT = c.currentTime + 0.1; music.step = 0;
   music.timer = setInterval(musicStep, 50);
   musicStep();
@@ -2159,6 +2321,7 @@ function showMain(){ $('mainbtns').hidden=false; $('mpbox').hidden=true; $('sett
 function syncSettings(){
   $('sound').textContent = 'SOUND EFFECTS: ' + (sfx.on ? 'ON' : 'OFF');
   $('musicbtn').textContent = 'MUSIC: ' + (music.on ? 'ON' : 'OFF');
+  $('drawbtn').textContent = 'DRAW DISTANCE: ' + RD;
 }
 function showSettings(){
   $('mainbtns').hidden=true; $('mpbox').hidden=true; $('settingsbox').hidden=false;
@@ -2348,7 +2511,7 @@ function loadPlayer(){
   return false;
 }
 let resetting=false;   // set during a world reset so the page-unload save does not write the old edits back
-function saveAll(){ if(resetting) return; saveEdits(); savePlayer(); }
+function saveAll(){ if(resetting) return; if(editsDirty){ saveEdits(); editsDirty=false; } savePlayer(); }
 
 /* ---------- starting, pausing and resetting ---------- */
 let played=false;
@@ -2385,6 +2548,12 @@ function pause(){
 $('settings').addEventListener('click',()=>{ sfx.init(); showSettings(); });
 $('setback').addEventListener('click',showMain);
 $('musicbtn').addEventListener('click',()=>{ sfx.init(); musicSet(!music.on); });
+$('drawbtn').addEventListener('click',()=>{
+  sfx.init();
+  RD = RD >= 6 ? 2 : RD + 1;                 // 2 to 6 chunks: fewer chunks to draw is the easiest way to keep the game smooth
+  try{ localStorage.setItem('blockrealm_draw_v1', String(RD)); }catch(e){}
+  syncSettings();
+});
 $('play').addEventListener('click',start);
 $('resume').addEventListener('click',start);
 $('multi').addEventListener('click',showMP);
@@ -2462,7 +2631,7 @@ function render(){
   gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
   // asleep, the camera sits low, as if lying on the mattress
-  const eye=[player.x, player.y+(player.sleeping?0.42:EYE), player.z];
+  const eye=[player.x, player.y+eyeNow(), player.z];
   const d=camDir();
   const V=lookAt(eye,[eye[0]+d[0],eye[1]+d[1],eye[2]+d[2]],[0,1,0]);
   const Pm=perspective(70*Math.PI/180, cv.width/cv.height, 0.05, 600);
@@ -2666,7 +2835,7 @@ function frame(now){
   if(playing){
     worldTime+=dt;
     if(music.on && !music.timer) musicStart();   // the tune keeps going while you play
-    if(!player.sleeping) physics(dt);      // asleep, the player lies still in the bed
+    if(!player.sleeping && !player.seat) physics(dt);      // asleep or sitting, the player stays where they are
     target=raycast(6);
   } else target=null;
   if(playing && mpMode){
@@ -2727,7 +2896,7 @@ window.VOX = {
   addChatLine, skipNight, trySleep, wakeUp,
   openCode, closeCode, tryCode, setInvisible, music, musicSet, musicStart, musicStop, PRIVATE_CODE,
   get wallHacks(){ return wallHacks; }, placeBunk, leaveBed, bedDirAt,
-  voice, toggleMic, voiceVolume, genChunk, buildMesh, FURN_BASE, FURN_MAX, FURN, FVI, furnVar, furnPartner, furnChange, furnAct, furnOpenToggle, furnUse, furnState, FURN_BASES, placeItem, applyBlock, toggleSwitch, toggleLamp, roomLights, LAMP_OFF_ID, LAMP_OFF_TOP_ID, isLampId, lampId,
+  voice, toggleMic, voiceVolume, genChunk, buildMesh, FURN_BASE, FURN_MAX, FURN, FVI, furnVar, furnPartner, furnChange, furnAct, furnOpenToggle, furnUse, furnState, FURN_BASES, ITEM_IDS, fridges, fridgeUse, sitOnFurniture, seatPlayer, standUp, takeFood, placeItem, applyBlock, toggleSwitch, toggleLamp, roomLights, LAMP_OFF_ID, LAMP_OFF_TOP_ID, isLampId, lampId,
   collides, CATS, GLOWSTONE_ID, get catFilter(){ return catFilter; }, setCat(n){ catFilter = n; if(invOpen) renderInv(); },
   get codeOpen(){ return codeOpen; }, get codeUnlocked(){ return codeUnlocked; },
   openInv, closeInv, addToInv, removeFromInv, get invOpen(){ return invOpen; },
