@@ -202,7 +202,12 @@ function handleUpload(req, res, token) {
     if (failed) return;
     const p = '/media/uploads/' + name;
     ticket.w.uploads = [...(ticket.w.uploads || []), p];
-    while (ticket.w.uploads.length > UPLOAD_KEEP) { const old = ticket.w.uploads.shift(); fs.unlink(path.join(__dirname, 'public', old), () => {}); }
+    while (ticket.w.uploads.length > UPLOAD_KEEP) {
+      const old = ticket.w.uploads.shift();
+      // a TV still showing the removed video is switched off, so nobody is left with a missing file
+      if (ticket.w.tvs) for (const t of ticket.w.tvs.values()) if (t.src === old) { t.src = TV_DEFAULT_SRC; t.on = false; }
+      fs.unlink(path.join(__dirname, 'public', old), () => {});
+    }
     json(200, { path: p });
   });
 }
@@ -342,7 +347,7 @@ wss.on('connection', (ws) => {
     if (m.type === 'uploadTicket') {
       // a player who joined may share a video: this gives a ticket for one upload, and at most one ticket every 20 seconds
       const now = Date.now();
-      if (p.ticketAt && now - p.ticketAt < 20000) return sendTo(p, { type: 'uploadTicket', error: 'wait a little before sharing another video' });
+      if (p.ticketAt && now - p.ticketAt < 5000) return sendTo(p, { type: 'uploadTicket', error: 'wait a few seconds before sharing another video' });
       p.ticketAt = now;
       const token = crypto.randomBytes(16).toString('hex');
       uploadTokens.set(token, { w, until: now + 120000 });

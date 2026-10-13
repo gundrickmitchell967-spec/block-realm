@@ -1337,15 +1337,19 @@ function tvUse(h){
   if(!isTV(h)) return false;
   sfx.init();
   const r = tvRec(h.x, h.y, h.z);
-  const now = performance.now(), quick = now - r.lastUse < TV_DOUBLE_MS;
-  r.lastUse = quick ? -1e9 : now;
-  if(quick || (r.el && r.el.error)){ tvChooseFile(r); return true; }   // also when no video file was found: a right click lets you choose one
+  if(r.el && r.el.error){ tvChooseFile(r); return true; }   // also when no video file was found: a right click lets you choose one
+  if(r.wait){ clearTimeout(r.wait); r.wait = 0; tvChooseFile(r); return true; }   // a second quick click: the picker for a different video
+  // the first click waits a moment, so the two clicks of a double click do not also pause or restart the TV
+  r.wait = setTimeout(() => { r.wait = 0; tvClick(r); }, TV_DOUBLE_MS);
+  return true;
+}
+// a single right click: starts the TV, or pauses it, or plays it again
+function tvClick(r){
   if(r.on && r.el){
     if(r.el.paused){ tvAct(r, 'play'); flashHud('TV PLAYING'); }
     else { tvAct(r, 'pause'); flashHud('TV PAUSED'); }
   } else { tvAct(r, 'start'); flashHud('TV ON'); }
   sfx.click();
-  return true;
 }
 // the picker: a video from this computer. In a world it is shared with everyone; alone it plays here
 function tvChooseFile(r){
@@ -1363,9 +1367,9 @@ function tvChooseFile(r){
       tvAct(r, 'start', 0, url); sfx.click(); flashHud('TV ON: YOUR VIDEO');
       return;
     }
-    flashHud('SHARING THE VIDEO WITH EVERYONE...');
+    flashHud('SHARING THE VIDEO WITH EVERYONE... 0%');
     try{
-      const path = await tvShare(f);
+      const path = await tvShare(f, p => flashHud('SHARING THE VIDEO WITH EVERYONE... ' + p + '%'));
       tvAct(r, 'start', 0, path); sfx.click(); flashHud('TV ON: SHARED VIDEO');
     }catch(e){ flashHud('COULD NOT SHARE THE VIDEO: ' + String(e.message).toUpperCase()); }
   });
@@ -1373,21 +1377,28 @@ function tvChooseFile(r){
   input.click();
 }
 // sends a picked video to the server, so everyone in the world can watch it. The server gives a ticket first, then the file is uploaded with it; the answer is the video's address on the server
-function tvShare(f){
+function tvShare(f, onProgress){
   return new Promise((resolve, reject) => {
     if(!mp.ws || mp.ws.readyState !== 1){ reject(new Error('not connected')); return; }
     const wait = {};
     tvShareWait = wait;
     setTimeout(() => { if(tvShareWait === wait){ tvShareWait = null; reject(new Error('the server did not answer')); } }, 10000);
     wait.reject = reject;
-    wait.ticket = async token => {
-      try{
-        const type = (f.type === 'video/webm' || /\.webm$/i.test(f.name)) ? 'video/webm' : 'video/mp4';
-        const res = await fetch(mpBase + '/upload?token=' + encodeURIComponent(token), {method:'POST', headers:{'Content-Type': type}, body:f});
-        const j = await res.json().catch(() => ({}));
-        if(!res.ok) throw new Error(j.error || 'the upload failed');
-        resolve(j.path);
-      }catch(e){ reject(e); }
+    wait.ticket = token => {
+      // XMLHttpRequest, not fetch: it reports how much of the video has been sent so far
+      const type = (f.type === 'video/webm' || /\.webm$/i.test(f.name)) ? 'video/webm' : 'video/mp4';
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', mpBase + '/upload?token=' + encodeURIComponent(token));
+      xhr.setRequestHeader('Content-Type', type);
+      xhr.upload.onprogress = e => { if(e.lengthComputable && onProgress) onProgress(Math.floor(e.loaded / e.total * 100)); };
+      xhr.onload = () => {
+        let j = {};
+        try{ j = JSON.parse(xhr.responseText); }catch(e){}
+        if(xhr.status >= 200 && xhr.status < 300 && j.path) resolve(j.path);
+        else reject(new Error(j.error || 'the upload failed'));
+      };
+      xhr.onerror = () => reject(new Error('the upload failed'));
+      xhr.send(f);
     };
     mpSend({type:'uploadTicket'});
   });
