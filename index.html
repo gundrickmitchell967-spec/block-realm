@@ -219,10 +219,308 @@ const BLOCKS = [null,
   {name:'Melon',            top:60,side:61,bot:60,sw:'#4a9a3a'},   // 56
   {name:'Mushroom Block',   top:62,side:63,bot:63,sw:'#b8382e'}    // 57
 ];
+// ---- furniture: each piece is a set of boxes. Coordinates run 0 to 1 across the block; the FRONT is the +z side.
+// B(x0,y0,z0, x1,y1,z1, top tile, side tile, bottom tile, glow) makes one box
+const B = (x0,y0,z0,x1,y1,z1,t,s=t,bo=t,g=0) => [x0,y0,z0,x1,y1,z1,t,s,bo,g];
+const FURN_A = [
+  {name:'Toilet', icon:64, sw:'#f2f2ee', parts:[
+    B(0.22,0,0.18,0.78,0.42,0.8,64),        // bowl
+    B(0.2,0.42,0.2,0.8,0.46,0.82,64),       // rim
+    B(0.3,0.44,0.48,0.7,0.47,0.74,66),      // dark water
+    B(0.2,0.42,0.02,0.8,0.98,0.2,64),       // tank at the back
+    B(0.18,0.98,0.0,0.82,1.0,0.22,64),      // tank lid
+    B(0.42,0.7,0.2,0.58,0.76,0.22,65)       // flush button
+  ]},
+  {name:'Bathroom Sink', icon:64, sw:'#f2f2ee', parts:[
+    B(0.36,0,0.36,0.64,0.72,0.64,64),       // pedestal
+    B(0.12,0.72,0.22,0.88,0.8,0.92,64),     // basin
+    B(0.2,0.8,0.3,0.8,0.82,0.84,66),        // dark basin plate
+    B(0.46,0.8,0.1,0.54,0.92,0.16,65),      // tap
+    B(0.46,0.9,0.16,0.54,0.94,0.3,65)       // spout
+  ]},
+  {name:'Bathtub', icon:64, sw:'#f2f2ee', parts:[
+    B(0,0,0,1,0.55,0.1,64),                 // back wall
+    B(0,0,0.9,1,0.55,1,64),                 // front wall
+    B(0,0,0.1,0.1,0.55,0.9,64),             // left wall
+    B(0.9,0,0.1,1,0.55,0.9,64),             // right wall
+    B(0.1,0,0.1,0.9,0.1,0.9,64),            // inside floor
+    B(0.1,0.1,0.1,0.9,0.42,0.9,68,64,64),   // water
+    B(0.44,0.55,0,0.56,0.8,0.1,65)          // tap on the back wall
+  ]},
+  {name:'Kitchen Sink', icon:54, sw:'#ece6dc', parts:[
+    B(0.02,0,0.02,0.98,0.86,0.94,25),       // cabinet
+    B(0.02,0.86,0.02,0.98,0.9,0.96,54),     // quartz counter
+    B(0.2,0.9,0.25,0.8,0.92,0.8,66),        // basin
+    B(0.46,0.9,0.1,0.54,0.99,0.16,65),      // tap
+    B(0.46,0.93,0.16,0.54,0.99,0.34,65),    // spout
+    B(0.03,0.02,0.94,0.47,0.84,0.99,24),    // left door
+    B(0.53,0.02,0.94,0.97,0.84,0.99,24),    // right door
+    B(0.4,0.6,0.99,0.44,0.7,1.0,65),        // left handle
+    B(0.56,0.6,0.99,0.6,0.7,1.0,65)         // right handle
+  ]},
+  {name:'Fridge', icon:65, sw:'#c8ccd2', parts:[
+    B(0.02,0,0.02,0.98,1,0.92,64),          // white body (the bottom block of the fridge)
+    B(0.03,0.01,0.92,0.97,0.99,0.99,65),    // door
+    B(0.86,0.5,0.99,0.9,0.75,1.02,66)       // handle
+  ]},
+  {name:'Microwave', icon:65, sw:'#c8ccd2', parts:[
+    B(0.02,0,0.08,0.98,0.58,0.96,65),       // steel body
+    B(0.06,0.12,0.96,0.7,0.5,1.0,66),       // dark window
+    B(0.74,0.12,0.96,0.94,0.5,1.0,65),      // control panel
+    B(0.76,0.36,1.0,0.92,0.44,1.02,68,68,68,0.9),   // display
+    B(0.76,0.2,1.0,0.92,0.26,1.02,67)       // button
+  ]},
+  {name:'Oven', icon:65, sw:'#c8ccd2', parts:[
+    B(0.02,0,0.02,0.98,0.74,0.94,65),       // steel body
+    B(0.02,0.74,0.02,0.98,0.98,0.94,74,66,66),   // hob
+    B(0.05,0.08,0.94,0.95,0.7,1.0,66),      // oven door
+    B(0.14,0.26,1.0,0.86,0.5,1.01,67),      // oven window
+    B(0.1,0.66,1.01,0.9,0.7,1.04,65),       // door handle
+    B(0.1,0.76,0.94,0.18,0.84,0.99,65),     // knob
+    B(0.42,0.76,0.94,0.5,0.84,0.99,65),     // knob
+    B(0.74,0.76,0.94,0.82,0.84,0.99,65)     // knob
+  ]},
+  {name:'Dishwasher', icon:65, sw:'#c8ccd2', parts:[
+    B(0.02,0,0.02,0.98,0.94,0.94,65),       // body
+    B(0.02,0.02,0.94,0.98,0.9,0.99,65),     // door
+    B(0.1,0.76,0.99,0.9,0.86,1.02,66),      // control panel
+    B(0.12,0.6,1.0,0.88,0.64,1.04,65)       // handle
+  ]},
+  {name:'Washing Machine', icon:64, sw:'#f2f2ee', parts:[
+    B(0.02,0,0.02,0.98,1,0.94,64),          // white body
+    B(0.02,0.92,0.02,0.98,1,0.94,65,64,64), // steel top
+    B(0.06,0.84,0.94,0.94,0.9,0.99,66),     // control strip
+    B(0.2,0.18,0.94,0.8,0.8,0.99,66),       // door ring
+    B(0.28,0.26,0.99,0.72,0.72,1.01,67)     // glass
+  ]},
+  {name:'Kitchen Cabinet', icon:25, sw:'#c7a06a', parts:[
+    B(0.02,0,0.02,0.98,1,0.94,25),          // cabinet body
+    B(0.04,0.04,0.94,0.48,0.96,0.99,24),    // left door
+    B(0.52,0.04,0.94,0.96,0.96,0.99,24),    // right door
+    B(0.4,0.5,0.99,0.44,0.62,1.02,65),      // left handle
+    B(0.56,0.5,0.99,0.6,0.62,1.02,65)       // right handle
+  ]},
+  {name:'Drawers', icon:24, sw:'#8a6a40', parts:[
+    B(0.02,0,0.02,0.98,1,0.94,24),          // chest
+    B(0.04,0.04,0.94,0.96,0.3,0.99,25),     // drawer 1
+    B(0.04,0.34,0.94,0.96,0.6,0.99,25),     // drawer 2
+    B(0.04,0.64,0.94,0.96,0.96,0.99,25),    // drawer 3
+    B(0.42,0.14,0.99,0.58,0.2,1.02,65),     // handle 1
+    B(0.42,0.44,0.99,0.58,0.5,1.02,65),     // handle 2
+    B(0.42,0.74,0.99,0.58,0.8,1.02,65)      // handle 3
+  ]},
+  {name:'Counter', icon:54, sw:'#ece6dc', parts:[
+    B(0.02,0,0.02,0.98,0.86,0.94,25),       // cabinet
+    B(0,0.86,0,1,0.9,1,54),                 // quartz top
+    B(0.04,0.04,0.94,0.96,0.84,0.99,24)     // door
+  ]}
+];
+const FURN_B = [
+  {name:'Table', icon:25, sw:'#b08450', parts:[
+    B(0,0.8,0,1,0.86,1,25),                 // top
+    B(0.06,0,0.06,0.14,0.8,0.14,24),        // legs
+    B(0.86,0,0.06,0.94,0.8,0.14,24),
+    B(0.06,0,0.86,0.14,0.8,0.94,24),
+    B(0.86,0,0.86,0.94,0.8,0.94,24)
+  ]},
+  {name:'Chair', icon:71, sw:'#d6c49a', parts:[
+    B(0.16,0.44,0.2,0.84,0.5,0.86,71),      // seat
+    B(0.16,0.5,0.06,0.84,1.0,0.16,24),      // backrest, at the back
+    B(0.18,0,0.22,0.24,0.44,0.28,24),       // legs
+    B(0.76,0,0.22,0.82,0.44,0.28,24),
+    B(0.18,0,0.72,0.24,0.44,0.8,24),
+    B(0.76,0,0.72,0.82,0.44,0.8,24)
+  ]},
+  {name:'Sofa', icon:69, sw:'#3a5fb4', parts:[
+    B(0.02,0.1,0.1,0.98,0.42,0.98,69),      // base
+    B(0.02,0.42,0.02,0.98,0.9,0.22,69),     // back
+    B(0.02,0.42,0.22,0.16,0.7,0.98,69),     // left arm
+    B(0.84,0.42,0.22,0.98,0.7,0.98,69),     // right arm
+    B(0.16,0.42,0.22,0.84,0.5,0.98,70),     // seat cushion
+    B(0.04,0,0.04,0.1,0.1,0.1,24),          // legs
+    B(0.9,0,0.04,0.96,0.1,0.1,24)
+  ]},
+  {name:'Computer Desk', icon:25, sw:'#b08450', parts:[
+    B(0,0.74,0,1,0.8,1,25),                 // desk top
+    B(0.04,0,0.04,0.12,0.74,0.12,24),       // legs
+    B(0.88,0,0.04,0.96,0.74,0.12,24),
+    B(0.04,0,0.88,0.12,0.74,0.96,24),
+    B(0.88,0,0.88,0.96,0.74,0.96,24),
+    B(0.46,0.8,0.36,0.54,0.9,0.44,66),      // monitor stand
+    B(0.36,0.8,0.3,0.64,0.82,0.5,66),       // monitor foot
+    B(0.2,0.84,0.44,0.8,0.98,0.66,67),      // monitor frame
+    B(0.22,0.86,0.66,0.78,0.96,0.68,68,68,68,0.9),   // monitor screen
+    B(0.28,0.8,0.7,0.72,0.84,0.84,66)       // keyboard
+  ]},
+  {name:'TV', icon:67, sw:'#1a1d24', parts:[
+    B(0.1,0,0.3,0.9,0.2,0.9,24),            // stand
+    B(0.02,0.2,0.5,0.98,0.9,0.9,67),        // screen body
+    B(0.04,0.24,0.9,0.96,0.86,0.92,68,68,68,0.9)   // lit screen
+  ]},
+  {name:'Nightstand', icon:24, sw:'#8a6a40', parts:[
+    B(0.12,0,0.12,0.88,0.72,0.9,24),        // body
+    B(0.16,0.42,0.9,0.84,0.68,0.94,25),     // drawer
+    B(0.44,0.52,0.94,0.56,0.58,0.98,65)     // knob
+  ]},
+  {name:'Plant', icon:6, sw:'#4a8a3a', parts:[
+    B(0.3,0,0.3,0.7,0.36,0.7,73),           // pot
+    B(0.32,0.34,0.32,0.68,0.4,0.68,2),      // soil
+    B(0.2,0.4,0.2,0.8,0.7,0.8,6),           // leaves
+    B(0.34,0.7,0.34,0.66,0.95,0.66,6)       // top leaves
+  ]},
+  {name:'Trash Can', icon:65, sw:'#8a9098', parts:[
+    B(0.14,0,0.14,0.86,0.82,0.86,65),       // bin
+    B(0.12,0.82,0.12,0.88,0.86,0.88,66)     // lid
+  ]},
+  {name:'Rug', icon:72, sw:'#d6c49a', parts:[
+    B(0.02,0,0.02,0.98,0.04,0.98,72)        // flat rug
+  ]},
+  {name:'Fireplace', icon:10, sw:'#a04a30', parts:[
+    B(0,0,0,1,1,0.5,10),                    // back wall
+    B(0,0,0.5,0.2,1,1,10),                  // left pillar
+    B(0.8,0,0.5,1,1,1,10),                  // right pillar
+    B(0.2,0.6,0.5,0.8,1,1,10),              // lintel
+    B(0.2,0,0.5,0.8,0.1,1,10),              // hearth
+    B(0.2,0.1,0.5,0.8,0.6,0.52,66),         // firebox back
+    B(0.2,0.1,0.52,0.22,0.6,1,10),          // firebox sides
+    B(0.78,0.1,0.52,0.8,0.6,1,10),
+    B(0.3,0.1,0.6,0.7,0.36,0.8,75,75,75,1.0)   // fire
+  ]},
+  {name:'Coffee Machine', icon:66, sw:'#3a3a40', parts:[
+    B(0.2,0,0.3,0.8,0.7,0.85,66,65,65),    // body
+    B(0.22,0.7,0.32,0.78,0.78,0.85,65),     // top
+    B(0.24,0.1,0.85,0.76,0.14,0.96,65),     // drip tray
+    B(0.4,0.14,0.9,0.6,0.26,0.98,64),       // cup
+    B(0.4,0.56,0.85,0.6,0.62,0.9,68,68,68,0.9)   // display
+  ]}
+];
+// every piece, in order; each one takes 4 block numbers, one per facing (furniture faces the player when placed)
+const FURN = [...FURN_A, ...FURN_B];
+// the open states: the parts drawn when a piece is open (its closed parts are drawn otherwise)
+const OPEN_DOOR = (x0,x1,z0,y0,y1,t) => B(x0,y0,z0,x0+0.07,y1,z0+(x1-x0),t);   // a door swung out on its left edge
+const OPEN_RIGHT = (x0,x1,z0,y0,y1,t) => B(x1-0.07,y0,z0,x1,y1,z0+(x1-x0),t);  // a door swung out on its right edge
+const OPEN_DROP = (x0,x1,z0,y,t) => B(x0,y,z0,x1,y+0.06,z0+0.8,t);             // a door dropped flat on its bottom hinge
+const OPENS = {
+  'Fridge': [
+    B(0.02,0,0.02,0.98,1,0.92,64),
+    OPEN_DOOR(0.03,0.97,0.92,0.01,0.99,65),
+    B(0.03,0.5,1.75,0.1,0.75,1.79,66),
+    B(0.1,0.02,0.92,0.96,0.98,0.93,66),     // inside, dark
+    B(0.1,0.5,0.93,0.96,0.52,0.96,65)       // a shelf
+  ],
+  'Microwave': [
+    B(0.02,0,0.08,0.98,0.58,0.96,65),
+    OPEN_DOOR(0.06,0.7,0.96,0.12,0.5,66),
+    B(0.06,0.12,0.96,0.7,0.5,0.97,66),      // the opening, dark
+    B(0.74,0.12,0.96,0.94,0.5,1.0,65),
+    B(0.76,0.36,1.0,0.92,0.44,1.02,68,68,68,0.9),
+    B(0.76,0.2,1.0,0.92,0.26,1.02,67)
+  ],
+  'Oven': [
+    B(0.02,0,0.02,0.98,0.74,0.94,65),
+    B(0.02,0.74,0.02,0.98,0.98,0.94,74,66,66),
+    OPEN_DROP(0.05,0.95,0.94,0.08,66),
+    B(0.08,0.16,0.94,0.92,0.7,0.96,67),     // the oven opening, dark
+    B(0.1,0.76,0.94,0.18,0.84,0.99,65),
+    B(0.42,0.76,0.94,0.5,0.84,0.99,65),
+    B(0.74,0.76,0.94,0.82,0.84,0.99,65)
+  ],
+  'Dishwasher': [
+    B(0.02,0,0.02,0.98,0.94,0.94,65),
+    OPEN_DROP(0.02,0.98,0.94,0.02,66),
+    B(0.06,0.1,0.94,0.94,0.86,0.96,66),     // the opening, dark
+    B(0.1,0.76,0.94,0.9,0.86,0.98,66)       // control panel
+  ],
+  'Washing Machine': [
+    B(0.02,0,0.02,0.98,1,0.94,64),
+    B(0.02,0.92,0.02,0.98,1,0.94,65,64,64),
+    B(0.06,0.84,0.94,0.94,0.9,0.99,66),
+    OPEN_DOOR(0.2,0.8,0.94,0.18,0.8,66),
+    B(0.22,0.2,0.94,0.78,0.78,0.96,67)      // the drum, dark
+  ],
+  'Kitchen Cabinet': [
+    B(0.02,0,0.02,0.98,1,0.94,25),
+    OPEN_DOOR(0.04,0.48,0.94,0.04,0.96,24),
+    OPEN_RIGHT(0.52,0.96,0.94,0.04,0.96,24),
+    B(0.12,0.08,0.94,0.88,0.92,0.95,66)     // the shelves, dark
+  ],
+  'Drawers': [
+    B(0.02,0,0.02,0.98,1,0.94,24),
+    B(0.04,0.04,0.94,0.96,0.3,0.99,25),
+    B(0.04,0.34,0.94,0.96,0.6,1.36,25),     // the middle drawer, pulled out
+    B(0.04,0.64,0.94,0.96,0.96,0.99,25),
+    B(0.42,0.14,0.99,0.58,0.2,1.02,65),
+    B(0.42,0.44,1.36,0.58,0.5,1.38,65),
+    B(0.42,0.74,0.99,0.58,0.8,1.02,65)
+  ],
+  'Nightstand': [
+    B(0.12,0,0.12,0.88,0.72,0.9,24),
+    B(0.16,0.42,0.9,0.84,0.68,1.3,25),      // the drawer, pulled out
+    B(0.44,0.52,1.3,0.56,0.58,1.32,65)
+  ],
+  'Counter': [
+    B(0.02,0,0.02,0.98,0.86,0.94,25),
+    B(0,0.86,0,1,0.9,1,54),
+    B(0.1,0.06,0.94,0.9,0.82,0.96,66),     // the cupboard, dark
+    OPEN_DOOR(0.04,0.96,0.94,0.04,0.84,24)
+  ],
+  'Kitchen Sink': [
+    B(0.02,0,0.02,0.98,0.86,0.94,25),
+    B(0.02,0.86,0.02,0.98,0.9,0.96,54),
+    B(0.2,0.9,0.25,0.8,0.92,0.8,66),
+    B(0.46,0.9,0.1,0.54,0.99,0.16,65),
+    B(0.46,0.93,0.16,0.54,0.99,0.34,65),
+    B(0.1,0.06,0.94,0.9,0.8,0.96,66),      // the cupboard, dark
+    OPEN_DOOR(0.03,0.47,0.94,0.02,0.84,24),
+    OPEN_RIGHT(0.53,0.97,0.94,0.02,0.84,24)
+  ],
+  'Trash Can': [
+    B(0.14,0,0.14,0.86,0.82,0.86,65),
+    B(0.12,0.82,0.02,0.88,1.12,0.1,66)     // the lid, flipped up at the back
+  ]
+};
+// the top block of a two-block piece (the fridge): its closed and open parts
+const TOPS = {
+  'Fridge': {
+    top: [
+      B(0.02,0,0.02,0.98,1,0.92,64),
+      B(0.03,0.01,0.92,0.97,0.99,0.99,65),
+      B(0.86,0.5,0.99,0.9,0.75,1.02,66)
+    ],
+    topOpen: [
+      B(0.02,0,0.02,0.98,1,0.92,64),
+      OPEN_DOOR(0.03,0.97,0.92,0.01,0.99,65),
+      B(0.03,0.5,1.75,0.1,0.75,1.79,66),
+      B(0.1,0.02,0.92,0.96,0.98,0.93,66),
+      B(0.1,0.5,0.93,0.96,0.52,0.96,65)
+    ]
+  }
+};
+FURN.forEach(ty => {
+  if(OPENS[ty.name]) ty.open = OPENS[ty.name];
+  if(TOPS[ty.name]){ ty.top = TOPS[ty.name].top; ty.topOpen = TOPS[ty.name].topOpen; }
+});
+// every block state a piece can be in, in order. The first 23 are the closed pieces (their block numbers never change);
+// then the open states; then the top halves of tall pieces. Each state takes 4 block numbers, one per facing.
+const FURN_VAR = [];                                // { t: piece index, key, parts, name }
+const FVI = FURN.map(() => ({}));                   // FVI[t][key] = the state's index in FURN_VAR
+function addVar(t, key, parts, name){ FVI[t][key] = FURN_VAR.length; FURN_VAR.push({t, key, parts, name}); }
+FURN.forEach((ty, t) => addVar(t, 'whole', ty.parts, ty.name));
+FURN.forEach((ty, t) => { if(ty.open) addVar(t, 'open', ty.open, ty.name + ' (open)'); });
+FURN.forEach((ty, t) => { if(ty.top) addVar(t, 'top', ty.top, ty.name + ' (top)'); });
+FURN.forEach((ty, t) => { if(ty.topOpen) addVar(t, 'topOpen', ty.topOpen, ty.name + ' (top, open)'); });
+const FURN_BASE = 58;                       // the first furniture block number
+const FURN_MAX = FURN_BASE + FURN_VAR.length*4 - 1;
+const FURN_BASES = FURN.map((_, t) => FURN_BASE + t*4);   // the block a player carries, facing front
+const furnVar = (t, key, f) => FURN_BASE + FVI[t][key]*4 + f;   // the block number for a piece, state and facing
+for(let vi = 0; vi < FURN_VAR.length; vi++) for(let f = 0; f < 4; f++){
+  const v = FURN_VAR[vi];
+  BLOCKS[FURN_BASE + vi*4 + f] = {name:v.name, top:FURN[v.t].icon, side:FURN[v.t].icon, bot:FURN[v.t].icon, sw:FURN[v.t].sw};
+}
 const GLASS_ID = 10, LAMP_ID = 11, LAMP_TOP_ID = 26;
 const DOOR_ID = 12, DOOR_OPEN_ID = 13, DOOR_TOP_ID = 14, DOOR_TOP_OPEN_ID = 15;
 const BED_FOOT_ID = 16, BED_HEAD_ID = 17;
-const MAX_ID = 57;                      // highest block id (matches the server)
+const MAX_ID = FURN_MAX;                // highest block id (matches the server)
 const GLOWSTONE_ID = 47;                // a full block that gives light by itself
 // blocks that give light: lamps (both halves) and glowstone
 const LIGHT_SRC = new Uint8Array(MAX_ID+1);
@@ -235,7 +533,7 @@ const NONSOLID = new Set([LAMP_ID, LAMP_TOP_ID, DOOR_OPEN_ID, DOOR_TOP_OPEN_ID])
 // solid blocks stop the player (-1 means a chunk that is not loaded yet, which counts as solid)
 function isSolidId(b){ return b!==0 && !NONSOLID.has(b); }
 // opaque blocks hide the faces behind them; glass, beds and doors do not (a door is a thin panel, so the walls beside it must still show their faces)
-function isOpaqueId(b){ return b!==0 && isSolidId(b) && b!==GLASS_ID && b!==BED_FOOT_ID && b!==BED_HEAD_ID && !isDoorId(b); }
+function isOpaqueId(b){ return b!==0 && isSolidId(b) && b!==GLASS_ID && b!==BED_FOOT_ID && b!==BED_HEAD_ID && !isDoorId(b) && !isFurn(b); }
 const SLOTS = 8;                                       // the inventory has 8 slots
 // every block a player can carry: the door, the bed and the lamp are placed as two blocks each
 // the catalog's tabs: each category lists its blocks. The door and the bed are placed as two blocks each, the lamp too.
@@ -246,7 +544,7 @@ const CATS = [
   {name:'Colors',       ids:[25,41,42,43,44,45,46]},
   {name:'Ores & Metal', ids:[24,48,49,50,21,22,51,52]},
   {name:'Light & Glass',ids:[10,11,47]},
-  {name:'Furniture',    ids:[12,16]}
+  {name:'Furniture',    ids:[12,16,...FURN_BASES]}
 ];
 const CATALOG = CATS.flatMap(c => c.ids);      // every block a player can carry
 let catFilter = 'All';                         // the catalog tab that is open
@@ -445,6 +743,64 @@ function doorThinZ(wx,y,wz){ return isSolidId(getBlock(wx-1,y,wz)) || isSolidId(
 // a bed is two blocks in a row: the foot (16) and the head (17). Its parts are given along the bed (u runs
 // 0 at the foot to 2 at the head) and across it (v runs 0 to 1). Each cell draws only the part of them that lies inside it.
 // x and z are chunk-local, as in buildMesh; wx and wz are world positions, used to look at the neighbouring cell.
+// furniture: the 4 facings of each piece are consecutive block numbers, so a piece's facing is part of its block number
+function isFurn(b){ return b >= FURN_BASE && b <= FURN_MAX; }
+function isFurnBase(b){ return isFurn(b) && ((b - FURN_BASE) >> 2) < FURN.length && ((b - FURN_BASE) & 3) === 0; }
+// a piece's state and facing, from its block number
+function furnState(b){ return FURN_VAR[(b - FURN_BASE) >> 2]; }
+function furnFacing(b){ return (b - FURN_BASE) & 3; }
+// openable pieces have an open state; a tall piece's top half is a state of its own
+function furnOpenable(b){ return FVI[furnState(b).t].open !== undefined; }
+// the other half of a tall piece (the fridge), if this cell has one: [x,y,z] or null
+function furnPartner(x,y,z,b){
+  const v = furnState(b);
+  if(FVI[v.t].top === undefined) return null;
+  const upper = v.key === 'top' || v.key === 'topOpen';
+  const dy = upper ? -1 : 1;
+  const o = getBlock(x,y+dy,z);
+  if(!isFurn(o)) return null;
+  const ov = furnState(o);
+  const oUpper = ov.key === 'top' || ov.key === 'topOpen';
+  return (ov.t === v.t && oUpper !== upper) ? [x,y+dy,z] : null;
+}
+// opens or closes a piece (and the other half of a tall piece) in one go
+function toggleFurn(h){
+  const v = furnState(h.id), f = furnFacing(h.id);
+  const opening = v.key === 'whole' || v.key === 'top';
+  const upper = v.key === 'top' || v.key === 'topOpen';
+  const stateName = (top, open) => top ? (open ? 'topOpen' : 'top') : (open ? 'open' : 'whole');
+  const p = furnPartner(h.x,h.y,h.z,h.id);
+  placeCell(h.x,h.y,h.z, furnVar(v.t, stateName(upper, opening), f));
+  if(p){ const pb = getBlock(p[0],p[1],p[2]); placeCell(p[0],p[1],p[2], furnVar(v.t, stateName(!upper, opening), furnFacing(pb))); }
+  sfx.door(opening);
+  flashHud((opening ? 'OPENED ' : 'CLOSED ') + FURN[v.t].name.toUpperCase());
+}
+// the facing a piece gets when put down: it turns to face the player
+function facingFromYaw(yaw){
+  const fx = Math.sin(yaw), fz = Math.cos(yaw);      // the direction from the piece to the player
+  const opts = [[fz,0],[-fx,1],[-fz,2],[fx,3]];       // front +z, front -x, front -z, front +x
+  return opts.reduce((a, b) => b[0] > a[0] ? b : a)[1];
+}
+// turns a box 90 degrees per facing about the middle of the block
+function rotBox(lo, hi, f){
+  const mn = [Infinity, lo[1], Infinity], mx = [-Infinity, hi[1], -Infinity];
+  for(const x of [lo[0], hi[0]]) for(const z of [lo[2], hi[2]]){
+    let u = x - 0.5, v = z - 0.5;
+    for(let i = 0; i < f; i++){ const t = u; u = -v; v = t; }
+    mn[0] = Math.min(mn[0], u+0.5); mx[0] = Math.max(mx[0], u+0.5);
+    mn[2] = Math.min(mn[2], v+0.5); mx[2] = Math.max(mx[2], v+0.5);
+  }
+  return {lo:mn, hi:mx};
+}
+// adds one piece of furniture to the mesh: each of its boxes, turned to the piece's facing
+function emitFurn(V, I, nv, x, y, z, b){
+  const f = furnFacing(b);
+  for(const p of furnState(b).parts){
+    const r = rotBox([p[0],p[1],p[2]], [p[3],p[4],p[5]], f);
+    nv = emitBox(V, I, nv, [x+r.lo[0], y+r.lo[1], z+r.lo[2]], [x+r.hi[0], y+r.hi[1], z+r.hi[2]], {top:p[6], side:p[7], bot:p[8]}, p[9]);
+  }
+  return nv;
+}
 // the direction a bed runs in, from its foot to its head, as seen from the bed block at (wx,y,wz); [0,0] when it has no partner
 function bedDir(wx,y,wz,id){
   const want = id===BED_FOOT_ID ? BED_HEAD_ID : BED_FOOT_ID;
@@ -526,6 +882,7 @@ function buildMesh(ch){
       nv=emitBox(V,I,nv, [x+0.2,y+0.86,z+0.2], [x+0.8,y+0.94,z+0.8], {top:17,side:17,bot:17}, 0.6);
       continue;
     }
+    if(isFurn(t)){ nv=emitFurn(V,I,nv,x,y,z,t); continue; }
     if(t===BED_FOOT_ID || t===BED_HEAD_ID){
       nv=emitBed(V,I,nv,x,y,z,wx,wz,t===BED_HEAD_ID,lightAt(wx,y+1,wz));
       continue;
@@ -785,6 +1142,21 @@ function makeAtlasCanvas(){
   tile(62,(px,py)=>{ const n=rnd2(px,py,117); if(rnd2(px>>2,py>>2,118)<0.15) return [240,236,226];                 // mushroom block top
                     return [g(n,180,20),g(n,40,12),g(n,36,12)]; });
   tile(63,(px,py)=>{ const n=rnd2(px,py,119); return [g(n,222,14),g(n,206,14),g(n,176,14)]; });   // mushroom stem side
+  // ---- furniture textures (64 onward) ----
+  tile(64,(px,py)=>{ const n=rnd2(px,py,120); return [g(n,236,6),g(n,236,6),g(n,232,6)]; });   // white ceramic
+  tile(65,(px,py)=>{ const n=rnd2(px,py,121); const streak=(py%6===0)?-8:0; return [g(n,186,10)+streak,g(n,188,10)+streak,g(n,194,10)+streak]; });   // brushed steel
+  tile(66,(px,py)=>{ const n=rnd2(px,py,122); const edge=(px<=1||px>=30||py<=1||py>=30)?14:0; return [g(n,44,8)+edge,g(n,46,8)+edge,g(n,52,8)+edge]; });   // dark steel and black glass
+  tile(67,(px,py)=>{ const n=rnd2(px,py,123); const frame=(px<=2||px>=29||py<=2||py>=29); return frame?[30,30,34]:[g(n,18,6),g(n,22,6),g(n,34,6)]; });   // black screen frame
+  tile(68,(px,py)=>{ const n=rnd2(px,py,124); const line=(py%8===0)?30:0; const shine=((px+py)%24<3)?30:0; return [g(n,40,6)+line+shine,g(n,110,10)+line+shine,g(n,220,10)+line+shine]; });   // lit blue display
+  tile(69,(px,py)=>{ const n=rnd2(px,py,125); return [g(n,50,16),g(n,80,16),g(n,170,16)]; });   // blue fabric
+  tile(70,(px,py)=>{ const n=rnd2(px,py,126); const w=((px+py)%4===0)?-6:0; return [g(n,96,14)+w,g(n,98,14)+w,g(n,104,14)+w]; });   // grey fabric
+  tile(71,(px,py)=>{ const n=rnd2(px,py,127); return [g(n,206,12),g(n,186,12),g(n,150,12)]; });   // beige fabric
+  tile(72,(px,py)=>{ const n=rnd2(px,py,128); const edge=(px<=2||px>=29||py<=2||py>=29); if(edge) return [120,40,40];   // rug
+                    return (Math.floor(px/4)%2) ? [g(n,170,14),g(n,50,10),g(n,50,10)] : [g(n,210,12),g(n,196,12),g(n,160,12)]; });
+  tile(73,(px,py)=>{ const n=rnd2(px,py,129); return [g(n,176,20),g(n,96,16),g(n,64,14)]; });   // terracotta
+  tile(74,(px,py)=>{ const n=rnd2(px,py,130); const ring=[[8,8],[24,8],[8,24],[24,24]].some(([a,b])=>Math.abs(Math.hypot(px-a,py-b)-5)<1.2);   // hob with burner rings
+                    return ring ? [90,90,96] : [g(n,36,8),g(n,36,8),g(n,40,8)]; });
+  tile(75,(px,py)=>{ const n=rnd2(px,py,131); const t=py/31; return [g(n,255,10),g(n,200-120*t,20),g(n,60*(1-t),20)]; });   // fire
   return c;
 }
 const atlasTex = gl.createTexture();
@@ -959,6 +1331,7 @@ function mpSend(msg){ if(mp.ws && mp.ws.readyState===1) mp.ws.send(JSON.stringif
 function placeCell(x,y,z,id){ setBlock(x,y,z,id); mpSend({type:'edit', x, y, z, id}); }
 // the other half of a door or a bed, if there is one next to this block
 function partnerOf(x,y,z,id){
+  if(isFurn(id)) return furnPartner(x,y,z,id);
   if(id===DOOR_ID || id===DOOR_OPEN_ID){ const b=getBlock(x,y+1,z); return (b===DOOR_TOP_ID||b===DOOR_TOP_OPEN_ID) ? [x,y+1,z] : null; }
   if(id===DOOR_TOP_ID || id===DOOR_TOP_OPEN_ID){ const b=getBlock(x,y-1,z); return (b===DOOR_ID||b===DOOR_OPEN_ID) ? [x,y-1,z] : null; }
   if(id===LAMP_ID){ return getBlock(x,y+1,z)===LAMP_TOP_ID ? [x,y+1,z] : null; }
@@ -1018,6 +1391,15 @@ function placeItem(id,x,y,z,dir){
     return true;
   }
   if(getBlock(x,y,z)!==0 || overlapsPlayer(x,y,z)) return false;
+  // furniture turns to face the player when it is put down
+  if(isFurnBase(id)){
+    const f = facingFromYaw(player.yaw), t = (id - FURN_BASE) >> 2;
+    if(FVI[t].top !== undefined){                // a tall piece takes two blocks, one on top of the other
+      if(getBlock(x,y+1,z)!==0 || overlapsPlayer(x,y+1,z)) return false;
+      placeCell(x,y+1,z, furnVar(t,'top',f));
+    }
+    placeCell(x,y,z, id + f); return true;       // furniture turns to face the player when it is put down
+  }
   placeCell(x,y,z,id);
   return true;
 }
@@ -1079,6 +1461,7 @@ function placeBunk(h){
 function doPlace(){
   const h=raycast(6); if(!h) return;
   if(isDoorId(h.id)){ toggleDoor(h); return; }
+  if(isFurn(h.id) && furnOpenable(h.id)){ toggleFurn(h); return; }   // right-click opens or shuts a cupboard, fridge, drawer...
   if(h.id===BED_FOOT_ID || h.id===BED_HEAD_ID){
     // holding a bed and aiming at the top of a bed stacks another bed on it; otherwise you lie down to sleep
     if(HOTBAR[sel]===BED_FOOT_ID && h.ny===1){ placeBunk(h); return; }
@@ -2002,6 +2385,7 @@ window.VOX = {
   addChatLine, skipNight, trySleep, wakeUp,
   openCode, closeCode, tryCode, setInvisible, music, musicSet, musicStart, musicStop, PRIVATE_CODE,
   get wallHacks(){ return wallHacks; }, placeBunk, leaveBed, bedDirAt,
+  FURN_BASE, FURN_MAX, FURN, FVI, furnVar, furnPartner, furnOpenable, toggleFurn, furnState, placeItem,
   collides, CATS, GLOWSTONE_ID, get catFilter(){ return catFilter; }, setCat(n){ catFilter = n; if(invOpen) renderInv(); },
   get codeOpen(){ return codeOpen; }, get codeUnlocked(){ return codeUnlocked; },
   openInv, closeInv, addToInv, removeFromInv, get invOpen(){ return invOpen; },
