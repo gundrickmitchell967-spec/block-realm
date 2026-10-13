@@ -1209,8 +1209,9 @@ function furnUse(h){
 /* ---------- the TV: right-click it to turn it on and play the video (media/tv.mp4) on its screen ---------- */
 // the video is one file the game loads; it is only played on the screen of the player who turned the TV on
 const TV_VIDEO_URL = 'media/tv.mp4';
-const tv = { on:false, x:0, y:0, z:0, el:null, node:null, gain:null, prog:null, vao:null, vbo:null, tex:null, loc:null, url:null };
+const tv = { on:false, x:0, y:0, z:0, el:null, node:null, gain:null, prog:null, vao:null, vbo:null, tex:null, loc:null, url:null, lastUse:-1e9 };
 const TV_NO_VIDEO = 'NO VIDEO FOUND: RIGHT-CLICK THE TV AGAIN TO CHOOSE ONE';
+const TV_DOUBLE_MS = 400;   // two right clicks (or taps) this close together open the file picker to choose a different video
 function tvVideo(){
   if(tv.el) return tv.el;
   const v = document.createElement('video');
@@ -1227,7 +1228,10 @@ function tvUse(h){
   if(!isFurn(h.id) || FURN[furnState(h.id).t].name !== 'TV') return false;
   sfx.init();
   const v = tvVideo();
-  if(v.error){ tvChooseFile(h); return true; }   // no video file was found: a right click lets you choose one from your computer
+  // a double right click (or double tap) opens the picker to play a different video; after it opens, the count starts over
+  const now = performance.now(), quick = now - tv.lastUse < TV_DOUBLE_MS;
+  tv.lastUse = quick ? -1e9 : now;
+  if(quick || v.error){ tvChooseFile(h); return true; }   // also when no video file was found: a right click lets you choose one from your computer
   tvStart(h);
   return true;
 }
