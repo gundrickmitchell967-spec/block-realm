@@ -222,297 +222,303 @@ const BLOCKS = [null,
 // ---- furniture: each piece is a set of boxes. Coordinates run 0 to 1 across the block; the FRONT is the +z side.
 // B(x0,y0,z0, x1,y1,z1, top tile, side tile, bottom tile, glow) makes one box
 const B = (x0,y0,z0,x1,y1,z1,t,s=t,bo=t,g=0) => [x0,y0,z0,x1,y1,z1,t,s,bo,g];
+// a box with its front open and walls of thickness th, so you can see inside it (it has depth)
+const SHELL = (x0,y0,z0,x1,y1,z1,t,th=0.06) => [
+  B(x0,y0,z0,x1,y0+th,z1,t),                 // floor
+  B(x0,y1-th,z0,x1,y1,z1,t),                 // ceiling
+  B(x0,y0+th,z0,x0+th,y1-th,z1,t),           // left wall
+  B(x1-th,y0+th,z0,x1,y1-th,z1,t),           // right wall
+  B(x0+th,y0+th,z0,x1-th,y1-th,z0+th,66)     // back, dark inside
+];
+const DT = 0.09;                                                              // door thickness
+const OPEN_DOOR = (x0,x1,z0,y0,y1,t) => B(x0,y0,z0,x0+DT,y1,z0+(x1-x0),t);  // a door swung out on its left edge
+const OPEN_RIGHT = (x0,x1,z0,y0,y1,t) => B(x1-DT,y0,z0,x1,y1,z0+(x1-x0),t); // a door swung out on its right edge
+const OPEN_DROP = (x0,x1,z0,y,t) => B(x0,y,z0,x1,y+0.06,z0+0.8,t);           // a door dropped flat on its bottom edge
+// a bin, open at the top, with walls
+const BIN = (x0,y0,z0,x1,y1,z1,t,th=0.05) => [
+  B(x0,y0,z0,x1,y0+th,z1,66),
+  B(x0,y0,z0,x0+th,y1,z1,t), B(x1-th,y0,z0,x1,y1,z1,t),
+  B(x0,y0,z0,x1,y1,z0+th,t), B(x0,y0,z1-th,x1,y1,z1,t)
+];
 const FURN_A = [
-  {name:'Toilet', icon:64, sw:'#f2f2ee', parts:[
-    B(0.22,0,0.18,0.78,0.42,0.8,64),        // bowl
-    B(0.2,0.42,0.2,0.8,0.46,0.82,64),       // rim
-    B(0.3,0.44,0.48,0.7,0.47,0.74,66),      // dark water
-    B(0.2,0.42,0.02,0.8,0.98,0.2,64),       // tank at the back
-    B(0.18,0.98,0.0,0.82,1.0,0.22,64),      // tank lid
-    B(0.42,0.7,0.2,0.58,0.76,0.22,65)       // flush button
+  {name:'Toilet', icon:64, sw:'#f2f2ee', fn: () => [
+    B(0.22,0,0.18,0.78,0.42,0.8,64),          // bowl
+    B(0.2,0.42,0.2,0.8,0.46,0.82,64),         // rim
+    B(0.3,0.44,0.48,0.7,0.47,0.74,66),        // dark water
+    B(0.2,0.42,0.02,0.8,0.98,0.2,64),         // tank at the back
+    B(0.18,0.98,0.0,0.82,1.0,0.22,64),        // tank lid
+    B(0.42,0.7,0.2,0.58,0.76,0.22,65)         // flush button
   ]},
-  {name:'Bathroom Sink', icon:64, sw:'#f2f2ee', parts:[
-    B(0.36,0,0.36,0.64,0.72,0.64,64),       // pedestal
-    B(0.12,0.72,0.22,0.88,0.8,0.92,64),     // basin
-    B(0.2,0.8,0.3,0.8,0.82,0.84,66),        // dark basin plate
-    B(0.46,0.8,0.1,0.54,0.92,0.16,65),      // tap
-    B(0.46,0.9,0.16,0.54,0.94,0.3,65)       // spout
+  // the tap is on the top of the sink: aim at it from above and right-click to turn the water on or off
+  {name:'Bathroom Sink', icon:64, sw:'#f2f2ee', states:[{},{water:1}],
+   acts:[{box:[0.35,0.6,0,0.65,1.01,0.4], flag:'water', on:'WATER ON', off:'WATER OFF'}],
+   fn: f => [
+    B(0.36,0,0.36,0.64,0.72,0.64,64),         // pedestal
+    B(0.12,0.72,0.22,0.88,0.8,0.92,64),       // basin
+    B(0.2,0.8,0.3,0.8,0.82,0.84,66),          // dark basin plate
+    B(0.46,0.8,0.1,0.54,0.92,0.16,65),        // tap
+    B(0.46,0.9,0.16,0.54,0.94,0.3,65),        // spout
+    ...(f.water ? [B(0.24,0.82,0.34,0.76,0.86,0.8,68,64,64)] : [])   // water in the basin
   ]},
-  {name:'Bathtub', icon:64, sw:'#f2f2ee', parts:[
-    B(0,0,0,1,0.55,0.1,64),                 // back wall
-    B(0,0,0.9,1,0.55,1,64),                 // front wall
-    B(0,0,0.1,0.1,0.55,0.9,64),             // left wall
-    B(0.9,0,0.1,1,0.55,0.9,64),             // right wall
-    B(0.1,0,0.1,0.9,0.1,0.9,64),            // inside floor
-    B(0.1,0.1,0.1,0.9,0.42,0.9,68,64,64),   // water
-    B(0.44,0.55,0,0.56,0.8,0.1,65)          // tap on the back wall
+  // two blocks long: the tap is on the back wall of the left half, the plug is in the bottom
+  {name:'Bathtub', icon:64, sw:'#f2f2ee', wide:true, states:[{lv:0},{lv:1},{lv:2},{lv:3}],
+   acts:[
+     {box:[0.36,0,0,0.64,1.01,0.35], level:3, msg:'FILLING THE BATH'},
+     {box:[0.05,0,0.3,0.4,1.01,0.75], level:0, msg:'DRAINING THE BATH'}
+   ],
+   fn: f => [
+    B(0,0,0,2,0.55,0.1,64),                   // back wall
+    B(0,0,0.9,2,0.55,1,64),                   // front wall
+    B(0,0,0.1,0.1,0.55,0.9,64),               // left end
+    B(1.9,0,0.1,2,0.55,0.9,64),               // right end
+    B(0.1,0,0.1,1.9,0.1,0.9,64),              // inside floor
+    B(0.44,0.55,0,0.56,0.8,0.1,65),           // tap on the back wall
+    B(0.2,0.1,0.42,0.3,0.12,0.58,66),         // plug
+    ...(f.lv ? [B(0.1,0.1,0.1,1.9,0.1+0.42*f.lv/3,0.9,68,64,64)] : [])   // the water, higher as the bath fills
   ]},
-  {name:'Kitchen Sink', icon:54, sw:'#ece6dc', parts:[
-    B(0.02,0,0.02,0.98,0.86,0.94,25),       // cabinet
-    B(0.02,0.86,0.02,0.98,0.9,0.96,54),     // quartz counter
-    B(0.2,0.9,0.25,0.8,0.92,0.8,66),        // basin
-    B(0.46,0.9,0.1,0.54,0.99,0.16,65),      // tap
-    B(0.46,0.93,0.16,0.54,0.99,0.34,65),    // spout
-    B(0.03,0.02,0.94,0.47,0.84,0.99,24),    // left door
-    B(0.53,0.02,0.94,0.97,0.84,0.99,24),    // right door
-    B(0.4,0.6,0.99,0.44,0.7,1.0,65),        // left handle
-    B(0.56,0.6,0.99,0.6,0.7,1.0,65)         // right handle
+  // the tap is on the top of the basin: aim at it from above and right-click to turn the water on or off
+  {name:'Kitchen Sink', icon:54, sw:'#ece6dc', states:[{},{open:1},{water:1},{open:1,water:1}],
+   acts:[{box:[0.35,0.6,0,0.65,1.01,0.4], flag:'water', on:'WATER ON', off:'WATER OFF'}],
+   fn: f => [
+    B(0.02,0.86,0.02,0.98,0.9,0.96,54),       // quartz counter
+    B(0.2,0.9,0.25,0.8,0.92,0.8,66),          // basin
+    B(0.46,0.9,0.1,0.54,0.99,0.16,65),        // tap
+    B(0.46,0.93,0.16,0.54,0.99,0.34,65),      // spout
+    ...(f.water ? [B(0.24,0.92,0.3,0.76,0.95,0.75,68,64,64)] : []),
+    ...(f.open ? [
+      ...SHELL(0.02,0,0.02,0.98,0.86,0.94,25),
+      OPEN_DOOR(0.03,0.47,0.94,0.02,0.84,24),
+      OPEN_RIGHT(0.53,0.97,0.94,0.02,0.84,24),
+      B(0.1,0.4,0.1,0.9,0.44,0.9,65)          // a shelf inside
+    ] : [
+      B(0.02,0,0.02,0.98,0.86,0.94,25),       // cabinet
+      B(0.03,0.02,0.94,0.47,0.84,0.99,24),    // left door
+      B(0.53,0.02,0.94,0.97,0.84,0.99,24),    // right door
+      B(0.4,0.6,0.99,0.44,0.7,1.0,65),
+      B(0.56,0.6,0.99,0.6,0.7,1.0,65)
+    ])
   ]},
-  {name:'Fridge', icon:65, sw:'#c8ccd2', parts:[
-    B(0.02,0,0.02,0.98,1,0.92,64),          // white body (the bottom block of the fridge)
-    B(0.03,0.01,0.92,0.97,0.99,0.99,65),    // door
-    B(0.86,0.5,0.99,0.9,0.75,1.02,66)       // handle
+  // two blocks tall: the bottom block and the top block each have their own door
+  {name:'Fridge', icon:65, sw:'#c8ccd2', tall:true, states:[{},{open:1},{top:1},{top:1,open:1}],
+   fn: f => f.open ? [
+    ...SHELL(0.02,0,0.02,0.98,1,0.92,64,0.05),
+    B(0.07,0.5,0.07,0.93,0.53,0.9,65),        // a shelf inside
+    OPEN_DOOR(0.03,0.97,0.92,0.01,0.99,65),
+    B(0.03,0.5,1.75,0.12,0.75,1.79,66)        // handle
+  ] : [
+    B(0.02,0,0.02,0.98,1,0.92,64),            // white body
+    B(0.03,0.01,0.92,0.97,0.99,0.99,65),      // door
+    B(0.86,0.5,0.99,0.9,0.75,1.02,66)         // handle
   ]},
-  {name:'Microwave', icon:65, sw:'#c8ccd2', parts:[
-    B(0.02,0,0.08,0.98,0.58,0.96,65),       // steel body
-    B(0.06,0.12,0.96,0.7,0.5,1.0,66),       // dark window
-    B(0.74,0.12,0.96,0.94,0.5,1.0,65),      // control panel
+  {name:'Microwave', icon:65, sw:'#c8ccd2', states:[{},{open:1}], fn: f => [
+    ...(f.open ? [
+      ...SHELL(0.02,0,0.08,0.98,0.58,0.96,65,0.05),
+      OPEN_DOOR(0.06,0.7,0.96,0.12,0.5,66)
+    ] : [
+      B(0.02,0,0.08,0.98,0.58,0.96,65),       // steel body
+      B(0.06,0.12,0.96,0.7,0.5,1.0,66)        // dark window
+    ]),
+    B(0.74,0.12,0.96,0.94,0.5,1.0,65),        // control panel
     B(0.76,0.36,1.0,0.92,0.44,1.02,68,68,68,0.9),   // display
-    B(0.76,0.2,1.0,0.92,0.26,1.02,67)       // button
+    B(0.76,0.2,1.0,0.92,0.26,1.02,67)         // button
   ]},
-  {name:'Oven', icon:65, sw:'#c8ccd2', parts:[
-    B(0.02,0,0.02,0.98,0.74,0.94,65),       // steel body
-    B(0.02,0.74,0.02,0.98,0.98,0.94,74,66,66),   // hob
-    B(0.05,0.08,0.94,0.95,0.7,1.0,66),      // oven door
-    B(0.14,0.26,1.0,0.86,0.5,1.01,67),      // oven window
-    B(0.1,0.66,1.01,0.9,0.7,1.04,65),       // door handle
-    B(0.1,0.76,0.94,0.18,0.84,0.99,65),     // knob
-    B(0.42,0.76,0.94,0.5,0.84,0.99,65),     // knob
-    B(0.74,0.76,0.94,0.82,0.84,0.99,65)     // knob
+  {name:'Oven', icon:65, sw:'#c8ccd2', states:[{},{open:1}], fn: f => [
+    B(0.02,0.74,0.02,0.98,0.98,0.94,74,66,66),     // hob
+    B(0.1,0.76,0.94,0.18,0.84,0.99,65),       // knobs
+    B(0.42,0.76,0.94,0.5,0.84,0.99,65),
+    B(0.74,0.76,0.94,0.82,0.84,0.99,65),
+    ...(f.open ? [
+      ...SHELL(0.02,0,0.02,0.98,0.74,0.94,65,0.06),
+      OPEN_DROP(0.05,0.95,0.94,0.08,66),      // the door lies flat
+      B(0.1,0.3,0.1,0.9,0.34,0.9,65)          // a rack inside
+    ] : [
+      B(0.02,0,0.02,0.98,0.74,0.94,65),       // steel body
+      B(0.05,0.08,0.94,0.95,0.7,1.0,66),      // oven door
+      B(0.14,0.26,1.0,0.86,0.5,1.01,67),      // oven window
+      B(0.1,0.66,1.01,0.9,0.7,1.04,65)        // door handle
+    ])
   ]},
-  {name:'Dishwasher', icon:65, sw:'#c8ccd2', parts:[
-    B(0.02,0,0.02,0.98,0.94,0.94,65),       // body
-    B(0.02,0.02,0.94,0.98,0.9,0.99,65),     // door
-    B(0.1,0.76,0.99,0.9,0.86,1.02,66),      // control panel
-    B(0.12,0.6,1.0,0.88,0.64,1.04,65)       // handle
+  {name:'Dishwasher', icon:65, sw:'#c8ccd2', states:[{},{open:1}], fn: f => f.open ? [
+    ...SHELL(0.02,0,0.02,0.98,0.94,0.94,65,0.06),
+    OPEN_DROP(0.02,0.98,0.94,0.02,66),
+    B(0.08,0.4,0.1,0.92,0.44,0.9,65)          // a rack inside
+  ] : [
+    B(0.02,0,0.02,0.98,0.94,0.94,65),         // body
+    B(0.02,0.02,0.94,0.98,0.9,0.99,65),       // door
+    B(0.1,0.76,0.99,0.9,0.86,1.02,66),        // control panel
+    B(0.12,0.6,1.0,0.88,0.64,1.04,65)         // handle
   ]},
-  {name:'Washing Machine', icon:64, sw:'#f2f2ee', parts:[
-    B(0.02,0,0.02,0.98,1,0.94,64),          // white body
-    B(0.02,0.92,0.02,0.98,1,0.94,65,64,64), // steel top
-    B(0.06,0.84,0.94,0.94,0.9,0.99,66),     // control strip
-    B(0.2,0.18,0.94,0.8,0.8,0.99,66),       // door ring
-    B(0.28,0.26,0.99,0.72,0.72,1.01,67)     // glass
+  {name:'Washing Machine', icon:64, sw:'#f2f2ee', states:[{},{open:1}], fn: f => f.open ? [
+    ...SHELL(0.02,0,0.02,0.98,1,0.94,64,0.06),
+    OPEN_DOOR(0.2,0.8,0.94,0.18,0.8,66),      // the round door
+    B(0.22,0.2,0.3,0.78,0.8,0.36,65)          // the drum wall inside
+  ] : [
+    B(0.02,0,0.02,0.98,1,0.94,64),            // white body
+    B(0.02,0.92,0.02,0.98,1,0.94,65,64,64),   // steel top
+    B(0.06,0.84,0.94,0.94,0.9,0.99,66),       // control strip
+    B(0.2,0.18,0.94,0.8,0.8,0.99,66),         // door ring
+    B(0.28,0.26,0.99,0.72,0.72,1.01,67)       // glass
   ]},
-  {name:'Kitchen Cabinet', icon:25, sw:'#c7a06a', parts:[
-    B(0.02,0,0.02,0.98,1,0.94,25),          // cabinet body
-    B(0.04,0.04,0.94,0.48,0.96,0.99,24),    // left door
-    B(0.52,0.04,0.94,0.96,0.96,0.99,24),    // right door
-    B(0.4,0.5,0.99,0.44,0.62,1.02,65),      // left handle
-    B(0.56,0.5,0.99,0.6,0.62,1.02,65)       // right handle
+  {name:'Kitchen Cabinet', icon:25, sw:'#c7a06a', states:[{},{open:1}], fn: f => f.open ? [
+    ...SHELL(0.02,0,0.02,0.98,1,0.94,25,0.06),
+    OPEN_DOOR(0.04,0.48,0.94,0.04,0.96,24),
+    OPEN_RIGHT(0.52,0.96,0.94,0.04,0.96,24),
+    B(0.08,0.5,0.08,0.92,0.55,0.9,25),        // shelves inside
+    B(0.08,0.2,0.08,0.92,0.25,0.9,25)
+  ] : [
+    B(0.02,0,0.02,0.98,1,0.94,25),            // cabinet body
+    B(0.04,0.04,0.94,0.48,0.96,0.99,24),      // left door
+    B(0.52,0.04,0.94,0.96,0.96,0.99,24),      // right door
+    B(0.4,0.5,0.99,0.44,0.62,1.02,65),
+    B(0.56,0.5,0.99,0.6,0.62,1.02,65)
   ]},
-  {name:'Drawers', icon:24, sw:'#8a6a40', parts:[
-    B(0.02,0,0.02,0.98,1,0.94,24),          // chest
-    B(0.04,0.04,0.94,0.96,0.3,0.99,25),     // drawer 1
-    B(0.04,0.34,0.94,0.96,0.6,0.99,25),     // drawer 2
-    B(0.04,0.64,0.94,0.96,0.96,0.99,25),    // drawer 3
-    B(0.42,0.14,0.99,0.58,0.2,1.02,65),     // handle 1
-    B(0.42,0.44,0.99,0.58,0.5,1.02,65),     // handle 2
-    B(0.42,0.74,0.99,0.58,0.8,1.02,65)      // handle 3
+  {name:'Drawers', icon:24, sw:'#8a6a40', states:[{},{open:1}], fn: f => f.open ? [
+    B(0.02,0,0.02,0.98,1,0.94,24),            // chest
+    B(0.04,0.04,0.94,0.96,0.3,0.99,25),       // drawer 1
+    B(0.04,0.64,0.94,0.96,0.96,0.99,25),      // drawer 3
+    B(0.1,0.38,0.94,0.9,0.56,0.95,66),        // the empty slot of drawer 2, dark
+    B(0.04,0.34,1.3,0.96,0.6,1.36,25),        // drawer 2, pulled out: its front
+    B(0.04,0.34,0.94,0.1,0.6,1.3,25),         // its sides
+    B(0.9,0.34,0.94,0.96,0.6,1.3,25),
+    B(0.1,0.34,0.94,0.9,0.38,1.3,25),         // its bottom
+    B(0.42,0.44,1.36,0.58,0.5,1.4,65)         // its handle
+  ] : [
+    B(0.02,0,0.02,0.98,1,0.94,24),            // chest
+    B(0.04,0.04,0.94,0.96,0.3,0.99,25),      // drawer 1
+    B(0.04,0.34,0.94,0.96,0.6,0.99,25),      // drawer 2
+    B(0.04,0.64,0.94,0.96,0.96,0.99,25),     // drawer 3
+    B(0.42,0.14,0.99,0.58,0.2,1.02,65),      // handle 1
+    B(0.42,0.44,0.99,0.58,0.5,1.02,65),      // handle 2
+    B(0.42,0.74,0.99,0.58,0.8,1.02,65)       // handle 3
   ]},
-  {name:'Counter', icon:54, sw:'#ece6dc', parts:[
-    B(0.02,0,0.02,0.98,0.86,0.94,25),       // cabinet
-    B(0,0.86,0,1,0.9,1,54),                 // quartz top
-    B(0.04,0.04,0.94,0.96,0.84,0.99,24)     // door
+  {name:'Counter', icon:54, sw:'#ece6dc', states:[{},{open:1}], fn: f => [
+    B(0,0.86,0,1,0.9,1,54),                   // quartz top
+    ...(f.open ? [
+      ...SHELL(0.02,0,0.02,0.98,0.86,0.94,25,0.06),
+      OPEN_DOOR(0.04,0.96,0.94,0.04,0.84,24),
+      B(0.08,0.4,0.08,0.92,0.45,0.9,25)       // a shelf inside
+    ] : [
+      B(0.02,0,0.02,0.98,0.86,0.94,25),       // cabinet
+      B(0.04,0.04,0.94,0.96,0.84,0.99,24)     // door
+    ])
   ]}
 ];
 const FURN_B = [
-  {name:'Table', icon:25, sw:'#b08450', parts:[
-    B(0,0.8,0,1,0.86,1,25),                 // top
-    B(0.06,0,0.06,0.14,0.8,0.14,24),        // legs
+  {name:'Table', icon:25, sw:'#b08450', fn: () => [
+    B(0,0.8,0,1,0.86,1,25),                   // top
+    B(0.06,0,0.06,0.14,0.8,0.14,24),          // legs
     B(0.86,0,0.06,0.94,0.8,0.14,24),
     B(0.06,0,0.86,0.14,0.8,0.94,24),
     B(0.86,0,0.86,0.94,0.8,0.94,24)
   ]},
-  {name:'Chair', icon:71, sw:'#d6c49a', parts:[
-    B(0.16,0.44,0.2,0.84,0.5,0.86,71),      // seat
-    B(0.16,0.5,0.06,0.84,1.0,0.16,24),      // backrest, at the back
-    B(0.18,0,0.22,0.24,0.44,0.28,24),       // legs
+  {name:'Chair', icon:71, sw:'#d6c49a', fn: () => [
+    B(0.16,0.44,0.2,0.84,0.5,0.86,71),        // seat
+    B(0.16,0.5,0.06,0.84,1.0,0.16,24),        // backrest, at the back
+    B(0.18,0,0.22,0.24,0.44,0.28,24),         // legs
     B(0.76,0,0.22,0.82,0.44,0.28,24),
     B(0.18,0,0.72,0.24,0.44,0.8,24),
     B(0.76,0,0.72,0.82,0.44,0.8,24)
   ]},
-  {name:'Sofa', icon:69, sw:'#3a5fb4', parts:[
-    B(0.02,0.1,0.1,0.98,0.42,0.98,69),      // base
-    B(0.02,0.42,0.02,0.98,0.9,0.22,69),     // back
-    B(0.02,0.42,0.22,0.16,0.7,0.98,69),     // left arm
-    B(0.84,0.42,0.22,0.98,0.7,0.98,69),     // right arm
-    B(0.16,0.42,0.22,0.84,0.5,0.98,70),     // seat cushion
-    B(0.04,0,0.04,0.1,0.1,0.1,24),          // legs
+  {name:'Sofa', icon:69, sw:'#3a5fb4', fn: () => [
+    B(0.02,0.1,0.1,0.98,0.42,0.98,69),        // base
+    B(0.02,0.42,0.02,0.98,0.9,0.22,69),       // back
+    B(0.02,0.42,0.22,0.16,0.7,0.98,69),       // left arm
+    B(0.84,0.42,0.22,0.98,0.7,0.98,69),       // right arm
+    B(0.16,0.42,0.22,0.84,0.5,0.98,70),       // seat cushion
+    B(0.04,0,0.04,0.1,0.1,0.1,24),            // legs
     B(0.9,0,0.04,0.96,0.1,0.1,24)
   ]},
-  {name:'Computer Desk', icon:25, sw:'#b08450', parts:[
-    B(0,0.74,0,1,0.8,1,25),                 // desk top
-    B(0.04,0,0.04,0.12,0.74,0.12,24),       // legs
+  {name:'Computer Desk', icon:25, sw:'#b08450', fn: () => [
+    B(0,0.74,0,1,0.8,1,25),                   // desk top
+    B(0.04,0,0.04,0.12,0.74,0.12,24),         // legs
     B(0.88,0,0.04,0.96,0.74,0.12,24),
     B(0.04,0,0.88,0.12,0.74,0.96,24),
     B(0.88,0,0.88,0.96,0.74,0.96,24),
-    B(0.46,0.8,0.36,0.54,0.9,0.44,66),      // monitor stand
-    B(0.36,0.8,0.3,0.64,0.82,0.5,66),       // monitor foot
-    B(0.2,0.84,0.44,0.8,0.98,0.66,67),      // monitor frame
+    B(0.46,0.8,0.36,0.54,0.9,0.44,66),        // monitor stand
+    B(0.36,0.8,0.3,0.64,0.82,0.5,66),         // monitor foot
+    B(0.2,0.84,0.44,0.8,0.98,0.66,67),        // monitor frame
     B(0.22,0.86,0.66,0.78,0.96,0.68,68,68,68,0.9),   // monitor screen
-    B(0.28,0.8,0.7,0.72,0.84,0.84,66)       // keyboard
+    B(0.28,0.8,0.7,0.72,0.84,0.84,66)         // keyboard
   ]},
-  {name:'TV', icon:67, sw:'#1a1d24', parts:[
-    B(0.1,0,0.3,0.9,0.2,0.9,24),            // stand
-    B(0.02,0.2,0.5,0.98,0.9,0.9,67),        // screen body
+  {name:'TV', icon:67, sw:'#1a1d24', fn: () => [
+    B(0.1,0,0.3,0.9,0.2,0.9,24),              // stand
+    B(0.02,0.2,0.5,0.98,0.9,0.9,67),          // screen body
     B(0.04,0.24,0.9,0.96,0.86,0.92,68,68,68,0.9)   // lit screen
   ]},
-  {name:'Nightstand', icon:24, sw:'#8a6a40', parts:[
-    B(0.12,0,0.12,0.88,0.72,0.9,24),        // body
-    B(0.16,0.42,0.9,0.84,0.68,0.94,25),     // drawer
-    B(0.44,0.52,0.94,0.56,0.58,0.98,65)     // knob
+  {name:'Nightstand', icon:24, sw:'#8a6a40', states:[{},{open:1}], fn: f => [
+    B(0.12,0,0.12,0.88,0.72,0.9,24),          // body
+    ...(f.open ? [
+      B(0.2,0.46,0.9,0.8,0.64,0.92,66),       // the empty slot, dark
+      B(0.16,0.42,0.92,0.2,0.68,1.2,25),      // the drawer, pulled out: sides
+      B(0.8,0.42,0.92,0.84,0.68,1.2,25),
+      B(0.16,0.42,0.92,0.84,0.46,1.2,25),     // its bottom
+      B(0.16,0.42,1.2,0.84,0.68,1.26,25),     // its front
+      B(0.44,0.52,1.26,0.56,0.58,1.3,65)      // its knob
+    ] : [
+      B(0.16,0.42,0.9,0.84,0.68,0.94,25),     // drawer
+      B(0.44,0.52,0.94,0.56,0.58,0.98,65)     // knob
+    ])
   ]},
-  {name:'Plant', icon:6, sw:'#4a8a3a', parts:[
-    B(0.3,0,0.3,0.7,0.36,0.7,73),           // pot
-    B(0.32,0.34,0.32,0.68,0.4,0.68,2),      // soil
-    B(0.2,0.4,0.2,0.8,0.7,0.8,6),           // leaves
-    B(0.34,0.7,0.34,0.66,0.95,0.66,6)       // top leaves
+  {name:'Plant', icon:6, sw:'#4a8a3a', fn: () => [
+    B(0.3,0,0.3,0.7,0.36,0.7,73),             // pot
+    B(0.32,0.34,0.32,0.68,0.4,0.68,2),        // soil
+    B(0.2,0.4,0.2,0.8,0.7,0.8,6),             // leaves
+    B(0.34,0.7,0.34,0.66,0.95,0.66,6)         // top leaves
   ]},
-  {name:'Trash Can', icon:65, sw:'#8a9098', parts:[
-    B(0.14,0,0.14,0.86,0.82,0.86,65),       // bin
-    B(0.12,0.82,0.12,0.88,0.86,0.88,66)     // lid
+  // open at the top: take things out of it, or put them in
+  {name:'Trash Can', icon:65, sw:'#8a9098', states:[{},{open:1}], fn: f => f.open ? [
+    ...BIN(0.14,0,0.14,0.86,0.82,0.86,65),
+    B(0.12,0.82,0.02,0.88,1.12,0.1,66)        // the lid, flipped up at the back
+  ] : [
+    B(0.14,0,0.14,0.86,0.82,0.86,65),         // bin
+    B(0.12,0.82,0.12,0.88,0.86,0.88,66)       // lid
   ]},
-  {name:'Rug', icon:72, sw:'#d6c49a', parts:[
-    B(0.02,0,0.02,0.98,0.04,0.98,72)        // flat rug
+  {name:'Rug', icon:72, sw:'#d6c49a', fn: () => [
+    B(0.02,0,0.02,0.98,0.04,0.98,72)          // flat rug
   ]},
-  {name:'Fireplace', icon:10, sw:'#a04a30', parts:[
-    B(0,0,0,1,1,0.5,10),                    // back wall
-    B(0,0,0.5,0.2,1,1,10),                  // left pillar
-    B(0.8,0,0.5,1,1,1,10),                  // right pillar
-    B(0.2,0.6,0.5,0.8,1,1,10),              // lintel
-    B(0.2,0,0.5,0.8,0.1,1,10),              // hearth
-    B(0.2,0.1,0.5,0.8,0.6,0.52,66),         // firebox back
-    B(0.2,0.1,0.52,0.22,0.6,1,10),          // firebox sides
+  {name:'Fireplace', icon:10, sw:'#a04a30', fn: () => [
+    B(0,0,0,1,1,0.5,10),                      // back wall
+    B(0,0,0.5,0.2,1,1,10),                    // left pillar
+    B(0.8,0,0.5,1,1,1,10),                    // right pillar
+    B(0.2,0.6,0.5,0.8,1,1,10),                // lintel
+    B(0.2,0,0.5,0.8,0.1,1,10),                // hearth
+    B(0.2,0.1,0.5,0.8,0.6,0.52,66),           // firebox back
+    B(0.2,0.1,0.52,0.22,0.6,1,10),            // firebox sides
     B(0.78,0.1,0.52,0.8,0.6,1,10),
-    B(0.3,0.1,0.6,0.7,0.36,0.8,75,75,75,1.0)   // fire
+    B(0.3,0.1,0.6,0.7,0.36,0.8,75,75,75,1.0) // fire
   ]},
-  {name:'Coffee Machine', icon:66, sw:'#3a3a40', parts:[
-    B(0.2,0,0.3,0.8,0.7,0.85,66,65,65),    // body
-    B(0.22,0.7,0.32,0.78,0.78,0.85,65),     // top
-    B(0.24,0.1,0.85,0.76,0.14,0.96,65),     // drip tray
-    B(0.4,0.14,0.9,0.6,0.26,0.98,64),       // cup
+  {name:'Coffee Machine', icon:66, sw:'#3a3a40', fn: () => [
+    B(0.2,0,0.3,0.8,0.7,0.85,66,65,65),      // body
+    B(0.22,0.7,0.32,0.78,0.78,0.85,65),       // top
+    B(0.24,0.1,0.85,0.76,0.14,0.96,65),       // drip tray
+    B(0.4,0.14,0.9,0.6,0.26,0.98,64),         // cup
     B(0.4,0.56,0.85,0.6,0.62,0.9,68,68,68,0.9)   // display
   ]}
 ];
-// every piece, in order; each one takes 4 block numbers, one per facing (furniture faces the player when placed)
+// every piece, in order. A piece's states are listed in states (the first is its normal one). Each state is one
+// block number per facing; the first 23 numbers are the normal state of each piece, so they never change.
 const FURN = [...FURN_A, ...FURN_B];
-// the open states: the parts drawn when a piece is open (its closed parts are drawn otherwise)
-const OPEN_DOOR = (x0,x1,z0,y0,y1,t) => B(x0,y0,z0,x0+0.07,y1,z0+(x1-x0),t);   // a door swung out on its left edge
-const OPEN_RIGHT = (x0,x1,z0,y0,y1,t) => B(x1-0.07,y0,z0,x1,y1,z0+(x1-x0),t);  // a door swung out on its right edge
-const OPEN_DROP = (x0,x1,z0,y,t) => B(x0,y,z0,x1,y+0.06,z0+0.8,t);             // a door dropped flat on its bottom hinge
-const OPENS = {
-  'Fridge': [
-    B(0.02,0,0.02,0.98,1,0.92,64),
-    OPEN_DOOR(0.03,0.97,0.92,0.01,0.99,65),
-    B(0.03,0.5,1.75,0.1,0.75,1.79,66),
-    B(0.1,0.02,0.92,0.96,0.98,0.93,66),     // inside, dark
-    B(0.1,0.5,0.93,0.96,0.52,0.96,65)       // a shelf
-  ],
-  'Microwave': [
-    B(0.02,0,0.08,0.98,0.58,0.96,65),
-    OPEN_DOOR(0.06,0.7,0.96,0.12,0.5,66),
-    B(0.06,0.12,0.96,0.7,0.5,0.97,66),      // the opening, dark
-    B(0.74,0.12,0.96,0.94,0.5,1.0,65),
-    B(0.76,0.36,1.0,0.92,0.44,1.02,68,68,68,0.9),
-    B(0.76,0.2,1.0,0.92,0.26,1.02,67)
-  ],
-  'Oven': [
-    B(0.02,0,0.02,0.98,0.74,0.94,65),
-    B(0.02,0.74,0.02,0.98,0.98,0.94,74,66,66),
-    OPEN_DROP(0.05,0.95,0.94,0.08,66),
-    B(0.08,0.16,0.94,0.92,0.7,0.96,67),     // the oven opening, dark
-    B(0.1,0.76,0.94,0.18,0.84,0.99,65),
-    B(0.42,0.76,0.94,0.5,0.84,0.99,65),
-    B(0.74,0.76,0.94,0.82,0.84,0.99,65)
-  ],
-  'Dishwasher': [
-    B(0.02,0,0.02,0.98,0.94,0.94,65),
-    OPEN_DROP(0.02,0.98,0.94,0.02,66),
-    B(0.06,0.1,0.94,0.94,0.86,0.96,66),     // the opening, dark
-    B(0.1,0.76,0.94,0.9,0.86,0.98,66)       // control panel
-  ],
-  'Washing Machine': [
-    B(0.02,0,0.02,0.98,1,0.94,64),
-    B(0.02,0.92,0.02,0.98,1,0.94,65,64,64),
-    B(0.06,0.84,0.94,0.94,0.9,0.99,66),
-    OPEN_DOOR(0.2,0.8,0.94,0.18,0.8,66),
-    B(0.22,0.2,0.94,0.78,0.78,0.96,67)      // the drum, dark
-  ],
-  'Kitchen Cabinet': [
-    B(0.02,0,0.02,0.98,1,0.94,25),
-    OPEN_DOOR(0.04,0.48,0.94,0.04,0.96,24),
-    OPEN_RIGHT(0.52,0.96,0.94,0.04,0.96,24),
-    B(0.12,0.08,0.94,0.88,0.92,0.95,66)     // the shelves, dark
-  ],
-  'Drawers': [
-    B(0.02,0,0.02,0.98,1,0.94,24),
-    B(0.04,0.04,0.94,0.96,0.3,0.99,25),
-    B(0.04,0.34,0.94,0.96,0.6,1.36,25),     // the middle drawer, pulled out
-    B(0.04,0.64,0.94,0.96,0.96,0.99,25),
-    B(0.42,0.14,0.99,0.58,0.2,1.02,65),
-    B(0.42,0.44,1.36,0.58,0.5,1.38,65),
-    B(0.42,0.74,0.99,0.58,0.8,1.02,65)
-  ],
-  'Nightstand': [
-    B(0.12,0,0.12,0.88,0.72,0.9,24),
-    B(0.16,0.42,0.9,0.84,0.68,1.3,25),      // the drawer, pulled out
-    B(0.44,0.52,1.3,0.56,0.58,1.32,65)
-  ],
-  'Counter': [
-    B(0.02,0,0.02,0.98,0.86,0.94,25),
-    B(0,0.86,0,1,0.9,1,54),
-    B(0.1,0.06,0.94,0.9,0.82,0.96,66),     // the cupboard, dark
-    OPEN_DOOR(0.04,0.96,0.94,0.04,0.84,24)
-  ],
-  'Kitchen Sink': [
-    B(0.02,0,0.02,0.98,0.86,0.94,25),
-    B(0.02,0.86,0.02,0.98,0.9,0.96,54),
-    B(0.2,0.9,0.25,0.8,0.92,0.8,66),
-    B(0.46,0.9,0.1,0.54,0.99,0.16,65),
-    B(0.46,0.93,0.16,0.54,0.99,0.34,65),
-    B(0.1,0.06,0.94,0.9,0.8,0.96,66),      // the cupboard, dark
-    OPEN_DOOR(0.03,0.47,0.94,0.02,0.84,24),
-    OPEN_RIGHT(0.53,0.97,0.94,0.02,0.84,24)
-  ],
-  'Trash Can': [
-    B(0.14,0,0.14,0.86,0.82,0.86,65),
-    B(0.12,0.82,0.02,0.88,1.12,0.1,66)     // the lid, flipped up at the back
-  ]
-};
-// the top block of a two-block piece (the fridge): its closed and open parts
-const TOPS = {
-  'Fridge': {
-    top: [
-      B(0.02,0,0.02,0.98,1,0.92,64),
-      B(0.03,0.01,0.92,0.97,0.99,0.99,65),
-      B(0.86,0.5,0.99,0.9,0.75,1.02,66)
-    ],
-    topOpen: [
-      B(0.02,0,0.02,0.98,1,0.92,64),
-      OPEN_DOOR(0.03,0.97,0.92,0.01,0.99,65),
-      B(0.03,0.5,1.75,0.1,0.75,1.79,66),
-      B(0.1,0.02,0.92,0.96,0.98,0.93,66),
-      B(0.1,0.5,0.93,0.96,0.52,0.96,65)
-    ]
-  }
-};
-FURN.forEach(ty => {
-  if(OPENS[ty.name]) ty.open = OPENS[ty.name];
-  if(TOPS[ty.name]){ ty.top = TOPS[ty.name].top; ty.topOpen = TOPS[ty.name].topOpen; }
-});
-// every block state a piece can be in, in order. The first 23 are the closed pieces (their block numbers never change);
-// then the open states; then the top halves of tall pieces. Each state takes 4 block numbers, one per facing.
-const FURN_VAR = [];                                // { t: piece index, key, parts, name }
-const FVI = FURN.map(() => ({}));                   // FVI[t][key] = the state's index in FURN_VAR
-function addVar(t, key, parts, name){ FVI[t][key] = FURN_VAR.length; FURN_VAR.push({t, key, parts, name}); }
-FURN.forEach((ty, t) => addVar(t, 'whole', ty.parts, ty.name));
-FURN.forEach((ty, t) => { if(ty.open) addVar(t, 'open', ty.open, ty.name + ' (open)'); });
-FURN.forEach((ty, t) => { if(ty.top) addVar(t, 'top', ty.top, ty.name + ' (top)'); });
-FURN.forEach((ty, t) => { if(ty.topOpen) addVar(t, 'topOpen', ty.topOpen, ty.name + ' (top, open)'); });
+FURN.forEach(ty => { ty.states = ty.states || [{}]; ty.wide = !!ty.wide; ty.tall = !!ty.tall; });
 const FURN_BASE = 58;                       // the first furniture block number
+const FURN_VAR = [];                        // every state of every piece: { t: piece, f: its flags, key, name, parts }
+const FVI = FURN.map(() => ({}));           // FVI[t][key] = the state's index in FURN_VAR
+const flagKey = f => (f.top?'t':'') + (f.open?'o':'') + (f.water?'w':'') + (f.lv!==undefined?'l'+f.lv:'') + (f.c?'c'+f.c:'');
+const flagName = f => (f.top?' (top)':'') + (f.open?' (open)':'') + (f.water?' (water on)':'') +
+  (f.lv===3?' (full)':(f.lv===1||f.lv===2)?' (filling)':'') + (f.c?' (right half)':'');
+function addVar(t, f){
+  const key = flagKey(f);
+  FVI[t][key] = FURN_VAR.length;
+  FURN_VAR.push({t, f, key, name: FURN[t].name + flagName(f), parts: FURN[t].fn(f)});
+}
+const withCell = (ty, s, c) => ty.wide ? Object.assign({}, s, {c}) : s;
+FURN.forEach((ty, t) => addVar(t, withCell(ty, ty.states[0], 0)));          // the normal state of every piece comes first
+FURN.forEach((ty, t) => ty.states.forEach((s, i) => {
+  if(ty.wide){ for(const c of [0,1]){ if(i === 0 && c === 0) continue; addVar(t, withCell(ty, s, c)); } }
+  else if(i > 0) addVar(t, s);
+}));
 const FURN_MAX = FURN_BASE + FURN_VAR.length*4 - 1;
 const FURN_BASES = FURN.map((_, t) => FURN_BASE + t*4);   // the block a player carries, facing front
-const furnVar = (t, key, f) => FURN_BASE + FVI[t][key]*4 + f;   // the block number for a piece, state and facing
+const furnVar = (t, f, facing) => FURN_BASE + FVI[t][flagKey(f)]*4 + facing;   // NaN if the piece has no such state
 for(let vi = 0; vi < FURN_VAR.length; vi++) for(let f = 0; f < 4; f++){
   const v = FURN_VAR[vi];
   BLOCKS[FURN_BASE + vi*4 + f] = {name:v.name, top:FURN[v.t].icon, side:FURN[v.t].icon, bot:FURN[v.t].icon, sw:FURN[v.t].sw};
@@ -642,11 +648,11 @@ function getBlock(wx,wy,wz){
 }
 function solidAt(wx,wy,wz){ return isSolidId(getBlock(wx,wy,wz)); }
 // records the change even when the chunk is not loaded, so it is applied when the chunk is generated later
-function setBlock(wx,wy,wz,t){
+function setBlock(wx,wy,wz,t,quiet){
   if(wy<0 || wy>=CH) return false;
   const cx=Math.floor(wx/CS), cz=Math.floor(wz/CS);
   const lx=wx-cx*CS, lz=wz-cz*CS, idx=lx+lz*CS+wy*CS*CS;
-  const k=chunkKey(cx,cz); (edits[k]||(edits[k]={}))[idx]=t;
+  const k=chunkKey(cx,cz); if(!quiet) (edits[k]||(edits[k]={}))[idx]=t;
   lightDirty = true;                          // a block change can move the light from a lamp
   const ch=chunks.get(k);
   if(!ch) return true;
@@ -743,63 +749,158 @@ function doorThinZ(wx,y,wz){ return isSolidId(getBlock(wx-1,y,wz)) || isSolidId(
 // a bed is two blocks in a row: the foot (16) and the head (17). Its parts are given along the bed (u runs
 // 0 at the foot to 2 at the head) and across it (v runs 0 to 1). Each cell draws only the part of them that lies inside it.
 // x and z are chunk-local, as in buildMesh; wx and wz are world positions, used to look at the neighbouring cell.
-// furniture: the 4 facings of each piece are consecutive block numbers, so a piece's facing is part of its block number
+// furniture: each state of a piece has 4 block numbers, one per facing (furniture faces the player when placed)
 function isFurn(b){ return b >= FURN_BASE && b <= FURN_MAX; }
 function isFurnBase(b){ return isFurn(b) && ((b - FURN_BASE) >> 2) < FURN.length && ((b - FURN_BASE) & 3) === 0; }
-// a piece's state and facing, from its block number
 function furnState(b){ return FURN_VAR[(b - FURN_BASE) >> 2]; }
 function furnFacing(b){ return (b - FURN_BASE) & 3; }
-// openable pieces have an open state; a tall piece's top half is a state of its own
-function furnOpenable(b){ return FVI[furnState(b).t].open !== undefined; }
-// the other half of a tall piece (the fridge), if this cell has one: [x,y,z] or null
-function furnPartner(x,y,z,b){
-  const v = furnState(b);
-  if(FVI[v.t].top === undefined) return null;
-  const upper = v.key === 'top' || v.key === 'topOpen';
-  const dy = upper ? -1 : 1;
-  const o = getBlock(x,y+dy,z);
-  if(!isFurn(o)) return null;
-  const ov = furnState(o);
-  const oUpper = ov.key === 'top' || ov.key === 'topOpen';
-  return (ov.t === v.t && oUpper !== upper) ? [x,y+dy,z] : null;
-}
-// opens or closes a piece (and the other half of a tall piece) in one go
-function toggleFurn(h){
-  const v = furnState(h.id), f = furnFacing(h.id);
-  const opening = v.key === 'whole' || v.key === 'top';
-  const upper = v.key === 'top' || v.key === 'topOpen';
-  const stateName = (top, open) => top ? (open ? 'topOpen' : 'top') : (open ? 'open' : 'whole');
-  const p = furnPartner(h.x,h.y,h.z,h.id);
-  placeCell(h.x,h.y,h.z, furnVar(v.t, stateName(upper, opening), f));
-  if(p){ const pb = getBlock(p[0],p[1],p[2]); placeCell(p[0],p[1],p[2], furnVar(v.t, stateName(!upper, opening), furnFacing(pb))); }
-  sfx.door(opening);
-  flashHud((opening ? 'OPENED ' : 'CLOSED ') + FURN[v.t].name.toUpperCase());
-}
 // the facing a piece gets when put down: it turns to face the player
 function facingFromYaw(yaw){
   const fx = Math.sin(yaw), fz = Math.cos(yaw);      // the direction from the piece to the player
   const opts = [[fz,0],[-fx,1],[-fz,2],[fx,3]];       // front +z, front -x, front -z, front +x
   return opts.reduce((a, b) => b[0] > a[0] ? b : a)[1];
 }
-// turns a box 90 degrees per facing about the middle of the block
-function rotBox(lo, hi, f){
+// the direction a wide piece runs in, from its first block to its second, for a facing
+function furnDir(f){
+  let u = 1, v = 0;
+  for(let i = 0; i < f; i++){ const t = u; u = -v; v = t; }
+  return [u, v];
+}
+// turns a box 90 degrees per facing about the middle of its block; cx is the middle of the block across x
+function rotBoxAt(lo, hi, f, cx){
   const mn = [Infinity, lo[1], Infinity], mx = [-Infinity, hi[1], -Infinity];
   for(const x of [lo[0], hi[0]]) for(const z of [lo[2], hi[2]]){
-    let u = x - 0.5, v = z - 0.5;
+    let u = x - cx, v = z - 0.5;
     for(let i = 0; i < f; i++){ const t = u; u = -v; v = t; }
     mn[0] = Math.min(mn[0], u+0.5); mx[0] = Math.max(mx[0], u+0.5);
     mn[2] = Math.min(mn[2], v+0.5); mx[2] = Math.max(mx[2], v+0.5);
   }
   return {lo:mn, hi:mx};
 }
-// adds one piece of furniture to the mesh: each of its boxes, turned to the piece's facing
+// adds one piece of furniture to the mesh: each of its boxes, turned to the piece's facing. A wide piece draws
+// only the part of its boxes that lies in its own block
 function emitFurn(V, I, nv, x, y, z, b){
-  const f = furnFacing(b);
-  for(const p of furnState(b).parts){
-    const r = rotBox([p[0],p[1],p[2]], [p[3],p[4],p[5]], f);
+  const v = furnState(b), f = furnFacing(b), ty = FURN[v.t], c = v.f.c || 0;
+  for(const p of v.parts){
+    let x0 = p[0], x1 = p[3];
+    if(ty.wide){ x0 = Math.max(x0, c); x1 = Math.min(x1, c+1); if(x1 <= x0) continue; }
+    const r = rotBoxAt([x0,p[1],p[2]], [x1,p[4],p[5]], f, ty.wide ? c+0.5 : 0.5);
     nv = emitBox(V, I, nv, [x+r.lo[0], y+r.lo[1], z+r.lo[2]], [x+r.hi[0], y+r.hi[1], z+r.hi[2]], {top:p[6], side:p[7], bot:p[8]}, p[9]);
   }
   return nv;
+}
+// the other half of a tall or wide piece, if there is one next to this block: [x,y,z] or null
+function furnPartner(x,y,z,b){
+  const v = furnState(b), ty = FURN[v.t];
+  if(ty.tall){
+    const dy = v.f.top ? -1 : 1, o = getBlock(x,y+dy,z);
+    if(!isFurn(o)) return null;
+    const ov = furnState(o);
+    return (ov.t === v.t && !!ov.f.top !== !!v.f.top) ? [x,y+dy,z] : null;
+  }
+  if(ty.wide){
+    const d = furnDir(furnFacing(b)), s = v.f.c ? -1 : 1;
+    const px = x + s*d[0], pz = z + s*d[1], o = getBlock(px,y,pz);
+    if(!isFurn(o)) return null;
+    const ov = furnState(o);
+    return (ov.t === v.t && !!ov.f.c !== !!v.f.c) ? [px,y,pz] : null;
+  }
+  return null;
+}
+// the point the player is looking at (from the last raycast)
+function hitPoint(h){
+  const o = [player.x, player.y+EYE, player.z], d = camDir();
+  return [o[0]+d[0]*h.t, o[1]+d[1]*h.t, o[2]+d[2]*h.t];
+}
+// the same point in the piece's own coordinates: 0 to 1 across a block, and 0 to 2 across a wide piece
+function furnModelPoint(h){
+  const v = furnState(h.id), f = furnFacing(h.id), c = v.f.c || 0;
+  const p = hitPoint(h);
+  let u = p[0] - h.x - 0.5, w = p[2] - h.z - 0.5;
+  for(let i = 0; i < f; i++){ const t = u; u = w; w = -t; }     // undo the piece's turn
+  return [(FURN[v.t].wide ? c + 0.5 : 0.5) + u, p[1] - h.y, 0.5 + w];
+}
+// changes the state of a piece (and of its other half, if it has one). Returns false if there is no such state.
+function furnChange(h, change){
+  const v = furnState(h.id), t = v.t, f = furnFacing(h.id), ty = FURN[t];
+  const nf = change(Object.assign({}, v.f));
+  const id = furnVar(t, nf, f);
+  if(!isFurn(id)) return false;
+  placeCell(h.x, h.y, h.z, id);
+  const p = furnPartner(h.x, h.y, h.z, h.id);
+  if(p){
+    const pb = getBlock(p[0], p[1], p[2]), pf = Object.assign({}, nf);
+    if(ty.wide) pf.c = furnState(pb).f.c;          // each half keeps its own side
+    if(ty.tall) pf.top = furnState(pb).f.top;      // and its own top or bottom
+    placeCell(p[0], p[1], p[2], furnVar(t, pf, furnFacing(pb)));
+  }
+  return true;
+}
+// right-clicking a control on a piece (a tap, a plug): true if one was used
+function furnAct(h){
+  const ty = FURN[furnState(h.id).t];
+  if(!ty.acts) return false;
+  const m = furnModelPoint(h);
+  for(const a of ty.acts){
+    const b = a.box;
+    if(m[0] < b[0] || m[0] > b[3] || m[1] < b[1] || m[1] > b[4] || m[2] < b[2] || m[2] > b[5]) continue;
+    if(a.flag){
+      let on = false;
+      furnChange(h, f => { on = !f[a.flag]; f[a.flag] = on; return f; });
+      flashHud(on ? a.on : a.off);
+      sfx.click();
+    } else {
+      const from = furnState(h.id).f.lv;
+      furnChange(h, f => { f.lv = a.level; return f; });
+      if(from !== a.level) sfx.noise(1.2, 0.12, 'bandpass', 900, 0.7);   // the water running or going down the drain
+      flashHud(a.msg);
+    }
+    return true;
+  }
+  return false;
+}
+// right-clicking an openable piece opens it, or shuts it again
+function furnOpenToggle(h){
+  const v = furnState(h.id);
+  if(!FURN[v.t].states.some(s => s.open)) return false;
+  const opening = !v.f.open;
+  if(!furnChange(h, f => { f.open = opening; return f; })) return false;
+  sfx.door(opening);
+  flashHud((opening ? 'OPENED ' : 'CLOSED ') + FURN[v.t].name.toUpperCase());
+  return true;
+}
+// the water in a bath rises or drains in steps. Each player's screen shows the steps; the stored state is the last one.
+const bathTimers = new Map();
+function animateBath(x, y, z, t, c, f, from, to){
+  const key = x+','+y+','+z;
+  for(const id of bathTimers.get(key) || []) clearTimeout(id);
+  const dir = to > from ? 1 : -1, seq = [];
+  for(let L = from + dir; L !== to; L += dir) seq.push(L);
+  seq.push(to);
+  const timers = [];
+  let i = 0, prev = from;
+  const step = first => {
+    if(!first){
+      const cur = getBlock(x, y, z);
+      if(!isFurn(cur) || furnState(cur).t !== t || furnState(cur).f.lv !== prev) return;   // changed again meanwhile
+    }
+    const L = seq[i++];
+    setBlock(x, y, z, furnVar(t, {lv:L, c}, f), true);   // a step is only on screen: it is not saved
+    prev = L;
+    if(i < seq.length) timers.push(setTimeout(() => step(false), 450));
+  };
+  bathTimers.set(key, timers);
+  step(true);
+}
+// sets a block, and starts a bath filling or draining when its water changes
+function applyBlock(x, y, z, id){
+  const prev = getBlock(x, y, z);
+  const ok = setBlock(x, y, z, id);
+  if(ok && isFurn(prev) && isFurn(id)){
+    const a = furnState(prev), b = furnState(id);
+    if(a.t === b.t && FURN[b.t].wide && a.f.lv !== b.f.lv) animateBath(x, y, z, b.t, b.f.c || 0, furnFacing(id), a.f.lv, b.f.lv);
+  }
+  return ok;
 }
 // the direction a bed runs in, from its foot to its head, as seen from the bed block at (wx,y,wz); [0,0] when it has no partner
 function bedDir(wx,y,wz,id){
@@ -1318,7 +1419,7 @@ function raycast(maxD){
     else { t=tmz; tmz+=tdz; z+=sz; nz=-sz; nx=0; ny=0; }
     const b=getBlock(x,y,z);
     if(b<0) return null;                       // ran into a chunk that is not loaded yet
-    if(b>0) return {x,y,z,nx,ny,nz,id:b};
+    if(b>0) return {x,y,z,nx,ny,nz,id:b,t};
   }
   return null;
 }
@@ -1328,7 +1429,7 @@ function overlapsPlayer(x,y,z){
 }
 function mpSend(msg){ if(mp.ws && mp.ws.readyState===1) mp.ws.send(JSON.stringify(msg)); }
 // sets one block and tells the server
-function placeCell(x,y,z,id){ setBlock(x,y,z,id); mpSend({type:'edit', x, y, z, id}); }
+function placeCell(x,y,z,id){ applyBlock(x,y,z,id); mpSend({type:'edit', x, y, z, id}); }
 // the other half of a door or a bed, if there is one next to this block
 function partnerOf(x,y,z,id){
   if(isFurn(id)) return furnPartner(x,y,z,id);
@@ -1393,11 +1494,11 @@ function placeItem(id,x,y,z,dir){
   if(getBlock(x,y,z)!==0 || overlapsPlayer(x,y,z)) return false;
   // furniture turns to face the player when it is put down
   if(isFurnBase(id)){
-    const f = facingFromYaw(player.yaw), t = (id - FURN_BASE) >> 2;
-    if(FVI[t].top !== undefined){                // a tall piece takes two blocks, one on top of the other
-      if(getBlock(x,y+1,z)!==0 || overlapsPlayer(x,y+1,z)) return false;
-      placeCell(x,y+1,z, furnVar(t,'top',f));
-    }
+    const f = facingFromYaw(player.yaw), t = (id - FURN_BASE) >> 2, ty = FURN[t];
+    // a tall piece takes two blocks one above the other; a wide piece takes two blocks side by side
+    const extra = ty.tall ? [x,y+1,z] : ty.wide ? [x+furnDir(f)[0], y, z+furnDir(f)[1]] : null;
+    if(extra && (getBlock(extra[0],extra[1],extra[2])!==0 || overlapsPlayer(extra[0],extra[1],extra[2]))) return false;
+    if(extra) placeCell(extra[0],extra[1],extra[2], furnVar(t, ty.tall ? {top:1} : {lv:0, c:1}, f));
     placeCell(x,y,z, id + f); return true;       // furniture turns to face the player when it is put down
   }
   placeCell(x,y,z,id);
@@ -1461,7 +1562,7 @@ function placeBunk(h){
 function doPlace(){
   const h=raycast(6); if(!h) return;
   if(isDoorId(h.id)){ toggleDoor(h); return; }
-  if(isFurn(h.id) && furnOpenable(h.id)){ toggleFurn(h); return; }   // right-click opens or shuts a cupboard, fridge, drawer...
+  if(isFurn(h.id) && (furnAct(h) || furnOpenToggle(h))) return;   // right-click works a tap, a plug or a door
   if(h.id===BED_FOOT_ID || h.id===BED_HEAD_ID){
     // holding a bed and aiming at the top of a bed stacks another bed on it; otherwise you lie down to sleep
     if(HOTBAR[sel]===BED_FOOT_ID && h.ny===1){ placeBunk(h); return; }
@@ -2028,7 +2129,7 @@ function onServerMessage(m){
   else if(m.type==='edit'){
     if(m.by===mp.id) return;                       // already applied locally
     const prev = getBlock(m.x,m.y,m.z);
-    if(!setBlock(m.x,m.y,m.z,m.id)) return;
+    if(!applyBlock(m.x,m.y,m.z,m.id)) return;
     const d = Math.hypot(m.x+0.5-player.x, m.y+0.5-player.y, m.z+0.5-player.z);
     const g = Math.max(0, 1 - d/28);
     if(g>0){
@@ -2385,7 +2486,7 @@ window.VOX = {
   addChatLine, skipNight, trySleep, wakeUp,
   openCode, closeCode, tryCode, setInvisible, music, musicSet, musicStart, musicStop, PRIVATE_CODE,
   get wallHacks(){ return wallHacks; }, placeBunk, leaveBed, bedDirAt,
-  FURN_BASE, FURN_MAX, FURN, FVI, furnVar, furnPartner, furnOpenable, toggleFurn, furnState, placeItem,
+  FURN_BASE, FURN_MAX, FURN, FVI, furnVar, furnPartner, furnChange, furnAct, furnOpenToggle, furnState, placeItem, applyBlock,
   collides, CATS, GLOWSTONE_ID, get catFilter(){ return catFilter; }, setCat(n){ catFilter = n; if(invOpen) renderInv(); },
   get codeOpen(){ return codeOpen; }, get codeUnlocked(){ return codeUnlocked; },
   openInv, closeInv, addToInv, removeFromInv, get invOpen(){ return invOpen; },
