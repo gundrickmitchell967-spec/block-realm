@@ -62,6 +62,13 @@
   #doorowner,#doorvisit{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%}
   #doorpanel input{font:16px 'Courier New',monospace;width:100%;box-sizing:border-box;padding:10px;text-align:center;letter-spacing:.2em;background:#11151f;color:#fff;border:2px solid #5b6578}
   #doormsg{min-height:1.4em;margin:0;font-size:13px;color:#ffe066;text-align:center}
+  #shopbox{position:fixed;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;background:rgba(8,12,22,.86)}
+  #shoppanel{display:flex;flex-direction:column;align-items:center;gap:10px;width:min(460px,100%);max-height:100%;overflow:auto;box-sizing:border-box;padding:18px;background:#161b26;border:3px solid #5b6578}
+  #shoppanel h2{margin:0;font-size:20px;letter-spacing:.14em;text-shadow:2px 2px 0 #000}
+  #shopcoins{margin:0;font-size:14px;color:#ffe066;text-align:center}
+  #shopitems{width:100%;display:flex;flex-direction:column;gap:6px}
+  .shoprow{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;background:#11151f;border:2px solid #3a4560;font-size:13px}
+  #tshop{right:calc(184px + env(safe-area-inset-right));bottom:calc(106px + env(safe-area-inset-bottom));width:66px;height:66px;font-size:11px;background:rgba(40,90,120,.6)}
   #tdoor{right:calc(184px + env(safe-area-inset-right));bottom:calc(24px + env(safe-area-inset-bottom));width:66px;height:66px;font-size:11px;background:rgba(120,90,40,.6)}
   .btn:focus-visible,.slot:focus-visible{outline:3px solid #ffe066;outline-offset:2px}
   #mpbox{display:flex;flex-direction:column;align-items:center;gap:8px;width:260px;max-width:80vw}
@@ -111,6 +118,10 @@
   #pmbox{margin-top:8px}
   #pmbox input{width:100%;box-sizing:border-box;padding:8px;font:14px 'Courier New',monospace;background:#0d111b;color:#fff;border:2px solid #3a4560;margin:4px 0}
   #adminlist .acts .btn{padding:6px 2px;font-size:10px;width:100%}
+  #givebox{display:flex;gap:6px;width:100%;margin:6px 0;align-items:stretch}
+  #givebox select,#givebox input{font:13px 'Courier New',monospace;padding:8px;background:#0d111b;color:#fff;border:2px solid #3a4560;min-width:0;box-sizing:border-box}
+  #givebox select{flex:1}
+  #giveamt{width:90px}
   body.touch{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;overscroll-behavior:none}
   body.touch #touch,body.touch #touchlook{touch-action:none}
   #touch{position:fixed;inset:0;z-index:2;pointer-events:none;touch-action:none}
@@ -164,6 +175,7 @@
   <button class="tbtn" id="tjump" type="button">JUMP</button>
   <button class="tbtn" id="tlie" type="button" hidden>LIE DOWN</button>
     <button class="tbtn" id="tdoor" type="button" hidden>DOOR</button>
+    <button class="tbtn" id="tshop" type="button" hidden>SHOP</button>
   <button class="tbtn" id="tdown" type="button" hidden>DOWN</button>
   <div id="ttop">
     <button class="tbtn" id="tadmin" type="button" hidden>ADMIN</button>
@@ -214,7 +226,7 @@
        Left click: break a block &middot; Right click: place the selected block<br>
        1-8 or mouse wheel: choose an inventory slot &middot; E: block catalog (add or remove blocks)<br>
        Right click a door: open or close it &middot; Q at a door: set or open its password (multiplayer)<br>
-       Right click a bed at night: go to sleep<br>
+       Right click a bed at night: go to sleep &middot; Right click the shopkeeper: open the shop<br>
        M: sound effects on or off &middot; Esc: pause and save<br>
        Double-tap Space: fly (Space up, Shift down) &middot; T: chat with other players (multiplayer)<br>
        V: talk to players close to you (voice chat, multiplayer)</p>
@@ -241,6 +253,13 @@
       <div id="adminpanel" hidden>
         <h3>PLAYERS</h3>
         <div id="adminlist"></div>
+        <h3>GIVE COINS</h3>
+        <div id="givebox">
+          <select id="givewho" aria-label="Player to give coins to"></select>
+          <input id="giveamt" type="number" step="1" placeholder="Amount" aria-label="Amount of coins">
+          <button class="btn" id="givego" type="button">GIVE</button>
+        </div>
+        <p class="hint">A negative amount takes coins away.</p>
         <div id="pmbox" hidden>
           <p class="hint" id="pmto"></p>
           <input id="pmtext" maxlength="200" autocomplete="off" aria-label="Message to the player">
@@ -251,6 +270,15 @@
     </div>
     <p id="codemsg" role="status"></p>
     <button class="btn" id="codeclose" type="button">CLOSE (P)</button>
+  </div>
+</div>
+
+<div id="shopbox" hidden>
+  <div id="shoppanel" role="dialog" aria-labelledby="shoptitle">
+    <h2 id="shoptitle">SHOP</h2>
+    <p class="hint" id="shopcoins"></p>
+    <div id="shopitems"></div>
+    <button class="btn" id="shopclose" type="button">LEAVE (E)</button>
   </div>
 </div>
 
@@ -920,6 +948,52 @@ function heightAt(wx,wz){
   return clamp(Math.floor(20 + n*30), 6, 58);   // the top block sits at y = h-1
 }
 
+/* ---------- the shop: a building with a counter, a doorway and a shopkeeper inside. It is worked out from the seed like the trees, so every world has it in the same place ---------- */
+const SHOP_W = 9, SHOP_D = 7, SHOP_H = 4;          // the footprint is 9 by 7 blocks; the room inside is 4 blocks high
+// the nearest spot to a point east of the spawn where the ground is flat and above the beach; the floor sits on the highest ground under it
+const SHOP = (() => {
+  let site = null;
+  for(let r = 0; r <= 80 && !site; r++) for(let dz = -r; dz <= r && !site; dz++) for(let dx = -r; dx <= r && !site; dx++){
+    if(Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;         // walk outward in rings
+    const x0 = 22 + dx, z0 = 14 + dz;
+    let lo = 1e9, hi = -1e9;
+    for(let z = 0; z < SHOP_D; z++) for(let x = 0; x < SHOP_W; x++){ const h = heightAt(x0 + x, z0 + z); lo = Math.min(lo, h); hi = Math.max(hi, h); }
+    if(lo >= 24 && hi - lo <= 3) site = { x0, z0, floorY: hi };
+  }
+  if(!site){ site = { x0: 22, z0: 14, floorY: 0 }; for(let z = 0; z < SHOP_D; z++) for(let x = 0; x < SHOP_W; x++) site.floorY = Math.max(site.floorY, heightAt(22 + x, 14 + z)); }
+  site.doorX = 4;                                   // the doorway: the middle of the front wall
+  site.counterZ = 3;                                // the counter runs across the room
+  site.npcX = site.x0 + 4; site.npcZ = site.z0 + 4; // the shopkeeper stands behind the counter
+  return site;
+})();
+// what the shop puts in the block at (wx,wy,wz), given the ground height h of that column; -1 when the shop does not change it
+function shopBlockAt(wx, wy, wz, h){
+  const lx = wx - SHOP.x0, lz = wz - SHOP.z0;
+  if(lx < 0 || lz < 0 || lx >= SHOP_W || lz >= SHOP_D) return -1;
+  const F = SHOP.floorY;
+  if(wy < F) return wy >= h ? 3 : -1;               // stone foundation, down to the ground
+  if(wy === F) return 7;                            // planks floor
+  const hy = wy - F;                                // 1..SHOP_H is inside the walls
+  if(hy === SHOP_H + 1) return 7;                   // planks roof
+  if(hy > SHOP_H + 1) return 0;
+  const wall = lx === 0 || lz === 0 || lx === SHOP_W - 1 || lz === SHOP_D - 1;
+  if(!wall){
+    if(hy === 1 && lz === SHOP.counterZ && lx >= 2 && lx <= SHOP_W - 3) return 7;   // the counter
+    return 0;                                       // the room is empty
+  }
+  if(lz === 0 && lx === SHOP.doorX){                // the doorway in the front wall
+    if(hy === 1) return DOOR_ID;
+    if(hy === 2) return DOOR_TOP_ID;
+    return 8;
+  }
+  // windows of glass, two blocks high, in the side walls and the back wall
+  const windowRow = hy === 2 || hy === 3;
+  const sideWindow = (lx === 0 || lx === SHOP_W - 1) && (lz === 2 || lz === 4);
+  const backWindow = lz === SHOP_D - 1 && (lx === 2 || lx === SHOP_W - 3);
+  if(windowRow && (sideWindow || backWindow)) return 10;
+  return 8;                                         // cobblestone walls
+}
+
 /* ---------- world storage: chunks are generated from the seed; edits are kept apart ---------- */
 const chunks = new Map();     // "cx,cz" -> chunk
 let edits = {};               // "cx,cz" -> { index: blockType }
@@ -971,6 +1045,12 @@ function genChunk(cx,cz){
       }
     }
     for(let i=0;i<trunk;i++) set(x, h+i, z, 4, false);
+  }
+  // the shop: after the trees, so it stands over anything that grew inside its walls
+  for(let z=0;z<CS;z++) for(let x=0;x<CS;x++){
+    const wx=cx*CS+x, wz=cz*CS+z, h=heights[x+z*CS];
+    if(wx<SHOP.x0 || wz<SHOP.z0 || wx>=SHOP.x0+SHOP_W || wz>=SHOP.z0+SHOP_D) continue;
+    for(let y=0;y<CH;y++){ const v=shopBlockAt(wx,y,wz,h); if(v>=0) data[x+z*CS+y*CS*CS]=v; }
   }
   const e = edits[chunkKey(cx,cz)];
   if(e) for(const k in e) data[+k] = e[k];
@@ -2462,6 +2542,7 @@ function tapVolume(){
   return best;
 }
 function doPlace(){
+  if(shopAim()){ openShop(); return; }   // right-click the shopkeeper: the shop opens
   const h=raycast(6);
   if(HOTBAR[sel]===REMOTE_ID){ remotePress(h); return; }   // the remote in your hand: right-click starts or pauses the TV you aim at
   // holding a glass of water: right-click drinks it, unless you are working a door, a light, the fridge or a bed
@@ -2752,6 +2833,72 @@ for(const id of ['doorpw', 'doorunlock']){
   });
 }
 $('bypassbtn').addEventListener('click', ()=>{ if(adminRole === 'creator') mpSend({type:'bypass', on: !adminBypass}); });
+$('givego').addEventListener('click', ()=>{
+  if(adminRole !== 'creator') return;
+  const id = +$('givewho').value, amount = Math.trunc(Number($('giveamt').value));
+  if(!id || !Number.isFinite(amount) || !amount){ flashHud('CHOOSE A PLAYER AND TYPE AN AMOUNT'); return; }
+  mpSend({type:'admin', action:'give', target:id, amount});
+  $('giveamt').value = '';
+});
+
+/* ---------- the shopkeeper, and the shop panel ---------- */
+// the shopkeeper: he stands behind the counter, facing the doorway. He is drawn like a player, with the same figure
+const SHOPKEEPER = { x: SHOP.npcX + 0.5, y: SHOP.floorY + 1, z: SHOP.npcZ + 0.5, yaw: 0, phase: 0, amt: 0, rgb: [0.55, 0.32, 0.12] };
+const shopTag = document.createElement('div'); shopTag.className = 'tag'; shopTag.hidden = true; shopTag.textContent = 'SHOPKEEPER';
+$('tags').appendChild(shopTag);
+// the distance along the view to the shopkeeper's body, or -1 when the view does not reach it
+function shopkeeperDist(){
+  const o = [player.x, player.y + eyeNow(), player.z], d = camDir();
+  const b0 = [SHOPKEEPER.x - 0.36, SHOPKEEPER.y, SHOPKEEPER.z - 0.36], b1 = [SHOPKEEPER.x + 0.36, SHOPKEEPER.y + 1.85, SHOPKEEPER.z + 0.36];
+  let tmin = 0, tmax = 1e9;
+  for(let i = 0; i < 3; i++){
+    if(Math.abs(d[i]) < 1e-9){ if(o[i] < b0[i] || o[i] > b1[i]) return -1; continue; }
+    let t1 = (b0[i] - o[i]) / d[i], t2 = (b1[i] - o[i]) / d[i];
+    if(t1 > t2){ const s = t1; t1 = t2; t2 = s; }
+    tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+    if(tmin > tmax) return -1;
+  }
+  return tmin;
+}
+// true when the shopkeeper is what you are looking at, within reach (a block in front of him hides him)
+function shopAim(){
+  if(!playing) return false;
+  const t = shopkeeperDist();
+  if(t < 0 || t > 6) return false;
+  const h = raycast(6);
+  return !h || t <= h.t;
+}
+// the items for sale: { name, price } (none yet; they are added here later)
+const SHOP_ITEMS = [];
+let myCoins = 0;            // your coins in this world (the multiplayer server keeps them)
+let shopOpen = false;
+function openShop(){
+  if(!playing || shopOpen || codeOpen || invOpen || fridgeOpen || doorShown || chatOpen || player.sleeping) return;
+  shopOpen = true;
+  for(const k in keys) keys[k] = false;
+  try{ document.exitPointerLock(); }catch(e){}
+  renderShop();
+  $('shopbox').hidden = false;
+  $('shopclose').focus();
+}
+function closeShop(){
+  if(!shopOpen) return;
+  shopOpen = false;
+  $('shopbox').hidden = true;
+  if(playing) lockPointer();
+}
+function renderShop(){
+  $('shopcoins').textContent = 'YOUR COINS: ' + myCoins + (mpMode ? '' : '   (coins come from the multiplayer server)');
+  const list = $('shopitems'); list.textContent = '';
+  if(!SHOP_ITEMS.length){ const p = document.createElement('p'); p.className = 'hint'; p.textContent = 'The shopkeeper has nothing for sale yet.'; list.appendChild(p); return; }
+  for(const it of SHOP_ITEMS){
+    const row = document.createElement('div'); row.className = 'shoprow';
+    const nm = document.createElement('span'); nm.textContent = String(it.name); row.appendChild(nm);
+    const pr = document.createElement('span'); pr.textContent = it.price + ' COINS'; row.appendChild(pr);
+    list.appendChild(row);
+  }
+}
+$('shopclose').addEventListener('click', closeShop);
 
 /* ---------- private panel: press P in the game, enter the code, then toggle invisibility ---------- */
 // the code is checked in the browser only; it keeps casual visitors out of the panel, it is not a real lock
@@ -2833,6 +2980,10 @@ function renderAdmin(){
     row.appendChild(acts); list.appendChild(row);
   }
   $('stopspec').hidden = spectate.id == null;
+  const who = $('givewho'), keep = who.value;      // the list of players in the give-coins box, keeping the choice
+  who.textContent = '';
+  for(const o of rows){ const op = document.createElement('option'); op.value = String(o.id); op.textContent = o.name; who.appendChild(op); }
+  if([...who.options].some(x => x.value === keep)) who.value = keep;
 }
 function adminAct(action, id){
   if(adminRole !== 'creator') return;
@@ -2946,6 +3097,10 @@ addEventListener('keydown',e=>{
     if(((e.code==='KeyQ' && !(document.activeElement && document.activeElement.tagName==='INPUT')) || e.code==='Escape') && !e.repeat){ e.preventDefault(); closeDoor(); }
     return;
   }
+  if(shopOpen){                                   // the shop is open: only E or Esc leaves it
+    if((e.code==='KeyE' || e.code==='Escape') && !e.repeat){ e.preventDefault(); closeShop(); }
+    return;
+  }
   if(e.code==='Space') e.preventDefault();
   if(e.code==='KeyM' && !e.repeat && !(document.activeElement && document.activeElement.tagName==='INPUT')){ toggleSound(); return; }
   if(invOpen){                                  // the catalog is open: only E or Esc do anything
@@ -3005,7 +3160,7 @@ function lockPointer(){
   try{ const p = cv.requestPointerLock(); if(p && p.catch) p.catch(()=>{}); }catch(e){}
 }
 cv.addEventListener('mousedown',e=>{
-  if(!playing || invOpen || codeOpen || fridgeOpen || doorShown || player.sleeping) return;
+  if(!playing || invOpen || codeOpen || fridgeOpen || doorShown || shopOpen || player.sleeping) return;
   if(document.pointerLockElement!==cv) lockPointer();   // a click after a join or a pause captures the mouse
   if(document.pointerLockElement!==cv && e.button!==0) return;
   if(e.button===0) doBreak(); else if(e.button===2) doPlace();
@@ -3013,7 +3168,7 @@ cv.addEventListener('mousedown',e=>{
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('pointerlockchange',()=>{
   if(document.pointerLockElement) lookFrom = performance.now() + 150;
-  if(!document.pointerLockElement && playing && !chatOpen && !invOpen && !codeOpen && !fridgeOpen && !doorShown) pause();   // releasing the mouse to type in chat or use the catalog is not a pause
+  if(!document.pointerLockElement && playing && !chatOpen && !invOpen && !codeOpen && !fridgeOpen && !doorShown && !shopOpen) pause();   // releasing the mouse to type in chat or use the catalog is not a pause
 });
 
 /* ---------- sound: every effect is synthesised with Web Audio, so there are no sound files to load ---------- */
@@ -3105,11 +3260,11 @@ function toggleSound(){
   if(sfx.on) sfx.click();
 }
 
-/* ---------- background music: looping tracks, one after another with a cross-fade ---------- */
+/* ---------- background music: looping tracks in a random order, with a cross-fade ---------- */
 // every track is built into this page (MUSIC_TRACKS). Each one plays from its own audio element, so it can cross-fade
 const MUSIC_FADE = 5;                                // seconds of cross-fade between tracks
 const MUSIC_VOL = 0.5;
-const music = { on:true, timer:null, els:null, bus:null, cur:-1, gen:0 };
+const music = { on:true, timer:null, els:null, bus:null, cur:-1, next:-1, gen:0 };
 try{ music.on = localStorage.getItem('blockrealm_music_v1') !== '0'; }catch(e){}
 // a track's text becomes a playable address the first time the track is needed
 function musicLoad(t){
@@ -3131,11 +3286,11 @@ function musicMake(){
     return t;
   });
 }
-// the next track that can play after track i (never i itself), or -1 when there is none
-function musicPick(i){
-  const n = music.els.length;
-  for(let k = 1; k < n; k++){ const j = (i + k) % n; if(!music.els[j].failed) return j; }
-  return -1;
+// a random track that can play, other than track `not` (-1 when there is none)
+function musicRandom(not){
+  const ok = [];
+  for(let j = 0; j < music.els.length; j++) if(j !== not && !music.els[j].failed) ok.push(j);
+  return ok.length ? ok[Math.floor(Math.random() * ok.length)] : -1;
 }
 // loads track i in the background, so the change to it is instant
 function musicPrefetch(i){
@@ -3154,21 +3309,36 @@ function musicPlayTrack(i, fade){
   try{ t.a.currentTime = 0; }catch(e){}
   t.a.play().catch(() => { if(t.a.error) t.failed = true; });   // blocked by the browser, or a load error (the tick then moves on)
 }
-// the cross-fade: the next track fades in while the current one fades out
-function musicNext(){
-  const c = sfx.ctx, old = music.cur >= 0 ? music.els[music.cur] : null, i = musicPick(music.cur);
-  if(i < 0) return;
-  const now = c.currentTime;
-  if(old){
+// moves to track i: it fades in while the track that was playing fades out
+function musicCrossTo(i){
+  const c = sfx.ctx, oi = music.cur, now = c.currentTime;
+  if(oi >= 0){
+    const old = music.els[oi];
     old.g.gain.cancelScheduledValues(now);
     old.g.gain.setValueAtTime(old.g.gain.value, now);
     old.g.gain.linearRampToValueAtTime(0, now + MUSIC_FADE);
-    const a = old.a;
-    setTimeout(() => a.pause(), (MUSIC_FADE + 0.5) * 1000);
+    // paused once it has faded, unless it has been chosen again meanwhile
+    setTimeout(() => { if(music.cur !== oi) old.a.pause(); }, (MUSIC_FADE + 0.5) * 1000);
   }
   music.cur = i;
   musicPlayTrack(i, MUSIC_FADE);
-  musicPrefetch(musicPick(i));
+  music.next = musicRandom(i);
+  musicPrefetch(music.next);
+}
+// the next track: the one picked in advance, or a fresh random one if that cannot play
+function musicNext(){
+  let i = music.next;
+  if(i < 0 || i === music.cur || music.els[i].failed) i = musicRandom(music.cur);
+  if(i < 0) return;
+  musicCrossTo(i);
+}
+// the settings were closed: the music changes to another track
+function musicReroll(){
+  if(!music.els) return;                          // nothing made yet: the first track is random anyway
+  const i = musicRandom(music.cur);
+  if(i < 0) return;
+  if(music.timer && sfx.ctx) musicCrossTo(i);     // playing: change now
+  else { music.cur = i; music.next = -1; }         // not playing: the next start plays this track
 }
 // called every quarter second while the music plays: moves on when the current track is nearly over
 function musicTick(){
@@ -3185,15 +3355,16 @@ function musicStart(){
   if(!c || !music.on || music.timer) return;
   if(c.state === 'suspended') c.resume();
   if(!music.els) musicMake();
-  let i = music.cur < 0 ? 0 : music.cur;
-  if(music.els[i].failed) i = musicPick(i);
+  let i = music.cur >= 0 ? music.cur : musicRandom(-1);
+  if(i >= 0 && music.els[i].failed) i = musicRandom(i);
   if(i < 0) return;
   music.cur = i;
   music.gen++;                                   // a stop that is still fading out must not pause the music that starts now
   const now = c.currentTime;
   music.bus.gain.cancelScheduledValues(now); music.bus.gain.setValueAtTime(1, now);
   musicPlayTrack(i, 2);                          // the music comes in over two seconds
-  musicPrefetch(musicPick(i));
+  music.next = musicRandom(i);
+  musicPrefetch(music.next);
   music.timer = setInterval(musicTick, 250);
   musicTick();
 }
@@ -3382,6 +3553,7 @@ function enterWorld(m){
   tvSync(m.tvs, m.sources);                      // the TVs already on in this world start for you too
   adminRole = null; player.invisible = false;   // the server forgets admin powers when you reconnect
   adminBypass = false;
+  myCoins = +m.coins || 0;
   doorLocks.clear();
   for(const L of m.locks || []) doorLocks.set(doorKeyOf(L.x, L.y, L.z), {ok: !!L.ok});
 }
@@ -3399,6 +3571,11 @@ function onServerMessage(m){
   else if(m.type==='doorinfo'){ onDoorInfo(m); }
   else if(m.type==='lock'){ onDoorLock(m); }
   else if(m.type==='doorresult'){ onDoorResult(m); }
+  else if(m.type==='coins'){
+    myCoins = +m.coins || 0; if(shopOpen) renderShop();
+    flashHud(m.change > 0 ? 'THE GAME CREATOR GAVE YOU ' + m.change + ' COINS' : 'THE GAME CREATOR TOOK ' + (-m.change) + ' COINS');
+  }
+  else if(m.type==='coinsgiven'){ flashHud((m.change > 0 ? 'GAVE ' + m.change + ' COINS TO ' : 'TOOK ' + (-m.change) + ' COINS FROM ') + String(m.name || 'PLAYER').toUpperCase()); }
   else if(m.type==='bypass'){ adminBypass = m.on === true; syncInvisBtn(); flashHud(adminBypass ? 'BREAK ANY BLOCK IS ON' : 'BREAK ANY BLOCK IS OFF'); }
   else if(m.type==='tv'){ tvSync(m.list, m.sources); }
   else if(m.type==='uploadTicket'){ const w=tvShareWait; tvShareWait=null; if(w){ if(m.token) w.ticket(m.token); else w.reject(new Error(m.error || 'not allowed')); } }
@@ -3571,7 +3748,7 @@ function tapBreakAt(sx, sy){ actAtScreen(sx, sy, () => doBreak()); }
 let breakTimer = 0;
 const tTouch = new Map();                          // touch id -> what that finger started on
 const touchesOf = e => [...e.changedTouches];
-function touchPlay(){ return isTouch && playing && !invOpen && !fridgeOpen && !codeOpen && !chatOpen; }
+function touchPlay(){ return isTouch && playing && !invOpen && !fridgeOpen && !codeOpen && !chatOpen && !shopOpen; }
 // the joystick
 stick.addEventListener('touchstart', e => {
   if(!touchPlay()) return;
@@ -3629,6 +3806,7 @@ const tBtns = [
   {el:$('tdown'), down:() => { keys.ShiftLeft = true; }, up:() => { keys.ShiftLeft = false; }},   // holds descent while flying
   {el:$('tlie'), down:() => tapKey('KeyZ', true)},
   {el:$('tdoor'), down:() => useDoorKey()},
+  {el:$('tshop'), down:() => openShop()},
   {el:$('tbag'), down:() => tapKey('KeyE', true)},
   {el:$('tchat'), down:() => tapKey('KeyT', true)},
   {el:$('tmic'), down:() => tapKey('KeyV', true)},
@@ -3657,7 +3835,7 @@ document.addEventListener('gesturestart', e => { if(isTouch) e.preventDefault();
 // the controls show only while you are playing and no panel is open; the chat and lie-down buttons only when they apply
 let touchShown = null;
 function syncTouch(){
-  const show = isTouch && playing && !invOpen && !fridgeOpen && !codeOpen && !chatOpen && !doorShown;
+  const show = isTouch && playing && !invOpen && !fridgeOpen && !codeOpen && !chatOpen && !doorShown && !shopOpen;
   if(show !== touchShown){ touchShown = show; $('touch').hidden = !show; $('touchlook').hidden = !show; }
   if(!show) return;
   $('tlie').hidden = !(player.seat && player.seat.cell);
@@ -3665,6 +3843,7 @@ function syncTouch(){
   $('tchat').hidden = !mpMode;
   $('tmic').hidden = !mpMode;
   $('tdoor').hidden = !(target && isDoorId(target.id));
+  $('tshop').hidden = !shopAim();
 }
 
 /* ---------- full screen: a button on the main menu ---------- */
@@ -3715,6 +3894,7 @@ function pause(){
   if(invOpen){ invOpen=false; $('inv').hidden=true; }
   if(codeOpen){ codeOpen=false; $('codebox').hidden=true; }
   if(doorShown){ doorShown=false; $('doorbox').hidden=true; }
+  if(shopOpen){ shopOpen=false; $('shopbox').hidden=true; }
   playing=false; for(const k in keys) keys[k]=false;
   musicStop();
   saveAll();
@@ -3725,7 +3905,7 @@ function pause(){
   if(document.pointerLockElement){ try{ document.exitPointerLock(); }catch(e){} }
 }
 $('settings').addEventListener('click',()=>{ sfx.init(); showSettings(); });
-$('setback').addEventListener('click',showMain);
+$('setback').addEventListener('click',()=>{ showMain(); musicReroll(); });   // closing the settings changes the track
 $('musicbtn').addEventListener('click',()=>{ sfx.init(); musicSet(!music.on); });
 // sensitivity: one button cycles through the steps for both mouse and touch
 function setSens(v){
@@ -3903,6 +4083,22 @@ function render(){
       else o.tag.hidden=true;
     }
   }
+  // the shopkeeper, in the shop
+  gl.disable(gl.CULL_FACE);
+  gl.useProgram(solid);
+  gl.uniformMatrix4fv(SU.uVP,false,new Float32Array(VP));
+  gl.uniform1f(SU.uLight,0.25+0.75*dl);
+  gl.bindVertexArray(cubeVAO);
+  for(const [M, rgb] of avatarBoxes(SHOPKEEPER)){
+    gl.uniform3f(SU.uCol, rgb[0], rgb[1], rgb[2]);
+    gl.uniformMatrix4fv(SU.uModel,false,new Float32Array(M));
+    gl.drawArrays(gl.TRIANGLES,0,36);
+  }
+  gl.enable(gl.CULL_FACE);
+  const npNear = playing && Math.hypot(SHOPKEEPER.x - player.x, SHOPKEEPER.z - player.z) < 40;
+  const np = npNear ? projectPoint(VP, SHOPKEEPER.x, SHOPKEEPER.y + 2.05, SHOPKEEPER.z) : null;
+  if(np){ shopTag.hidden = false; shopTag.style.left = np[0] + 'px'; shopTag.style.top = np[1] + 'px'; }
+  else shopTag.hidden = true;
   if(cow.on){                                    // the cow
     gl.disable(gl.CULL_FACE);
     gl.useProgram(solid);

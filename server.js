@@ -118,6 +118,7 @@ for (const w of Object.values(WORLDS)) {
   w.edits = new Map();
   w.owners = new Map();    // "x,y,z" -> hashed id of the player who placed the block there (land has no owner)
   w.locks = new Map();     // "x,y,z" of each half of a door with a password -> the lock (both halves share one lock)
+  w.coins = new Map();     // hashed player id -> coins (the game creator can give them)
   w.mob = null;
   w.clock = { t: DAY_LEN * 0.3, at: Date.now() };    // the world time is w.clock.t at the moment w.clock.at; it then runs on in real time
   w.saveTimer = null;
@@ -125,6 +126,7 @@ for (const w of Object.values(WORLDS)) {
   try {
     const data = JSON.parse(fs.readFileSync(w.file, 'utf8'));
     const list = Array.isArray(data) ? data : data.edits;          // older saves were just the list of edits
+    for (const [pid, n] of (Array.isArray(data) ? [] : (data.coins || []))) w.coins.set(pid, n);
     for (const [k, v, o] of list) { w.edits.set(k, v); if (o !== undefined) w.owners.set(k, o); }
     for (const L of Array.isArray(data) ? [] : (data.locks || [])) {
       const lo = L.lower.split(',').map(Number);
@@ -148,7 +150,7 @@ function saveWorld(w) {
   const locks = [...new Set(w.locks.values())].map(L => ({ lower: L.lower.join(','), owner: L.owner, salt: L.salt, digest: L.digest, allowed: [...L.allowed] }));
   const tmp = w.file + '.tmp';
   try {
-    fs.writeFileSync(tmp, JSON.stringify({ edits, locks }));
+    fs.writeFileSync(tmp, JSON.stringify({ edits, locks, coins: [...w.coins] }));
     fs.renameSync(tmp, w.file);
   } catch (e) {
     console.error(`${w.name}: could not save the world:`, e.message);
@@ -339,7 +341,7 @@ function hello(p, id, m) {
   const all = [];
   // each block also says who it belongs to for this player: 1 = yours, 0 = another player's, null = nobody's (land or older saves)
   for (const [k, v] of w.edits) { const [x, y, z] = k.split(',').map(Number); const o = w.owners.get(k); all.push([x, y, z, v, o === undefined ? null : (o === p.pid ? 1 : 0)]); }
-  sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, edits: all, players: list, time: worldTime(w), mob: w.mob, tvs: tvList(w), sources: tvSources(w), locks: lockList(w, p) });
+  sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, edits: all, players: list, time: worldTime(w), mob: w.mob, tvs: tvList(w), sources: tvSources(w), locks: lockList(w, p), coins: w.coins.get(p.pid) || 0 });
   broadcast(w, { type: 'join', id, name: p.name, color: p.color, x: p.x, y: p.y, z: p.z, yaw: p.yaw, role: p.role }, id);
   broadcast(w, { type: 'system', text: p.name + ' joined' }, id);
 }
@@ -400,6 +402,15 @@ wss.on('connection', (ws) => {
     if (m.type === 'admin') {
       // player commands: only a game creator may use them, and only on another player in the same world
       if (p.role !== 'creator') return;
+      if (m.action === 'give') {
+        const g = players.get(m.target), amt = Number.isInteger(m.amount) ? Math.max(-1000000, Math.min(1000000, m.amount)) : 0;
+        if (!g || !g.joined || g.world !== w || !g.pid || !amt) return;
+        const now = Math.max(0, (w.coins.get(g.pid) || 0) + amt);
+        w.coins.set(g.pid, now); scheduleSave(w);
+        sendTo(g, { type: 'coins', coins: now, change: amt });
+        sendTo(p, { type: 'coinsgiven', name: g.name, coins: now, change: amt });
+        return;
+      }
       const q = players.get(m.target);
       if (!q || !q.joined || q === p || q.world !== w) return;
       if (m.action === 'tp') sendTo(p, { type: 'teleport', x: q.x, y: q.y, z: q.z, exact: true });        // you go to their exact spot
