@@ -34,11 +34,23 @@
   #invmsg{min-height:1.4em;margin:0;font-size:13px;color:#ffe066;text-align:center}
   #selname{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);white-space:nowrap;font:bold 14px 'Courier New',monospace;color:#fff;text-shadow:1px 1px 0 #000,0 0 6px rgba(0,0,0,.6);background:rgba(0,0,0,.35);padding:2px 8px;pointer-events:none}
   @media (max-width:700px){ #hotbar{gap:2px} .slot{width:44px;height:50px} .slot i{left:3px;right:3px;top:12px;bottom:3px} .slot .nm{display:none} .slot .key{font-size:9px} #selname{bottom:66px;font-size:12px} }
-  #menu{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(8,12,22,.72);padding:20px;text-align:center}
-  #menu h1{font-size:clamp(28px,7vw,52px);letter-spacing:.14em;margin:0 0 6px;text-shadow:3px 3px 0 #000}
+  #menu{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;text-align:center;background:radial-gradient(ellipse at 50% 30%,rgba(44,76,118,.55),rgba(6,9,18,.94) 72%)}
+  #menu .card{display:flex;flex-direction:column;align-items:center;gap:12px;width:min(340px,100%);box-sizing:border-box;max-height:100%;overflow:auto;padding:26px 24px;background:rgba(18,23,36,.94);border:2px solid #2e3850;border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.5)}
+  #menu h1{font-size:clamp(26px,7vw,40px);letter-spacing:.16em;margin:0;color:#ffe066;text-shadow:3px 3px 0 #000}
+  #menu .tagline{margin:0 0 4px;font-size:13px;color:#9aa6c0;letter-spacing:.03em}
+  #menu h2{margin:0;font-size:18px;letter-spacing:.14em;color:#ffe066}
   #menu p{max-width:560px;line-height:1.6;color:#d4d9e6;font-size:14px;margin:6px 0}
-  .btn{font:bold 16px 'Courier New',monospace;width:260px;max-width:80vw;padding:12px;background:#2b3140;color:#fff;border:2px solid #5b6578;cursor:pointer;letter-spacing:.1em}
-  .btn:hover{background:#3d4558}
+  #menu .help{font-size:11px;line-height:1.45;color:#9aa6c0;margin:4px 0 0}
+  #mainbtns,#settingsbox{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%}
+  .btn{font:bold 15px 'Courier New',monospace;width:260px;max-width:100%;box-sizing:border-box;padding:12px;background:linear-gradient(#3a4358,#2a3143);color:#fff;border:2px solid #5b6578;border-radius:8px;cursor:pointer;letter-spacing:.1em;box-shadow:0 3px 0 #111827;transition:background .15s,transform .08s}
+  .btn:hover{background:linear-gradient(#4a5470,#343d54)}
+  .btn:active{transform:translateY(2px);box-shadow:0 1px 0 #111827}
+  .btn.ghost{background:transparent;border-color:#3a4358;box-shadow:none}
+  #codebox{position:fixed;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;background:rgba(8,12,22,.86)}
+  #codepanel{display:flex;flex-direction:column;align-items:center;gap:10px;width:min(380px,100%);box-sizing:border-box;padding:18px;background:#161b26;border:3px solid #5b6578}
+  #codeask,#codeok{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%}
+  #codein{font:20px 'Courier New',monospace;width:100%;box-sizing:border-box;padding:10px;text-align:center;letter-spacing:.3em;background:#11151f;color:#fff;border:2px solid #5b6578}
+  #codemsg{min-height:1.4em;margin:0;font-size:13px;color:#ffb3a7;text-align:center}
   .btn:focus-visible,.slot:focus-visible{outline:3px solid #ffe066;outline-offset:2px}
   #mpbox{display:flex;flex-direction:column;align-items:center;gap:8px;width:260px;max-width:80vw}
   #mpbox input{font:14px 'Courier New',monospace;width:100%;box-sizing:border-box;padding:10px;background:#11151f;color:#fff;border:2px solid #5b6578}
@@ -63,28 +75,54 @@
 <div id="selname"></div>
 <div id="hotbar"></div>
 <div id="menu">
-  <h1>BLOCK REALM</h1>
-  <div id="mainbtns" style="display:flex;flex-direction:column;align-items:center;gap:10px">
-    <button class="btn" id="play">PLAY</button>
-    <button class="btn" id="resume" hidden>RESUME</button>
-    <button class="btn" id="multi">MULTIPLAYER</button>
-    <button class="btn" id="leave" hidden>LEAVE SERVER</button>
-    <button class="btn" id="reset">RESET WORLD</button>
-    <button class="btn" id="sound">SOUND: ON</button>
+  <div class="card">
+    <h1>BLOCK REALM</h1>
+    <p class="tagline">Build it. Share it. Sleep through the night.</p>
+    <div id="mainbtns">
+      <button class="btn" id="play">PLAY</button>
+      <button class="btn" id="resume" hidden>RESUME</button>
+      <button class="btn" id="multi">MULTIPLAYER</button>
+      <button class="btn" id="leave" hidden>LEAVE SERVER</button>
+      <button class="btn" id="settings">SETTINGS</button>
+      <button class="btn" id="reset">RESET WORLD</button>
+    </div>
+    <div id="settingsbox" hidden>
+      <h2>SETTINGS</h2>
+      <button class="btn" id="musicbtn">MUSIC: ON</button>
+      <button class="btn" id="sound">SOUND EFFECTS: ON</button>
+      <button class="btn ghost" id="setback">BACK</button>
+    </div>
+    <div id="mpbox" hidden>
+      <input id="mpname" maxlength="16" placeholder="Your name" aria-label="Your name">
+      <input id="mpurl" aria-label="Server address" placeholder="ws://localhost:8080/ws">
+      <button class="btn" id="mpgo">CONNECT</button>
+      <button class="btn ghost" id="mpback">BACK</button>
+      <p id="mpstatus" role="status"></p>
+    </div>
+    <p class="help">Mouse: look &middot; WASD: move &middot; Space: jump &middot; Shift: run<br>
+       Left click: break a block &middot; Right click: place the selected block<br>
+       1-8 or mouse wheel: choose an inventory slot &middot; E: block catalog (add or remove blocks)<br>
+       Right click a door: open or close it &middot; Right click a bed at night: go to sleep<br>
+       M: sound effects on or off &middot; Esc: pause and save<br>
+       Double-tap Space: fly (Space up, Shift down) &middot; T: chat with other players (multiplayer)</p>
   </div>
-  <div id="mpbox" hidden>
-    <input id="mpname" maxlength="16" placeholder="Your name" aria-label="Your name">
-    <input id="mpurl" aria-label="Server address" placeholder="ws://localhost:8080/ws">
-    <button class="btn" id="mpgo">CONNECT</button>
-    <button class="btn" id="mpback">BACK</button>
-    <p id="mpstatus" role="status"></p>
+</div>
+
+<div id="codebox" hidden>
+  <div id="codepanel" role="dialog" aria-labelledby="codetitle">
+    <h2 id="codetitle">PRIVATE</h2>
+    <div id="codeask">
+      <p class="hint">Enter the code to unlock your private settings.</p>
+      <input id="codein" type="password" inputmode="numeric" maxlength="8" autocomplete="off" aria-label="Code">
+      <button class="btn" id="codego" type="button">UNLOCK</button>
+    </div>
+    <div id="codeok" hidden>
+      <button class="btn" id="invisbtn" type="button">INVISIBLE: OFF</button>
+      <p class="hint">While you are invisible, other players cannot see you or your name, and you do not appear on their screens.</p>
+    </div>
+    <p id="codemsg" role="status"></p>
+    <button class="btn" id="codeclose" type="button">CLOSE (P)</button>
   </div>
-  <p>Mouse: look &middot; WASD: move &middot; Space: jump &middot; Shift: run<br>
-     Left click: break a block &middot; Right click: place the selected block<br>
-     1-8 or mouse wheel: choose an inventory slot &middot; E: block catalog (add or remove blocks)<br>
-     Right click a door: open or close it &middot; Right click a bed at night: go to sleep<br>
-     M: sound on or off &middot; Esc: pause and save<br>
-     Double-tap Space: fly (Space up, Shift down) &middot; T: chat with other players (multiplayer)</p>
 </div>
 
 <div id="inv" hidden>
@@ -139,23 +177,24 @@ const BLOCKS = [null,
   {name:'Gold',        top:18,side:18,bot:18,sw:'#f0c446'},
   {name:'Bookshelf',   top:8, side:19,bot:8, sw:'#8c5a34'},
   {name:'Coal ore',    top:20,side:20,bot:20,sw:'#4a4a4e'},
-  {name:'Wool',        top:21,side:21,bot:21,sw:'#f0f0ea'}
+  {name:'Wool',        top:21,side:21,bot:21,sw:'#f0f0ea'},
+  {name:'Lamp',        top:12,side:12,bot:12,sw:'#ffd76a'}    // 26: upper half of a lamp (placed as two blocks)
 ];
-const GLASS_ID = 10, LAMP_ID = 11;
+const GLASS_ID = 10, LAMP_ID = 11, LAMP_TOP_ID = 26;
 const DOOR_ID = 12, DOOR_OPEN_ID = 13, DOOR_TOP_ID = 14, DOOR_TOP_OPEN_ID = 15;
 const BED_FOOT_ID = 16, BED_HEAD_ID = 17;
-const MAX_ID = 25;                      // highest block id (matches the server)
+const MAX_ID = 26;                      // highest block id (matches the server)
 const DOOR_PAIR = {12:13, 13:12, 14:15, 15:14};   // open <-> closed for each half of a door
 const isDoorId = b => b >= 12 && b <= 15;
 const isOpenDoor = b => b === DOOR_OPEN_ID || b === DOOR_TOP_OPEN_ID;
 // blocks that do not stop the player: lamps and open doors
-const NONSOLID = new Set([LAMP_ID, DOOR_OPEN_ID, DOOR_TOP_OPEN_ID]);
+const NONSOLID = new Set([LAMP_ID, LAMP_TOP_ID, DOOR_OPEN_ID, DOOR_TOP_OPEN_ID]);
 // solid blocks stop the player (-1 means a chunk that is not loaded yet, which counts as solid)
 function isSolidId(b){ return b!==0 && !NONSOLID.has(b); }
-// opaque blocks hide the faces behind them; glass and beds do not (beds are low, so the wall behind shows above them)
-function isOpaqueId(b){ return b!==0 && isSolidId(b) && b!==GLASS_ID && b!==BED_FOOT_ID && b!==BED_HEAD_ID; }
+// opaque blocks hide the faces behind them; glass, beds and doors do not (a door is a thin panel, so the walls beside it must still show their faces)
+function isOpaqueId(b){ return b!==0 && isSolidId(b) && b!==GLASS_ID && b!==BED_FOOT_ID && b!==BED_HEAD_ID && !isDoorId(b); }
 const SLOTS = 8;                                       // the inventory has 8 slots
-// every block a player can carry: the door and the bed are placed as two blocks each
+// every block a player can carry: the door, the bed and the lamp are placed as two blocks each
 const CATALOG = [1,2,3,4,5,6,7,8,9,10,11,12,16,18,19,20,21,22,23,24,25];
 const DEFAULT_INV = [1,2,3,7,10,11,12,8];              // Grass, Dirt, Stone, Planks, Glass, Lamp, Door, Cobblestone
 const HOTBAR = DEFAULT_INV.slice();                    // the 8 inventory slots; null = empty slot (filled in by loadInv)
@@ -306,7 +345,7 @@ function relightLamps(){
   for(const ch of chunks.values()){
     const d = ch.data;
     for(let i=0;i<d.length;i++){
-      if(d[i]!==LAMP_ID) continue;
+      if(d[i]!==LAMP_ID && d[i]!==LAMP_TOP_ID) continue;
       spreadLight(ch.cx*CS + (i%CS), Math.floor(i/(CS*CS)), ch.cz*CS + Math.floor(i/CS)%CS);
     }
   }
@@ -347,6 +386,42 @@ function emitBox(V, I, nv, lo, hi, tl, glow){
   }
   return nv;
 }
+// a door sits in a wall: if there is wall on either side of it along x, the wall runs along x and the door panel is thin along z
+function doorThinZ(wx,y,wz){ return isSolidId(getBlock(wx-1,y,wz)) || isSolidId(getBlock(wx+1,y,wz)); }
+// a bed is two blocks in a row: the foot (16) and the head (17). Its parts are given along the bed (u runs
+// 0 at the foot to 2 at the head) and across it (v runs 0 to 1). Each cell draws only the part of them that lies inside it.
+// x and z are chunk-local, as in buildMesh; wx and wz are world positions, used to look at the neighbouring cell.
+function emitBed(V,I,nv,x,y,z,wx,wz,isHead,gl){
+  let dx=0, dz=0;
+  const want = isHead ? BED_FOOT_ID : BED_HEAD_ID;
+  for(const [ax,az] of [[1,0],[-1,0],[0,1],[0,-1]]){
+    if(getBlock(wx+ax,y,wz+az)===want){ dx = isHead ? -ax : ax; dz = isHead ? -az : az; break; }   // foot to head
+  }
+  if(!dx && !dz) return emitBox(V,I,nv, [x,y,z],[x+1,y+0.5625,z+1], {top:22,side:23,bot:8}, gl);   // no partner: a low block
+  const footX = isHead ? x-dx : x, footZ = isHead ? z-dz : z;
+  const k = isHead ? 1 : 0;                                  // the half of the bed this cell is
+  const ia = dx ? 0 : 2, ic = dx ? 2 : 0;                    // index along the bed, and across it
+  const s = dx ? dx : dz;
+  const base = dx ? (dx>0 ? footX : footX+1) : (dz>0 ? footZ : footZ+1);
+  const origin = [x,y,z];
+  let n = nv;
+  const part = (u0,u1,v0,v1,y0,y1,tl) => {
+    const a = Math.max(u0,k), b = Math.min(u1,k+1);
+    if(b<=a) return;
+    const p0 = base + s*a, p1 = base + s*b;
+    const lo = [x,y+y0,z], hi = [x+1,y+y1,z+1];
+    lo[ia] = Math.min(p0,p1); hi[ia] = Math.max(p0,p1);
+    lo[ic] = origin[ic]+v0;   hi[ic] = origin[ic]+v1;
+    n = emitBox(V,I,n, lo, hi, tl, gl);
+  };
+  const WOOD = {top:8,side:8,bot:8}, SHEET = {top:22,side:23,bot:8}, WHITE = {top:21,side:21,bot:21};
+  part(0,2,     0,1,     0,0.25,   WOOD);    // frame
+  part(0.02,1.92,0.04,0.96,0.25,0.5, SHEET); // mattress with a red blanket
+  part(0,0.08,  0.02,0.98,0.25,0.56, WOOD);  // footboard at the foot end
+  part(1.92,2,  0,1,     0.25,0.95, WOOD);   // headboard at the head end
+  part(1.42,1.9,0.14,0.86,0.5,0.66, WHITE);  // pillow, tucked in against the headboard
+  return n;
+}
 // vertex layout: position (3), texture coordinates (2), tile (1), shade (1), glow (1) = 8 floats
 function buildMesh(ch){
   const bx=ch.cx*CS, bz=ch.cz*CS;
@@ -356,26 +431,32 @@ function buildMesh(ch){
   for(let y=0;y<CH;y++) for(let z=0;z<CS;z++) for(let x=0;x<CS;x++){
     const t=ch.data[x+z*CS+y*CS*CS]; if(!t) continue;
     const wx=bx+x, wz=bz+z;
-    if(t===DOOR_OPEN_ID || t===DOOR_TOP_OPEN_ID){
-      // an open door is a thin panel across the middle of the block, visible from both sides
-      const b0=nv, tile=BLOCKS[DOOR_ID].top, gl=lightAt(wx,y,wz);
-      for(const [qx,qy] of [[0,0],[1,0],[1,1],[0,1]]){
-        V.push(x+qx, y+qy, z+0.5, qx, qy, tile, 1, gl);
-        nv++;
-      }
-      I.push(b0,b0+1,b0+2, b0,b0+2,b0+3, b0,b0+2,b0+1, b0,b0+3,b0+2);
+    if(isDoorId(t)){
+      // a door is one thin panel, two blocks tall: closed, it fills the middle of the doorway; open, it swings back against the wall
+      const gln=lightAt(wx,y,wz), thinZ=doorThinZ(wx,y,wz), open=isOpenDoor(t);
+      const lo=[x,y,z], hi=[x+1,y+1,z+1];
+      if(!open){ if(thinZ){ lo[2]=z+0.4375; hi[2]=z+0.5625; } else { lo[0]=x+0.4375; hi[0]=x+0.5625; } }
+      else { if(thinZ) hi[0]=x+0.125; else hi[2]=z+0.125; }
+      nv=emitBox(V,I,nv, lo, hi, {top:13,side:13,bot:13}, gln);
       continue;
     }
-    if(t===LAMP_ID){
-      // a lamp is a small lantern on a post, not a full block; its head is bright and gives light
-      nv=emitBox(V,I,nv, [x+0.3,y,z+0.3],     [x+0.7,y+0.12,z+0.7],  {top:17,side:17,bot:17}, 0.6);
-      nv=emitBox(V,I,nv, [x+0.44,y+0.12,z+0.44],[x+0.56,y+0.74,z+0.56], {top:17,side:17,bot:17}, 0.6);
-      nv=emitBox(V,I,nv, [x+0.26,y+0.74,z+0.26],[x+0.74,y+0.98,z+0.74], {top:12,side:12,bot:12}, 1.0);
+    if(t===LAMP_ID || t===LAMP_TOP_ID){
+      // a lamp is two blocks: a base and a post, then a lantern on top that gives light.
+      // an old single lamp (no lantern block above it) still gets its lantern
+      if(t===LAMP_ID){
+        nv=emitBox(V,I,nv, [x+0.3,y,z+0.3], [x+0.7,y+0.1,z+0.7], {top:17,side:17,bot:17}, 0.6);
+        const top = getBlock(wx,y+1,wz)===LAMP_TOP_ID;
+        nv=emitBox(V,I,nv, [x+0.44,y+0.1,z+0.44], [x+0.56,y+(top?1:0.5),z+0.56], {top:17,side:17,bot:17}, 0.6);
+        if(top) continue;
+      } else {
+        nv=emitBox(V,I,nv, [x+0.44,y,z+0.44], [x+0.56,y+0.5,z+0.56], {top:17,side:17,bot:17}, 0.6);
+      }
+      nv=emitBox(V,I,nv, [x+0.26,y+0.5,z+0.26], [x+0.74,y+0.86,z+0.74], {top:12,side:12,bot:12}, 1.0);
+      nv=emitBox(V,I,nv, [x+0.2,y+0.86,z+0.2], [x+0.8,y+0.94,z+0.8], {top:17,side:17,bot:17}, 0.6);
       continue;
     }
     if(t===BED_FOOT_ID || t===BED_HEAD_ID){
-      // a bed is a low block: its top is a sheet, its sides a blanket
-      nv=emitBox(V,I,nv, [x,y,z], [x+1,y+0.5625,z+1], {top:22,side:23,bot:8}, lightAt(wx,y+1,wz));
+      nv=emitBed(V,I,nv,x,y,z,wx,wz,t===BED_HEAD_ID,lightAt(wx,y+1,wz));
       continue;
     }
     const isGlass = t===GLASS_ID;
@@ -654,7 +735,7 @@ function mul(a,b){
 }
 
 /* ---------- player, physics and controls ---------- */
-const player = {x:8.5, y:40, z:8.5, vx:0, vy:0, vz:0, yaw:0, pitch:0, onGround:false, fly:false, lastSpace:0, sleeping:false};
+const player = {x:8.5, y:40, z:8.5, vx:0, vy:0, vz:0, yaw:0, pitch:0, onGround:false, fly:false, lastSpace:0, sleeping:false, invisible:false};
 let playing=false, sel=0, target=null, worldTime=DAY_LEN*0.3;
 const keys = {};
 function camDir(){
@@ -744,6 +825,8 @@ function placeCell(x,y,z,id){ setBlock(x,y,z,id); mpSend({type:'edit', x, y, z, 
 function partnerOf(x,y,z,id){
   if(id===DOOR_ID || id===DOOR_OPEN_ID){ const b=getBlock(x,y+1,z); return (b===DOOR_TOP_ID||b===DOOR_TOP_OPEN_ID) ? [x,y+1,z] : null; }
   if(id===DOOR_TOP_ID || id===DOOR_TOP_OPEN_ID){ const b=getBlock(x,y-1,z); return (b===DOOR_ID||b===DOOR_OPEN_ID) ? [x,y-1,z] : null; }
+  if(id===LAMP_ID){ return getBlock(x,y+1,z)===LAMP_TOP_ID ? [x,y+1,z] : null; }
+  if(id===LAMP_TOP_ID){ return getBlock(x,y-1,z)===LAMP_ID ? [x,y-1,z] : null; }
   if(id===BED_FOOT_ID || id===BED_HEAD_ID){
     const want = id===BED_FOOT_ID ? BED_HEAD_ID : BED_FOOT_ID;
     for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]) if(getBlock(x+dx,y,z+dz)===want) return [x+dx,y,z+dz];
@@ -774,6 +857,13 @@ function placeItem(id,x,y,z){
     if(getBlock(x,y,z)!==0 || getBlock(x,y+1,z)!==0) return false;
     if(overlapsPlayer(x,y,z) || overlapsPlayer(x,y+1,z)) return false;
     placeCell(x,y,z,DOOR_ID); placeCell(x,y+1,z,DOOR_TOP_ID);
+    return true;
+  }
+  if(id===LAMP_ID){
+    // a lamp stands two blocks high
+    if(getBlock(x,y,z)!==0 || getBlock(x,y+1,z)!==0) return false;
+    if(overlapsPlayer(x,y,z) || overlapsPlayer(x,y+1,z)) return false;
+    placeCell(x,y,z,LAMP_ID); placeCell(x,y+1,z,LAMP_TOP_ID);
     return true;
   }
   if(id===BED_FOOT_ID){
@@ -941,11 +1031,64 @@ function closeInv(){
   lockPointer();
 }
 $('invclose').addEventListener('click', closeInv);
+
+/* ---------- private panel: press P in the game, enter the code, then toggle invisibility ---------- */
+// the code is checked in the browser only; it keeps casual visitors out of the panel, it is not a real lock
+const PRIVATE_CODE = '0702';
+let codeOpen = false, codeUnlocked = false;
+function syncInvisBtn(){ $('invisbtn').textContent = 'INVISIBLE: ' + (player.invisible ? 'ON' : 'OFF'); }
+function openCode(){
+  if(!playing || chatOpen || invOpen || codeOpen || player.sleeping) return;
+  codeOpen = true;
+  for(const k in keys) keys[k] = false;
+  try{ document.exitPointerLock(); }catch(e){}
+  $('codebox').hidden = false;
+  $('codeask').hidden = codeUnlocked; $('codeok').hidden = !codeUnlocked;
+  $('codemsg').textContent = '';
+  $('codein').value = '';
+  syncInvisBtn();
+  (codeUnlocked ? $('invisbtn') : $('codein')).focus();
+}
+function closeCode(){
+  if(!codeOpen) return;
+  codeOpen = false;
+  $('codebox').hidden = true;
+  lockPointer();
+}
+function tryCode(){
+  if($('codein').value.trim() === PRIVATE_CODE){
+    codeUnlocked = true;
+    $('codeask').hidden = true; $('codeok').hidden = false; $('codemsg').textContent = '';
+    syncInvisBtn();
+    $('invisbtn').focus();
+  } else {
+    $('codemsg').textContent = 'That code is not right. Try again.';
+    $('codein').select();
+  }
+}
+function setInvisible(on){
+  player.invisible = on;
+  mpSend({type:'vanish', on});
+  syncInvisBtn();
+  flashHud(on ? 'YOU ARE INVISIBLE' : 'YOU ARE VISIBLE AGAIN');
+}
+$('codego').addEventListener('click', tryCode);
+$('codein').addEventListener('keydown', e=>{
+  e.stopPropagation();
+  if(e.key === 'Enter'){ e.preventDefault(); tryCode(); }
+  else if(e.key === 'Escape'){ e.preventDefault(); closeCode(); }
+});
+$('invisbtn').addEventListener('click', ()=> setInvisible(!player.invisible));
+$('codeclose').addEventListener('click', closeCode);
 let flashT=0;
 function flashHud(text){ $('tm').textContent=text; flashT=2.0; }
 
 addEventListener('keydown',e=>{
   if(chatOpen) return;                          // while typing in chat, keys belong to the chat box
+  if(codeOpen){                                 // the private panel is open: only Esc does anything
+    if(e.code==='Escape' && !e.repeat){ e.preventDefault(); closeCode(); }
+    return;
+  }
   if(e.code==='Space') e.preventDefault();
   if(e.code==='KeyM' && !e.repeat && !(document.activeElement && document.activeElement.tagName==='INPUT')){ toggleSound(); return; }
   if(invOpen){                                  // the catalog is open: only E or Esc do anything
@@ -960,6 +1103,7 @@ addEventListener('keydown',e=>{
     return;
   }
   if(e.code==='KeyE' && !e.repeat){ e.preventDefault(); openInv(); return; }
+  if(e.code==='KeyP' && !e.repeat){ e.preventDefault(); openCode(); return; }
   if(e.code==='Space' && !e.repeat){
     // two quick taps of Space switch flying on or off
     const now=performance.now();
@@ -984,14 +1128,14 @@ function lockPointer(){
   try{ const p = cv.requestPointerLock(); if(p && p.catch) p.catch(()=>{}); }catch(e){}
 }
 cv.addEventListener('mousedown',e=>{
-  if(!playing || invOpen || player.sleeping) return;
+  if(!playing || invOpen || codeOpen || player.sleeping) return;
   if(document.pointerLockElement!==cv) lockPointer();   // a click after a join or a pause captures the mouse
   if(document.pointerLockElement!==cv && e.button!==0) return;
   if(e.button===0) doBreak(); else if(e.button===2) doPlace();
 });
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('pointerlockchange',()=>{
-  if(!document.pointerLockElement && playing && !chatOpen && !invOpen) pause();   // releasing the mouse to type in chat or use the catalog is not a pause
+  if(!document.pointerLockElement && playing && !chatOpen && !invOpen && !codeOpen) pause();   // releasing the mouse to type in chat or use the catalog is not a pause
 });
 
 /* ---------- sound: every effect is synthesised with Web Audio, so there are no sound files to load ---------- */
@@ -1060,8 +1204,81 @@ sfx.on = (()=>{ try{ return localStorage.getItem('blockrealm_sound_v1') !== '0';
 function toggleSound(){
   sfx.init();
   sfx.setOn(!sfx.on);
-  $('sound').textContent = 'SOUND: ' + (sfx.on ? 'ON' : 'OFF');
+  syncSettings();
   if(sfx.on) sfx.click();
+}
+
+/* ---------- background music: a looping tune made with Web Audio, so there are no music files to load ---------- */
+const music = { on:true, timer:null, nextT:0, step:0, bus:null };
+try{ music.on = localStorage.getItem('blockrealm_music_v1') !== '0'; }catch(e){}
+const midiHz = m => 440*Math.pow(2,(m-69)/12);
+// four bars, A minor, F, C, G: the pad chord (MIDI notes) and the bass note of each bar
+const PROG = [
+  {pad:[57,60,64], bass:45},
+  {pad:[53,57,60], bass:41},
+  {pad:[48,52,55], bass:36},
+  {pad:[55,59,62], bass:43}
+];
+// the melody: one note per eighth note, 8 per bar; null is a rest
+const TUNE = [
+  [69,null,72,74, 76,null,74,72],
+  [72,null,70,69, 65,null,69,null],
+  [72,76,79,76, 72,null,67,null],
+  [71,null,74,71, 67,69,71,null]
+];
+function musicNote(m, t, dur, type, vol){
+  const c = sfx.ctx;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = type; o.frequency.value = midiHz(m);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+  o.connect(g); g.connect(music.bus);
+  o.start(t); o.stop(t+dur+0.05);
+}
+// schedules the notes a little ahead of time, so the tune keeps steady even when the page is busy
+function musicStep(){
+  const c = sfx.ctx;
+  if(!c || !music.bus) return;
+  while(music.nextT < c.currentTime + 0.25){
+    const s = music.step, bar = Math.floor(s/8) % 4, i = s % 8, t = music.nextT, ch = PROG[bar];
+    if(i === 0) for(const p of ch.pad) musicNote(p, t, 2.0, 'sine', 0.035);       // soft pad at the start of each bar
+    if(i % 4 === 0) musicNote(ch.bass, t, 0.5, 'triangle', 0.10);                 // bass on the beat
+    musicNote(ch.pad[i % 3] + 12, t, 0.2, 'triangle', 0.03);                      // a gentle arpeggio
+    const mel = TUNE[bar][i];
+    if(mel != null) musicNote(mel, t, 0.3, 'triangle', 0.08);                     // the tune
+    music.nextT += 0.25; music.step++;
+  }
+}
+function musicStart(){
+  sfx.init();
+  const c = sfx.ctx;
+  if(!c || !music.on || music.timer) return;
+  if(c.state === 'suspended') c.resume();
+  music.bus = c.createGain();
+  music.bus.gain.setValueAtTime(0.0001, c.currentTime);
+  music.bus.gain.exponentialRampToValueAtTime(0.6, c.currentTime + 1.5);   // fades in over a second and a half
+  music.bus.connect(c.destination);
+  music.nextT = c.currentTime + 0.1; music.step = 0;
+  music.timer = setInterval(musicStep, 60);
+  musicStep();
+}
+function musicStop(){
+  if(music.timer){ clearInterval(music.timer); music.timer = null; }
+  const b = music.bus; music.bus = null;
+  if(b && sfx.ctx){
+    const t = sfx.ctx.currentTime;
+    b.gain.cancelScheduledValues(t);
+    b.gain.setValueAtTime(Math.max(0.0001, b.gain.value), t);
+    b.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);   // fades out, then is disconnected
+    setTimeout(()=>{ try{ b.disconnect(); }catch(e){} }, 500);
+  }
+}
+function musicSet(on){
+  music.on = on;
+  try{ localStorage.setItem('blockrealm_music_v1', on ? '1' : '0'); }catch(e){}
+  if(on && playing) musicStart(); else if(!on) musicStop();
+  syncSettings();
 }
 
 /* ---------- multiplayer: a small server keeps the shared world and relays players and block changes ---------- */
@@ -1091,9 +1308,18 @@ function defaultWS(){
   if(location.protocol==='http:' || location.protocol==='https:') return (location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws';
   return 'ws://localhost:8080/ws';
 }
-function showMain(){ $('mainbtns').hidden=false; $('mpbox').hidden=true; }
+function showMain(){ $('mainbtns').hidden=false; $('mpbox').hidden=true; $('settingsbox').hidden=true; }
+// the settings screen holds the music and sound effect switches
+function syncSettings(){
+  $('sound').textContent = 'SOUND EFFECTS: ' + (sfx.on ? 'ON' : 'OFF');
+  $('musicbtn').textContent = 'MUSIC: ' + (music.on ? 'ON' : 'OFF');
+}
+function showSettings(){
+  $('mainbtns').hidden=true; $('mpbox').hidden=true; $('settingsbox').hidden=false;
+  syncSettings();
+}
 function showMP(){
-  $('mainbtns').hidden=true; $('mpbox').hidden=false;
+  $('mainbtns').hidden=true; $('mpbox').hidden=false; $('settingsbox').hidden=true;
   let saved={}; try{ saved=JSON.parse(sessionStorage.getItem('blockrealm_mp')||'{}')||{}; }catch(e){}
   if(!$('mpname').value) $('mpname').value = saved.name || '';
   if(!$('mpurl').value) $('mpurl').value = saved.url || defaultWS();
@@ -1103,7 +1329,7 @@ function tagText(o){ o.tag.textContent = o.name + (o.sleeping ? '  zZ' : ''); }
 function addRemote(p){
   const tag=document.createElement('div'); tag.className='tag'; tag.hidden=true;
   $('tags').appendChild(tag);
-  const o={id:p.id, name:p.name, rgb:hexRGB(p.color||'#4b9be6'), sleeping:!!p.sleeping,
+  const o={id:p.id, name:p.name, rgb:hexRGB(p.color||'#4b9be6'), sleeping:!!p.sleeping, hidden:!!p.hidden,
     x:p.x, y:p.y, z:p.z, yaw:p.yaw||0, tx:p.x, ty:p.y, tz:p.z, tyaw:p.yaw||0, tag};
   mp.others.set(p.id, o);
   tagText(o);
@@ -1163,6 +1389,7 @@ function enterWorld(m){
   for(const p of m.players) addRemote(p);
   mp.sendT = 0;
   start();
+  if(player.invisible) mpSend({type:'vanish', on:true});   // the server forgets this when you reconnect
 }
 function onServerMessage(m){
   if(m.type==='join'){ removeRemote(m.id); addRemote(m); }
@@ -1175,6 +1402,12 @@ function onServerMessage(m){
   }
   else if(m.type==='sleep'){
     const o=mp.others.get(m.id); if(o){ o.sleeping=!!m.on; tagText(o); }
+  }
+  else if(m.type==='vanish'){
+    // someone turned invisible (hidden from us) or visible again (shown at the position they just sent)
+    const o=mp.others.get(m.id); if(!o) return;
+    o.hidden=!!m.on;
+    if(!o.hidden){ o.tx=o.x=m.x; o.ty=o.y=m.y; o.tz=o.z=m.z; o.tyaw=o.yaw=m.yaw; }
   }
   else if(m.type==='morning'){
     // everyone is in bed: the night passes for the whole server
@@ -1273,10 +1506,11 @@ function menuState(){
   $('multi').hidden = played || SINGLE_ONLY;
   $('leave').hidden = !mpMode;
   $('reset').hidden = mpMode;
-  $('sound').textContent = 'SOUND: ' + (sfx.on ? 'ON' : 'OFF');
+  syncSettings();
 }
 function start(){
   sfx.init();
+  musicStart();
   played = true;
   $('menu').hidden=true; playing=true; keys.__reset=false;
   lockPointer();
@@ -1285,13 +1519,18 @@ function start(){
 function pause(){
   if(!playing && !$('menu').hidden) return;
   if(invOpen){ invOpen=false; $('inv').hidden=true; }
+  if(codeOpen){ codeOpen=false; $('codebox').hidden=true; }
   playing=false; for(const k in keys) keys[k]=false;
+  musicStop();
   saveAll();
   menuState();
   showMain();
   $('menu').hidden=false;
   if(document.pointerLockElement){ try{ document.exitPointerLock(); }catch(e){} }
 }
+$('settings').addEventListener('click',()=>{ sfx.init(); showSettings(); });
+$('setback').addEventListener('click',showMain);
+$('musicbtn').addEventListener('click',()=>{ sfx.init(); musicSet(!music.on); });
 $('play').addEventListener('click',start);
 $('resume').addEventListener('click',start);
 $('multi').addEventListener('click',showMP);
@@ -1418,6 +1657,7 @@ function render(){
     gl.uniform1f(SU.uLight,0.25+0.75*dl);
     gl.bindVertexArray(cubeVAO);
     for(const o of mp.others.values()){
+      if(o.hidden) continue;
       for(const P of PARTS){
         const col = P.col==='body' ? o.rgb : P.col==='legs' ? LEGS_RGB : P.col==='skin' ? SKIN_RGB : FACE_RGB;
         gl.uniform3f(SU.uCol,col[0],col[1],col[2]);
@@ -1428,7 +1668,7 @@ function render(){
     gl.enable(gl.CULL_FACE);
     // name tags sit above each head
     for(const o of mp.others.values()){
-      const p = projectPoint(VP, o.x, o.y+2.05, o.z);
+      const p = o.hidden ? null : projectPoint(VP, o.x, o.y+2.05, o.z);
       if(p){ o.tag.hidden=false; o.tag.style.left=p[0]+'px'; o.tag.style.top=p[1]+'px'; }
       else o.tag.hidden=true;
     }
@@ -1460,6 +1700,7 @@ function hud(dt){
     const asleep = (player.sleeping?1:0) + [...mp.others.values()].filter(o=>o.sleeping).length;
     $('mp').textContent = 'ONLINE: ' + total + ' PLAYER' + (mp.others.size ? 'S' : '') + '  (you are ' + mp.id + ')'
       + (asleep ? '   ASLEEP: ' + asleep + ' OF ' + total : '')
+      + (player.invisible ? '   INVISIBLE' : '')
       + (document.pointerLockElement ? '' : '   CLICK THE GAME TO LOOK AROUND');
   } else $('mp').textContent = '';
   const h=Math.floor(((worldTime/DAY_LEN)%1)*24);
@@ -1527,8 +1768,10 @@ window.VOX = {
   get playing(){ return playing; }, get target(){ return target; },
   doBreak, doPlace, daylight, get worldTime(){ return worldTime; }, set worldTime(v){ worldTime=v; },
   BLOCKS, HOTBAR, KEYS, CATALOG, DEFAULT_INV, GLASS_ID, LAMP_ID, DOOR_ID, DOOR_OPEN_ID, DOOR_TOP_ID, DOOR_TOP_OPEN_ID,
-  BED_FOOT_ID, BED_HEAD_ID, toggleDoor, overlapsPlayer, solidAt, isSolidId, isOpaqueId, lightAt, relightLamps,
+  BED_FOOT_ID, BED_HEAD_ID, LAMP_TOP_ID, toggleDoor, overlapsPlayer, solidAt, isSolidId, isOpaqueId, lightAt, relightLamps,
   addChatLine, skipNight, trySleep, wakeUp,
+  openCode, closeCode, tryCode, setInvisible, music, musicSet, musicStart, musicStop, PRIVATE_CODE,
+  get codeOpen(){ return codeOpen; }, get codeUnlocked(){ return codeUnlocked; },
   openInv, closeInv, addToInv, removeFromInv, get invOpen(){ return invOpen; },
   get sel(){ return sel; }, get selLabel(){ return $('selname').textContent; },
   mp, sfx, connectMP, toggleSound, enterWorld,

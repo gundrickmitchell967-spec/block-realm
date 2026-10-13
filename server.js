@@ -16,7 +16,7 @@ const MAX_PLAYERS = Number(process.env.MAX_PLAYERS) || 16;
 const PAGE = path.join(__dirname, 'public', 'index.html');
 const CH = 64;                  // world height in blocks
 const REACH = 12;               // a block change must be this close to the player's last reported position
-const MAX_BLOCK_ID = 25;        // highest block id a player may place (see BLOCKS in index.html)
+const MAX_BLOCK_ID = 26;        // highest block id a player may place (see BLOCKS in index.html)
 const COLORS = ['#e6594b', '#4b9be6', '#58c25a', '#e6c44b', '#b35ae6', '#4be6d6', '#e6894b', '#e64b9b'];
 
 // shared edits: "x,y,z" -> block id (0 is air, so a broken block is stored as 0)
@@ -101,7 +101,7 @@ wss.on('connection', (ws) => {
   if (players.size >= MAX_PLAYERS) { ws.close(1013, 'server full'); return; }
   const id = nextId++;
   const p = { ws, name: 'Builder' + id, color: COLORS[id % COLORS.length], x: 8.5, y: 40, z: 8.5, yaw: 0, pitch: 0,
-              tokens: 60, lastTick: Date.now(), joined: false, sleeping: false };
+              tokens: 60, lastTick: Date.now(), joined: false, sleeping: false, hidden: false };
   players.set(id, p);
 
   ws.on('message', (raw) => {
@@ -114,7 +114,7 @@ wss.on('connection', (ws) => {
       p.joined = true;
       p.name = cleanName(m.name);
       const list = [];
-      for (const [oid, o] of players) if (oid !== id && o.joined) list.push({ id: oid, name: o.name, color: o.color, x: o.x, y: o.y, z: o.z, yaw: o.yaw, sleeping: o.sleeping });
+      for (const [oid, o] of players) if (oid !== id && o.joined) list.push({ id: oid, name: o.name, color: o.color, x: o.x, y: o.y, z: o.z, yaw: o.yaw, sleeping: o.sleeping, hidden: o.hidden });
       const all = [];
       for (const [k, v] of edits) { const [x, y, z] = k.split(',').map(Number); all.push([x, y, z, v]); }
       sendTo(p, { type: 'welcome', id, edits: all, players: list });
@@ -138,13 +138,20 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    if (m.type === 'vanish') {
+      // invisibility: while hidden, this player's position is not relayed to anyone
+      p.hidden = m.on === true;
+      broadcast({ type: 'vanish', id, on: p.hidden, x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch }, id);
+      return;
+    }
+
     if (m.type === 'move') {
       if (!isNum(m.x) || !isNum(m.y) || !isNum(m.z) || !isNum(m.yaw) || !isNum(m.pitch)) return;
       p.x = Math.max(-1e6, Math.min(1e6, m.x));
       p.y = Math.max(-10, Math.min(200, m.y));
       p.z = Math.max(-1e6, Math.min(1e6, m.z));
       p.yaw = m.yaw; p.pitch = m.pitch;
-      broadcast({ type: 'move', id, x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch }, id);
+      if (!p.hidden) broadcast({ type: 'move', id, x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch }, id);
       return;
     }
 
