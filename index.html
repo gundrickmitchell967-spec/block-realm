@@ -28,6 +28,10 @@
   #invslots{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
   #catalog{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;width:100%}
   .cat{display:flex;align-items:center;gap:8px;padding:6px;background:#222938;border:2px solid #3a3f4c;color:#fff;font:13px 'Courier New',monospace;text-align:left;cursor:pointer}
+  #cattabs{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;width:100%}
+  .tab{font:bold 11px 'Courier New',monospace;padding:6px 8px;background:#222938;color:#c9d1e0;border:2px solid #3a3f4c;cursor:pointer;letter-spacing:.06em}
+  .tab:hover{border-color:#8a94ab}
+  .tab.on{border-color:#ffe066;color:#ffe066;background:#2f3749}
   .cat:hover,.cat:focus-visible{border-color:#ffe066;outline:none}
   .cat i{flex:0 0 auto;width:36px;height:36px;border:2px solid rgba(0,0,0,.45);background-repeat:no-repeat;image-rendering:pixelated}
   .cat small{color:#ffe066;font-size:11px}
@@ -119,7 +123,7 @@
     <div id="codeok" hidden>
       <button class="btn" id="invisbtn" type="button">INVISIBLE: OFF</button>
       <button class="btn" id="wallbtn" type="button">WALL HACKS: OFF</button>
-      <p class="hint">Wall hacks let you see other players through walls and blocks.</p>
+      <p class="hint">Wall hacks let you fly straight through walls and floors, and see other players through them.</p>
       <p class="hint">While you are invisible, other players cannot see you or your name, and you do not appear on their screens.</p>
     </div>
     <p id="codemsg" role="status"></p>
@@ -133,7 +137,8 @@
     <p class="hint">Click a block below to add it to your inventory. Click a slot to pick it, then add a block to replace it. Click the red × to remove a block.<br>Press <b>E</b> or <b>Esc</b> to close.</p>
     <div class="lbl">YOUR INVENTORY (8 SLOTS)</div>
     <div id="invslots"></div>
-    <div class="lbl">ALL BLOCKS</div>
+    <div class="lbl">BLOCKS: PICK A TAB TO FILTER</div>
+    <div id="cattabs"></div>
     <div id="catalog"></div>
     <p id="invmsg" role="status"></p>
     <button class="btn" id="invclose" type="button">CLOSE (E)</button>
@@ -175,17 +180,53 @@ const BLOCKS = [null,
   {name:'Gravel',      top:14,side:14,bot:14,sw:'#7c7874'},
   {name:'Clay',        top:15,side:15,bot:15,sw:'#9aa2b0'},
   {name:'Snow',        top:16,side:16,bot:16,sw:'#f2f6fa'},
-  {name:'Iron',        top:17,side:17,bot:17,sw:'#c4c6cc'},
-  {name:'Gold',        top:18,side:18,bot:18,sw:'#f0c446'},
+  {name:'Iron Block',   top:17,side:17,bot:17,sw:'#c4c6cc'},
+  {name:'Gold Block',   top:18,side:18,bot:18,sw:'#f0c446'},
   {name:'Bookshelf',   top:8, side:19,bot:8, sw:'#8c5a34'},
   {name:'Coal ore',    top:20,side:20,bot:20,sw:'#4a4a4e'},
   {name:'Wool',        top:21,side:21,bot:21,sw:'#f0f0ea'},
-  {name:'Lamp',        top:12,side:12,bot:12,sw:'#ffd76a'}    // 26: upper half of a lamp (placed as two blocks)
+  {name:'Lamp',        top:12,side:12,bot:12,sw:'#ffd76a'},   // 26: upper half of a lamp (placed as two blocks)
+  // 27 onward: more blocks, grouped into tabs in the catalog (see CATS below)
+  {name:'Spruce Planks',    top:24,side:24,bot:24,sw:'#5a3a1e'},   // 27
+  {name:'Birch Planks',     top:25,side:25,bot:25,sw:'#d8c48a'},   // 28
+  {name:'Spruce Log',       top:5, side:26,bot:5, sw:'#4a3218'},   // 29
+  {name:'Birch Log',        top:5, side:27,bot:5, sw:'#e4e0d0'},   // 30
+  {name:'Crafting Table',   top:28,side:29,bot:8, sw:'#8a6a40'},   // 31
+  {name:'Chest',            top:31,side:30,bot:8, sw:'#9a6a30'},   // 32
+  {name:'Hay Bale',         top:32,side:33,bot:32,sw:'#d4b040'},   // 33
+  {name:'Stone Bricks',     top:34,side:34,bot:34,sw:'#7a7a7e'},   // 34
+  {name:'Mossy Cobblestone',top:35,side:35,bot:35,sw:'#6a7a5a'},   // 35
+  {name:'Moss Block',       top:36,side:36,bot:36,sw:'#5e8a3a'},   // 36
+  {name:'Mud',              top:37,side:37,bot:37,sw:'#4a3a2a'},   // 37
+  {name:'Sandstone',        top:38,side:39,bot:38,sw:'#dcc78a'},   // 38
+  {name:'Granite',          top:40,side:40,bot:40,sw:'#9a6a58'},   // 39
+  {name:'Obsidian',         top:41,side:41,bot:41,sw:'#2a1a3a'},   // 40
+  {name:'Red Wool',         top:42,side:42,bot:42,sw:'#b02a2a'},   // 41
+  {name:'Blue Wool',        top:43,side:43,bot:43,sw:'#3246b4'},   // 42
+  {name:'Green Wool',       top:44,side:44,bot:44,sw:'#3c8232'},   // 43
+  {name:'Yellow Wool',      top:45,side:45,bot:45,sw:'#e6c832'},   // 44
+  {name:'Black Wool',       top:46,side:46,bot:46,sw:'#282830'},   // 45
+  {name:'Pink Wool',        top:47,side:47,bot:47,sw:'#e682aa'},   // 46
+  {name:'Glowstone',        top:48,side:48,bot:48,sw:'#ffd060'},   // 47: a block that gives light
+  {name:'Iron Ore',         top:49,side:49,bot:49,sw:'#8a8a8e'},   // 48
+  {name:'Gold Ore',         top:50,side:50,bot:50,sw:'#9a9078'},   // 49
+  {name:'Diamond Ore',      top:51,side:51,bot:51,sw:'#6a8a90'},   // 50
+  {name:'Copper Block',     top:52,side:52,bot:52,sw:'#c06a3a'},   // 51
+  {name:'Diamond Block',    top:53,side:53,bot:53,sw:'#6ad8e0'},   // 52
+  {name:'Quartz Block',     top:54,side:55,bot:54,sw:'#ece6dc'},   // 53
+  {name:'Furnace',          top:56,side:57,bot:56,sw:'#6a6a6e'},   // 54
+  {name:'Pumpkin',          top:58,side:59,bot:58,sw:'#d07a20'},   // 55
+  {name:'Melon',            top:60,side:61,bot:60,sw:'#4a9a3a'},   // 56
+  {name:'Mushroom Block',   top:62,side:63,bot:63,sw:'#b8382e'}    // 57
 ];
 const GLASS_ID = 10, LAMP_ID = 11, LAMP_TOP_ID = 26;
 const DOOR_ID = 12, DOOR_OPEN_ID = 13, DOOR_TOP_ID = 14, DOOR_TOP_OPEN_ID = 15;
 const BED_FOOT_ID = 16, BED_HEAD_ID = 17;
-const MAX_ID = 26;                      // highest block id (matches the server)
+const MAX_ID = 57;                      // highest block id (matches the server)
+const GLOWSTONE_ID = 47;                // a full block that gives light by itself
+// blocks that give light: lamps (both halves) and glowstone
+const LIGHT_SRC = new Uint8Array(MAX_ID+1);
+LIGHT_SRC[LAMP_ID] = LIGHT_SRC[LAMP_TOP_ID] = LIGHT_SRC[GLOWSTONE_ID] = 1;
 const DOOR_PAIR = {12:13, 13:12, 14:15, 15:14};   // open <-> closed for each half of a door
 const isDoorId = b => b >= 12 && b <= 15;
 const isOpenDoor = b => b === DOOR_OPEN_ID || b === DOOR_TOP_OPEN_ID;
@@ -197,7 +238,18 @@ function isSolidId(b){ return b!==0 && !NONSOLID.has(b); }
 function isOpaqueId(b){ return b!==0 && isSolidId(b) && b!==GLASS_ID && b!==BED_FOOT_ID && b!==BED_HEAD_ID && !isDoorId(b); }
 const SLOTS = 8;                                       // the inventory has 8 slots
 // every block a player can carry: the door, the bed and the lamp are placed as two blocks each
-const CATALOG = [1,2,3,4,5,6,7,8,9,10,11,12,16,18,19,20,21,22,23,24,25];
+// the catalog's tabs: each category lists its blocks. The door and the bed are placed as two blocks each, the lamp too.
+const CATS = [
+  {name:'Nature',       ids:[1,2,6,18,19,20,5,36,37,33,55,56,57]},
+  {name:'Wood',         ids:[4,7,27,28,29,30,31,32,23]},
+  {name:'Stone',        ids:[3,8,35,34,9,38,39,40,53,54]},
+  {name:'Colors',       ids:[25,41,42,43,44,45,46]},
+  {name:'Ores & Metal', ids:[24,48,49,50,21,22,51,52]},
+  {name:'Light & Glass',ids:[10,11,47]},
+  {name:'Furniture',    ids:[12,16]}
+];
+const CATALOG = CATS.flatMap(c => c.ids);      // every block a player can carry
+let catFilter = 'All';                         // the catalog tab that is open
 const DEFAULT_INV = [1,2,3,7,10,11,12,8];              // Grass, Dirt, Stone, Planks, Glass, Lamp, Door, Cobblestone
 const HOTBAR = DEFAULT_INV.slice();                    // the 8 inventory slots; null = empty slot (filled in by loadInv)
 const KEYS = ['1','2','3','4','5','6','7','8'];
@@ -347,7 +399,7 @@ function relightLamps(){
   for(const ch of chunks.values()){
     const d = ch.data;
     for(let i=0;i<d.length;i++){
-      if(d[i]!==LAMP_ID && d[i]!==LAMP_TOP_ID) continue;
+      if(!LIGHT_SRC[d[i]]) continue;
       spreadLight(ch.cx*CS + (i%CS), Math.floor(i/(CS*CS)), ch.cz*CS + Math.floor(i/CS)%CS);
     }
   }
@@ -485,7 +537,7 @@ function buildMesh(ch){
       if(isGlass){ if(nb===GLASS_ID || isOpaqueId(nb)) continue; }   // glass against glass or a wall: hidden
       else if(isOpaqueId(nb)) continue;
       const tile=tileOf(t,f), ao=[0,0,0,0];
-      const glow = lightAt(wx+n[0], y+n[1], wz+n[2]);   // light from a lamp in the air in front of this face
+      const glow = t===GLOWSTONE_ID ? 1 : lightAt(wx+n[0], y+n[1], wz+n[2]);   // light from a lamp in the air in front of this face
       const base = isGlass ? gnv : nv;
       const OUT = isGlass ? GV : V, IDX = isGlass ? GI : I;
       for(let k=0;k<4;k++){
@@ -556,8 +608,8 @@ uniform vec3 uSky;
 uniform float uFogStart; uniform float uFogEnd;
 out vec4 o;
 void main(){
-  vec2 tile = vec2(mod(vTile,8.0), floor(vTile/8.0));
-  vec2 uvA = (tile + 0.03125 + clamp(vUV,0.0,1.0)*0.9375) / vec2(8.0,4.0);
+  vec2 tile = vec2(mod(vTile,16.0), floor(vTile/16.0));
+  vec2 uvA = (tile + 0.03125 + clamp(vUV,0.0,1.0)*0.9375) / vec2(16.0,8.0);
   float lit = max(uLight, vGlow);               // lamp light shows through the dark of night
   vec3 c = texture(uAtlas, uvA).rgb * vShade * lit;
   float f = clamp((vDist - uFogStart) / (uFogEnd - uFogStart), 0.0, 1.0);
@@ -614,12 +666,12 @@ gl.bindVertexArray(null);
 // the block atlas, drawn procedurally: 8x4 tiles of 32 pixels on a 256x128 canvas
 function makeAtlasCanvas(){
   // each pattern is written at 16x16 and scaled up 2x, then fine grain is added so the texture reads as detailed
-  const c=document.createElement('canvas'); c.width=256; c.height=128;
+  const c=document.createElement('canvas'); c.width=512; c.height=256;
   const x=c.getContext('2d');
   const g=(n,base,amp)=>base+(n-0.5)*amp;
   const cb=v=>Math.max(0,Math.min(255,v|0));
   function tile(i,fn){
-    const ox=(i%8)*32, oy=Math.floor(i/8)*32;
+    const ox=(i%16)*32, oy=Math.floor(i/16)*32;
     for(let py=0;py<32;py++) for(let px=0;px<32;px++){
       const col=fn(px>>1,py>>1);
       const grain=(rnd2(px,py,40+i)-0.5)*10;
@@ -671,6 +723,68 @@ function makeAtlasCanvas(){
   tile(22,(px,py)=>{ const n=rnd2(px,py,59); return [g(n,184,20),g(n,44,14),g(n,44,14)]; });   // red blanket (the pillow is its own white block)
   tile(23,(px,py)=>{ const n=rnd2(px,py,60); if(py>=10 && py<=14) return [g(n,184,16),g(n,44,12),g(n,44,12)];      // bed side: blanket band
                     return [g(n,150,20),g(n,104,16),g(n,60,12)]; });
+  // ---- more blocks (24 onward), drawn the same way ----
+  // planks in any wood: boards with dark seams
+  const planksTile=(i,R,G,B,seed)=>tile(i,(px,py)=>{ const board=Math.floor(py/4), tint=board%2?-10:0; const n=rnd2(px,py,seed);
+                    const seam=(py%4===0)||((px+board*7)%8===0); const d=seam?-40:0;
+                    return [g(n,R,16)+tint+d,g(n,G,14)+tint+d,g(n,B,12)+tint+d]; });
+  // a single solid colour of wool
+  const woolTile=(i,R,G,B,seed)=>tile(i,(px,py)=>{ const n=rnd2(px,py,seed); return [g(n,R,22),g(n,G,22),g(n,B,22)]; });
+  // stone with coloured specks of ore
+  const oreTile=(i,R,G,B,seed)=>tile(i,(px,py)=>{ const n=rnd2(px,py,seed); if(rnd2(px>>1,py>>1,seed+1)<0.14) return [R,G,B];
+                    return [g(n,126,44),g(n,126,44),g(n,130,44)]; });
+  planksTile(24,108,74,42,70);                                                              // spruce planks
+  planksTile(25,216,196,140,71);                                                            // birch planks
+  tile(26,(px,py)=>{ const n=rnd2(px,py,72); const d=(px%5===0)?-20:0; return [g(n,70,18)+d,g(n,48,14)+d,g(n,30,12)+d]; });   // spruce log side
+  tile(27,(px,py)=>{ const n=rnd2(px,py,73); const dash=(rnd2(px>>1,py>>2,74)<0.25 && py%4<2)?-90:0; return [g(n,222,14)+dash,g(n,218,14)+dash,g(n,206,12)+dash]; }); // birch log side
+  tile(28,(px,py)=>{ const n=rnd2(px,py,75); const cross=(px===15||px===16||py===15||py===16); const edge=px<=1||px>=30||py<=1||py>=30;
+                    const d=cross?-70:(edge?-40:0); return [g(n,160,14)+d,g(n,118,12)+d,g(n,70,10)+d]; });   // crafting table top
+  tile(29,(px,py)=>{ const n=rnd2(px,py,76); const tool=px>=6&&px<=25&&py>=8&&py<=22&&(((px>>2)+(py>>2))%2===0); const d=tool?-35:0;
+                    const seam=py%8===0?-30:0; return [g(n,160,14)+d+seam,g(n,118,12)+d+seam,g(n,70,10)+d+seam]; });   // crafting table side
+  tile(30,(px,py)=>{ const n=rnd2(px,py,77); if(px>=14&&px<=17&&py>=12&&py<=19) return [230,190,70];                  // chest front, with its latch
+                    const band=(py===8||py===9||py===22||py===23); const seam=(py%8===0)?-30:0; const d=band?-55:seam;
+                    return [g(n,160,14)+d,g(n,118,12)+d,g(n,66,10)+d]; });
+  tile(31,(px,py)=>{ const n=rnd2(px,py,78); const seam=px%8===0?-40:0; return [g(n,160,14)+seam,g(n,118,12)+seam,g(n,70,10)+seam]; });   // chest top
+  tile(32,(px,py)=>{ const n=rnd2(px,py,79); const r=Math.atan2(py-15.5,px-15.5); const str=Math.floor((r+Math.PI)*8/Math.PI)%2; const d=str?-30:0;
+                    return [g(n,206,30)+d,g(n,166,26)+d,g(n,56,16)+d]; });   // hay bale top
+  tile(33,(px,py)=>{ const n=rnd2(px,py,80); const band=(py%8<3)?-40:0; return [g(n,206,30)+band,g(n,166,26)+band,g(n,56,16)+band]; });   // hay bale side
+  tile(34,(px,py)=>{ const row=py>>3, mortar=(py%8===0)||((px+(row%2)*8)%16===0); const n=rnd2(px,py,81);
+                    if(mortar) return [150,148,150]; return [g(n,122,30),g(n,122,30),g(n,126,30)]; });   // stone bricks
+  tile(35,(px,py)=>{ const cell=rnd2(px>>2,py>>2,82); const mortar=(px%4===0)||(py%4===0); const n=rnd2(px,py,83); const moss=rnd2(px>>2,py>>2,84)<0.4;
+                    if(mortar) return [88,88,84]; if(moss) return [g(n,80,30),g(n,130,30),g(n,64,20)];
+                    return [g(cell,120,40)+(n-0.5)*12,g(cell,120,40)+(n-0.5)*12,g(cell,124,40)+(n-0.5)*12]; });   // mossy cobblestone
+  tile(36,(px,py)=>{ const n=rnd2(px,py,85); return [g(n,80,40),g(n,140,44),g(n,58,24)]; });   // moss block
+  tile(37,(px,py)=>{ const n=rnd2(px,py,86); return [g(n,70,30),g(n,54,24),g(n,44,20)]; });   // mud
+  tile(38,(px,py)=>{ const n=rnd2(px,py,87); return [g(n,220,14),g(n,206,14),g(n,150,14)]; });   // sandstone top
+  tile(39,(px,py)=>{ const n=rnd2(px,py,88); const layer=(py%8<2)?-24:(py%8>=6?8:0); return [g(n,216,14)+layer,g(n,200,14)+layer,g(n,146,14)+layer]; });   // sandstone side
+  tile(40,(px,py)=>{ const n=rnd2(px,py,89); const sp=rnd2(px>>1,py>>1,90); const d=sp<0.2?-30:(sp>0.85?30:0); return [g(n,150,26)+d,g(n,100,22)+d,g(n,88,22)+d]; });   // granite
+  tile(41,(px,py)=>{ const n=rnd2(px,py,91); const glint=n>0.95?60:0; return [g(n,30,14)+glint,g(n,20,12)+glint,g(n,40,16)+glint]; });   // obsidian
+  woolTile(42,180,40,40,92);    // red wool
+  woolTile(43,50,70,180,93);    // blue wool
+  woolTile(44,60,130,50,94);    // green wool
+  woolTile(45,230,200,50,95);   // yellow wool
+  woolTile(46,40,40,44,96);     // black wool
+  woolTile(47,230,130,170,97);  // pink wool
+  tile(48,(px,py)=>{ const n=rnd2(px,py,98); const sp=rnd2(px>>1,py>>1,99); const d=sp>0.5?20:-10; return [g(n,250,12)+d,g(n,206,30)+d,g(n,100,30)+d]; });   // glowstone
+  oreTile(49,214,160,120,100);   // iron ore
+  oreTile(50,240,200,70,102);    // gold ore
+  oreTile(51,90,220,230,104);    // diamond ore
+  tile(52,(px,py)=>{ const n=rnd2(px,py,106); const rivet=(px%8===3||px%8===4)&&(py%8===3||py%8===4); const d=rivet?30:0; return [g(n,186,40)+d,g(n,108,30)+d,g(n,60,20)+d]; });   // copper block
+  tile(53,(px,py)=>{ const n=rnd2(px,py,107); const facet=((px+py)%12<2)||((px-py+64)%12<2); const d=facet?40:0; return [g(n,110,24)+d,g(n,230,20)+d,g(n,236,16)+d]; });   // diamond block
+  tile(54,(px,py)=>{ const n=rnd2(px,py,108); return [g(n,240,8),g(n,238,8),g(n,232,8)]; });   // quartz top
+  tile(55,(px,py)=>{ const n=rnd2(px,py,109); const line=(px%16<2)?-24:0; return [g(n,240,8)+line,g(n,238,8)+line,g(n,232,8)+line]; });   // quartz side
+  tile(56,(px,py)=>{ const n=rnd2(px,py,110); const seam=(px%8===0||py%8===0)?-30:0; return [g(n,120,30)+seam,g(n,120,30)+seam,g(n,124,30)+seam]; });   // furnace top and sides
+  tile(57,(px,py)=>{ const n=rnd2(px,py,111); if(px>=8&&px<=23&&py>=14&&py<=26){ return py>=20 ? [230,120,30] : [40,36,36]; }   // furnace front, with its fire
+                    return [g(n,120,30),g(n,120,30),g(n,124,30)]; });
+  tile(58,(px,py)=>{ const n=rnd2(px,py,112); if(Math.hypot(px-15.5,py-15.5)<4) return [70,90,40];                       // pumpkin top, with its stem
+                    const seam=px%8===0?-25:0; return [g(n,226,16)+seam,g(n,128,14)+seam,g(n,20,10)+seam]; });
+  tile(59,(px,py)=>{ const n=rnd2(px,py,113); const rib=(px%8<2)?-30:0; return [g(n,226,16)+rib,g(n,128,14)+rib,g(n,20,10)+rib]; });   // pumpkin side
+  tile(60,(px,py)=>{ const n=rnd2(px,py,114); const st=(px%8<3)?-30:0; return [g(n,80,16)+st,g(n,150,20)+st,g(n,60,14)+st]; });   // melon top
+  tile(61,(px,py)=>{ const n=rnd2(px,py,115); const st=(px%8<3)?-30:0; if(rnd2(px>>2,py>>2,116)<0.1) return [60,100,50];
+                    return [g(n,80,16)+st,g(n,150,20)+st,g(n,60,14)+st]; });   // melon side
+  tile(62,(px,py)=>{ const n=rnd2(px,py,117); if(rnd2(px>>2,py>>2,118)<0.15) return [240,236,226];                 // mushroom block top
+                    return [g(n,180,20),g(n,40,12),g(n,36,12)]; });
+  tile(63,(px,py)=>{ const n=rnd2(px,py,119); return [g(n,222,14),g(n,206,14),g(n,176,14)]; });   // mushroom stem side
   return c;
 }
 const atlasTex = gl.createTexture();
@@ -768,6 +882,10 @@ function collides(x,y,z){
 }
 function moveAxis(axis,d){
   if(d===0) return;
+  if(wallHacks){                          // wall hacks: nothing stops you, you go straight through walls and floors
+    if(axis===0) player.x+=d; else if(axis===1) player.y+=d; else player.z+=d;
+    return;
+  }
   const P=player, steps=Math.ceil(Math.abs(d)/0.2), s=d/steps;
   for(let i=0;i<steps;i++){
     if(axis===0) P.x+=s; else if(axis===1) P.y+=s; else P.z+=s;
@@ -791,8 +909,8 @@ function physics(dt){
     P.vx=(-Math.sin(P.yaw)*fw + Math.cos(P.yaw)*rt)*sp;
     P.vz=(-Math.cos(P.yaw)*fw - Math.sin(P.yaw)*rt)*sp;
   }
-  if(P.fly){
-    P.vy = ((keys.Space?1:0) - ((keys.ShiftLeft||keys.ShiftRight)?1:0)) * 8;
+  if(P.fly || wallHacks){                // flying, or wall hacks (which also turn gravity off)
+    P.vy =((keys.Space?1:0) - ((keys.ShiftLeft||keys.ShiftRight)?1:0)) * 8;
   } else {
     P.vy-=26*dt; if(P.vy<-40) P.vy=-40;
     if(keys.Space && P.onGround){ P.vy=8.6; sfx.jump(); }
@@ -979,8 +1097,8 @@ const ATLAS_URL = ATLAS_CV.toDataURL();      // the texture atlas as an image, u
 // shows one tile of the atlas in an icon box: the 800% x 400% background holds all 8 x 4 tiles
 function setIcon(el, t){
   el.style.backgroundImage = 'url(' + ATLAS_URL + ')';
-  el.style.backgroundSize = '800% 400%';
-  el.style.backgroundPosition = ((t % 8) * 100 / 7) + '% ' + (Math.floor(t / 8) * 100 / 3) + '%';
+  el.style.backgroundSize = '1600% 800%';
+  el.style.backgroundPosition = ((t % 16) * 100 / 15) + '% ' + (Math.floor(t / 16) * 100 / 7) + '%';
 }
 function saveInv(){ try{ localStorage.setItem(INV_KEY, JSON.stringify(HOTBAR)); }catch(e){} }
 function loadInv(){
@@ -1031,12 +1149,25 @@ function buildHotbar(){
   selectSlot(sel);
 }
 function invMsg(text){ $('invmsg').textContent = text; }
+// the tabs above the catalog: All, then one tab per category
+function renderTabs(){
+  const box = $('cattabs'); box.innerHTML = '';
+  for(const name of ['All', ...CATS.map(c => c.name)]){
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'tab' + (name === catFilter ? ' on' : '');
+    b.textContent = name.toUpperCase();
+    b.onclick = () => { catFilter = name; renderInv(); };
+    box.appendChild(b);
+  }
+}
 function renderInv(){
   const slots = $('invslots'); slots.innerHTML = '';
   for(let i = 0; i < SLOTS; i++) slots.appendChild(slotEl(i, true));
   markSel();
+  renderTabs();
   const cat = $('catalog'); cat.innerHTML = '';
-  for(const id of CATALOG){
+  const shown = catFilter === 'All' ? CATALOG : (CATS.find(c => c.name === catFilter) || {ids:[]}).ids;
+  for(const id of shown){
     const b = document.createElement('button');
     b.className = 'cat'; b.type = 'button'; b.title = BLOCKS[id].name;
     const ic = document.createElement('i'); setIcon(ic, BLOCKS[id].top); b.appendChild(ic);
@@ -1139,10 +1270,17 @@ $('codein').addEventListener('keydown', e=>{
   else if(e.key === 'Escape'){ e.preventDefault(); closeCode(); }
 });
 $('invisbtn').addEventListener('click', ()=> setInvisible(!player.invisible));
+// after wall hacks are switched off, lifts the player out of any block they are standing inside
+function unstick(){
+  let n = 0;
+  while(collides(player.x, player.y, player.z) && n < 80){ player.y += 0.5; n++; }
+  player.vy = 0;
+}
 $('wallbtn').addEventListener('click', ()=>{
   wallHacks = !wallHacks;
+  if(!wallHacks) unstick();
   syncInvisBtn();
-  flashHud(wallHacks ? 'WALL HACKS ON: other players show through walls' : 'WALL HACKS OFF');
+  flashHud(wallHacks ? 'WALL HACKS ON: you fly through walls and see players through them' : 'WALL HACKS OFF');
 });
 $('codeclose').addEventListener('click', closeCode);
 let flashT=0;
@@ -1864,6 +2002,7 @@ window.VOX = {
   addChatLine, skipNight, trySleep, wakeUp,
   openCode, closeCode, tryCode, setInvisible, music, musicSet, musicStart, musicStop, PRIVATE_CODE,
   get wallHacks(){ return wallHacks; }, placeBunk, leaveBed, bedDirAt,
+  collides, CATS, GLOWSTONE_ID, get catFilter(){ return catFilter; }, setCat(n){ catFilter = n; if(invOpen) renderInv(); },
   get codeOpen(){ return codeOpen; }, get codeUnlocked(){ return codeUnlocked; },
   openInv, closeInv, addToInv, removeFromInv, get invOpen(){ return invOpen; },
   get sel(){ return sel; }, get selLabel(){ return $('selname').textContent; },

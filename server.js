@@ -16,7 +16,7 @@ const MAX_PLAYERS = Number(process.env.MAX_PLAYERS) || 16;
 const PAGE = path.join(__dirname, 'public', 'index.html');
 const CH = 64;                  // world height in blocks
 const REACH = 12;               // a block change must be this close to the player's last reported position
-const MAX_BLOCK_ID = 26;        // highest block id a player may place (see BLOCKS in index.html)
+const MAX_BLOCK_ID = 57;        // highest block id a player may place (see BLOCKS in index.html)
 const COLORS = ['#e6594b', '#4b9be6', '#58c25a', '#e6c44b', '#b35ae6', '#4be6d6', '#e6894b', '#e64b9b'];
 const DAY_LEN = 480;            // seconds for one full day (the same as in index.html)
 
