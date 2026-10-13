@@ -74,6 +74,42 @@
   #fridgebox h2{margin:0;font-size:22px;letter-spacing:.14em;text-shadow:2px 2px 0 #000}
   #fridgeslots{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;width:100%}
   #fridgemsg{min-height:1.4em;margin:0;font-size:13px;color:#ffe066;text-align:center}
+  /* ---------- touch screens: a joystick, drag to look, round buttons, and a bottom sheet for the catalog ---------- */
+  [hidden]{display:none !important}
+  @supports (height:100dvh){ html,body{height:100dvh} canvas#c{height:100dvh} }
+  #hotbar{z-index:2}
+  #fsbtn{position:absolute;top:12px;right:12px;width:auto;padding:9px 12px;font-size:12px;letter-spacing:.06em;z-index:3}
+  #fsmsg{position:absolute;top:58px;right:12px;max-width:280px;margin:0;font-size:12px;line-height:1.4;color:#ffe066;text-align:right;text-shadow:1px 1px 0 #000}
+  #touchlook{position:fixed;inset:0;z-index:1;touch-action:none}
+  #touch{position:fixed;inset:0;z-index:2;pointer-events:none;touch-action:none}
+  #stick{position:fixed;left:calc(14px + env(safe-area-inset-left));bottom:calc(14px + env(safe-area-inset-bottom));width:130px;height:130px;box-sizing:border-box;border-radius:50%;background:rgba(255,255,255,.1);border:3px solid rgba(255,255,255,.35);pointer-events:auto;touch-action:none}
+  #knob{position:absolute;left:50%;top:50%;width:58px;height:58px;margin:-29px 0 0 -29px;box-sizing:border-box;border-radius:50%;background:rgba(255,255,255,.38);border:2px solid rgba(255,255,255,.7);pointer-events:none}
+  .tbtn{position:fixed;display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:0;border-radius:50%;border:3px solid rgba(255,255,255,.55);background:rgba(20,26,40,.6);color:#fff;font:bold 13px 'Courier New',monospace;letter-spacing:.04em;text-shadow:1px 1px 0 #000;pointer-events:auto;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+  .tbtn.down{background:rgba(255,224,102,.5);border-color:#ffe066}
+  #tjump{right:calc(14px + env(safe-area-inset-right));bottom:calc(14px + env(safe-area-inset-bottom));width:84px;height:84px;font-size:15px}
+  #tbreak{right:calc(106px + env(safe-area-inset-right));bottom:calc(24px + env(safe-area-inset-bottom));width:66px;height:66px;background:rgba(150,44,36,.6)}
+  #tplace{right:calc(14px + env(safe-area-inset-right));bottom:calc(106px + env(safe-area-inset-bottom));width:66px;height:66px;background:rgba(36,100,56,.6)}
+  #tlie{right:calc(106px + env(safe-area-inset-right));bottom:calc(106px + env(safe-area-inset-bottom));width:66px;height:66px;font-size:11px;background:rgba(60,60,120,.6)}
+  #ttop{position:fixed;top:calc(10px + env(safe-area-inset-top));right:calc(10px + env(safe-area-inset-right));display:flex;gap:6px;pointer-events:none}
+  #ttop .tbtn{position:relative;width:66px;height:40px;border-radius:9px;font-size:12px}
+  body.touch{overscroll-behavior:none}
+  body.touch #hotbar{bottom:var(--hb,180px)}
+  body.touch #selname{bottom:calc(var(--hb,180px) + 56px)}
+  @media (orientation:landscape) and (max-height:600px){ body.touch{--hb:14px} body.touch #stick{width:118px;height:118px} }
+  @media (orientation:portrait){ body.touch .slot{width:40px;height:46px} }
+  /* the catalog and the fridge become a sheet across the bottom, so the game stays visible above it */
+  body.touch #inv,body.touch #fridge{align-items:flex-end;padding:0;background:transparent;pointer-events:none}
+  body.touch #invbox,body.touch #fridgebox{pointer-events:auto;width:100%;max-width:none;max-height:none;height:64vh;height:64dvh;box-sizing:border-box;padding:10px 10px calc(12px + env(safe-area-inset-bottom));gap:6px;border-width:3px 0 0;background:rgba(22,27,38,.97);align-items:stretch;overflow:hidden}
+  body.touch #invbox h2,body.touch #fridgebox h2{font-size:16px;text-align:center}
+  body.touch #invbox .hint,body.touch #fridgebox .hint{display:none}
+  body.touch #invbox .lbl{align-self:center;font-size:11px}
+  body.touch #invslots{flex-wrap:nowrap;gap:3px}
+  body.touch #cattabs,body.touch #roomtabs{flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;padding-bottom:3px;width:100%;-webkit-overflow-scrolling:touch}
+  body.touch #cattabs .tab,body.touch #roomtabs .tab{flex:0 0 auto}
+  body.touch #catalog{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;grid-template-columns:repeat(auto-fill,minmax(138px,1fr));align-content:start;margin-bottom:4px}
+  body.touch #fridgeslots{flex:1 1 auto;min-height:0;overflow-y:auto;grid-template-columns:repeat(2,1fr)}
+  body.touch #invmsg{min-height:1em}
+  body.touch #invbox .btn,body.touch #fridgebox .btn{width:100%;padding:11px}
 </style>
 </head>
 <body>
@@ -84,8 +120,23 @@
 <div id="chatlog" aria-live="polite"></div>
 <input id="chatin" maxlength="120" hidden aria-label="Chat message" placeholder="Type a message, Enter to send, Esc to cancel">
 <div id="selname"></div>
+<div id="touchlook"></div>
+<div id="touch" hidden>
+  <div id="stick" role="presentation"><div id="knob"></div></div>
+  <button class="tbtn" id="tbreak" type="button">BREAK</button>
+  <button class="tbtn" id="tjump" type="button">JUMP</button>
+  <button class="tbtn" id="tlie" type="button" hidden>LIE DOWN</button>
+  <div id="ttop">
+    <button class="tbtn" id="tbag" type="button">BAG</button>
+    <button class="tbtn" id="tchat" type="button" hidden>CHAT</button>
+    <button class="tbtn" id="tmic" type="button" hidden>MIC</button>
+    <button class="tbtn" id="tmenu" type="button">MENU</button>
+  </div>
+</div>
 <div id="hotbar"></div>
 <div id="menu">
+  <button class="btn" id="fsbtn" type="button">FULL SCREEN</button>
+  <p id="fsmsg" role="status" hidden></p>
   <div class="card">
     <h1>BLOCK REALM</h1>
     <p class="tagline">Build it. Share it. Sleep through the night.</p>
@@ -118,6 +169,7 @@
        M: sound effects on or off &middot; Esc: pause and save<br>
        Double-tap Space: fly (Space up, Shift down) &middot; T: chat with other players (multiplayer)<br>
        V: talk to players close to you (voice chat, multiplayer)</p>
+    <p class="help touchhelp" hidden>Touch: drag the circle on the left to walk, drag anywhere else to look.<br>Tap anywhere to place the selected block there. Hold still on a block to break it. BREAK breaks the block in the middle of the screen. JUMP jumps. BAG opens the block catalog. MENU pauses.</p>
   </div>
 </div>
 
@@ -1902,7 +1954,7 @@ function placeItem(id,x,y,z,dir,face){
     let dx, dz;
     if(dir){ dx=dir[0]; dz=dir[1]; }
     else {
-      const lx=-Math.sin(player.yaw), lz=-Math.cos(player.yaw);
+      const yw = tapFace != null ? tapFace : player.yaw, lx=-Math.sin(yw), lz=-Math.cos(yw);
       const alongX = Math.abs(lx) > Math.abs(lz);
       dx = alongX ? Math.sign(lx) : 0; dz = alongX ? 0 : Math.sign(lz);
     }
@@ -1915,7 +1967,7 @@ function placeItem(id,x,y,z,dir,face){
   if(getBlock(x,y,z)!==0 || overlapsPlayer(x,y,z)) return false;
   // furniture turns to face the player when it is put down
   if(isFurnBase(id)){
-    const f = face != null ? face : facingFromYaw(player.yaw), t = furnState(id).t, ty = FURN[t];
+    const f = face != null ? face : facingFromYaw(tapFace != null ? tapFace : player.yaw), t = furnState(id).t, ty = FURN[t];
     // a tall piece takes two blocks one above the other; a wide piece takes two blocks side by side
     const extra = ty.tall ? [x,y+1,z] : ty.wide ? [x+furnDir(f)[0], y, z+furnDir(f)[1]] : null;
     if(extra && (getBlock(extra[0],extra[1],extra[2])!==0 || overlapsPlayer(extra[0],extra[1],extra[2]))) return false;
@@ -2709,6 +2761,144 @@ function menuState(){
   $('reset').hidden = mpMode;
   syncSettings();
 }
+/* ---------- touch screens: a joystick to walk, drag to look, and round buttons for the actions ---------- */
+// the buttons and the joystick drive the same keys and actions as the keyboard and mouse do
+const isTouch = matchMedia('(pointer: coarse)').matches || /[?&]touch=1/.test(location.search);
+if(isTouch){ document.body.classList.add('touch'); document.querySelector('.touchhelp').hidden = false; }
+// presses a key the game already listens for: the same code runs as on a keyboard
+function tapKey(code, down){
+  window.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', {code, key: code === 'Space' ? ' ' : code, bubbles: true}));
+}
+// the joystick: its push sets the walking keys (and running at the edge of the circle)
+const stick = $('stick'), knob = $('knob');
+let stickPtr = null, stickOrigin = {x:0, y:0};
+const STICK_R = 55;
+function setMove(x, y){
+  const dead = 0.22;
+  keys.KeyW = y < -dead; keys.KeyS = y > dead;
+  keys.KeyA = x < -dead; keys.KeyD = x > dead;
+  keys.ShiftLeft = Math.hypot(x, y) > 0.9;
+}
+function stickMove(e){
+  let dx = e.clientX - stickOrigin.x, dy = e.clientY - stickOrigin.y;
+  const L = Math.hypot(dx, dy), k = L > STICK_R ? STICK_R / L : 1;
+  dx *= k; dy *= k;
+  knob.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+  setMove(dx / STICK_R, dy / STICK_R);
+}
+stick.addEventListener('pointerdown', e => {
+  e.preventDefault(); stickPtr = e.pointerId; capture(stick, e.pointerId);
+  const r = stick.getBoundingClientRect(); stickOrigin = {x: r.left + r.width/2, y: r.top + r.height/2};
+  stickMove(e);
+});
+stick.addEventListener('pointermove', e => { if(e.pointerId === stickPtr) stickMove(e); });
+const stickEnd = e => { if(e.pointerId !== stickPtr) return; stickPtr = null; knob.style.transform = ''; setMove(0, 0); };
+stick.addEventListener('pointerup', stickEnd);
+stick.addEventListener('pointercancel', stickEnd);
+// runs act (placing or breaking) as if the camera were aimed at a point on the screen, then puts the view back.
+// tapFace keeps the way you really face, so new furniture and beds still turn toward you
+let tapFace = null;
+function actAtScreen(sx, sy, act){
+  if(!playing || invOpen || fridgeOpen || codeOpen) return;
+  const t = Math.tan(35 * Math.PI / 180), asp = innerWidth / innerHeight;   // the camera's 70 degree field of view
+  const nx = (sx / innerWidth) * 2 - 1, ny = 1 - (sy / innerHeight) * 2;
+  const cy = Math.cos(player.yaw), sn = Math.sin(player.yaw), cp = Math.cos(player.pitch), sp = Math.sin(player.pitch);
+  const f = [-sn*cp, sp, -cy*cp], r = [cy, 0, -sn], u = [sn*sp, cp, cy*sp];
+  const d = [0, 1, 2].map(i => f[i] + nx*t*asp*r[i] + ny*t*u[i]);
+  const L = Math.hypot(d[0], d[1], d[2]);
+  const savedYaw = player.yaw, savedPitch = player.pitch, savedFace = tapFace;
+  tapFace = savedYaw;
+  player.pitch = Math.asin(clamp(d[1] / L, -1, 1));
+  player.yaw = Math.atan2(-d[0] / L, -d[2] / L);
+  try { act(); } finally { player.yaw = savedYaw; player.pitch = savedPitch; tapFace = savedFace; }
+}
+function tapPlaceAt(sx, sy){ actAtScreen(sx, sy, () => doPlace()); }
+function tapBreakAt(sx, sy){ actAtScreen(sx, sy, () => doBreak()); }
+// a drag turns you; a quick tap places the selected block where you tapped; holding still breaks the block there
+const look = $('touchlook');
+let lookPtr = null, lookLast = null, lookStart = null, lookMoved = false, lookTimer = 0, lookDone = false;
+look.addEventListener('pointerdown', e => {
+  if(!playing) return;
+  e.preventDefault();
+  lookPtr = e.pointerId; lookLast = {x: e.clientX, y: e.clientY}; lookStart = {x: e.clientX, y: e.clientY, t: performance.now()};
+  lookMoved = false; lookDone = false;
+  capture(look, e.pointerId);
+  clearTimeout(lookTimer);
+  lookTimer = setTimeout(() => { if(lookPtr !== null && !lookMoved){ lookDone = true; tapBreakAt(lookStart.x, lookStart.y); } }, 480);
+});
+look.addEventListener('pointermove', e => {
+  if(e.pointerId !== lookPtr || !lookLast || !playing || invOpen || fridgeOpen || codeOpen) return;
+  const dx = e.clientX - lookLast.x, dy = e.clientY - lookLast.y;
+  lookLast = {x: e.clientX, y: e.clientY};
+  if(!lookMoved){
+    if(Math.hypot(e.clientX - lookStart.x, e.clientY - lookStart.y) <= 12) return;   // small wobbles are still a tap
+    lookMoved = true; clearTimeout(lookTimer);
+  }
+  player.yaw -= dx * 0.0042;
+  player.pitch = clamp(player.pitch - dy * 0.0042, -1.55, 1.55);
+});
+const lookEnd = e => {
+  if(e.pointerId !== lookPtr) return;
+  clearTimeout(lookTimer); lookTimer = 0;
+  const quick = performance.now() - lookStart.t < 480;
+  if(e.type === 'pointerup' && !lookMoved && !lookDone && quick) tapPlaceAt(lookStart.x, lookStart.y);
+  lookPtr = null;
+};
+look.addEventListener('pointerup', lookEnd);
+look.addEventListener('pointercancel', lookEnd);
+// a round button: onDown when pressed, onUp when let go
+// keeps a pointer on its element when it moves off it; some browsers refuse, and that must not stop the game
+function capture(el, id){ try{ el.setPointerCapture(id); }catch(e){} }
+function holdButton(id, onDown, onUp){
+  const b = $(id);
+  b.addEventListener('pointerdown', e => { e.preventDefault(); b.classList.add('down'); if(onDown) onDown(); });
+  const up = () => { b.classList.remove('down'); if(onUp) onUp(); };
+  b.addEventListener('pointerup', up);
+  b.addEventListener('pointercancel', up);
+  b.addEventListener('pointerleave', up);
+}
+let breakTimer = 0;
+holdButton('tbreak',
+  () => { if(!playing || invOpen || fridgeOpen) return; doBreak(); breakTimer = setInterval(() => { if(playing && !invOpen && !fridgeOpen) doBreak(); }, 280); },
+  () => clearInterval(breakTimer));
+holdButton('tjump', () => tapKey('Space', true), () => tapKey('Space', false));
+holdButton('tbag', () => tapKey('KeyE', true));
+holdButton('tlie', () => tapKey('KeyZ', true));
+holdButton('tchat', () => tapKey('KeyT', true));
+holdButton('tmic', () => tapKey('KeyV', true));
+holdButton('tmenu', () => pause());
+// the controls show only while you are playing and no panel is open; the chat and lie-down buttons only when they apply
+let touchShown = null;
+function syncTouch(){
+  const show = isTouch && playing && !invOpen && !fridgeOpen && !codeOpen && !chatOpen;
+  if(show !== touchShown){ touchShown = show; $('touch').hidden = !show; $('touchlook').hidden = !show; }
+  if(!show) return;
+  $('tlie').hidden = !(player.seat && player.seat.cell);
+  $('tchat').hidden = !mpMode;
+  $('tmic').hidden = !mpMode;
+}
+
+/* ---------- full screen: a button on the main menu ---------- */
+function fsOn(){ return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+function fsSync(){ $('fsbtn').textContent = fsOn() ? 'EXIT FULL SCREEN' : 'FULL SCREEN'; }
+function fsMsg(text){ $('fsmsg').textContent = text; $('fsmsg').hidden = false; }
+function toggleFullscreen(){
+  const el = document.documentElement;
+  const enter = el.requestFullscreen || el.webkitRequestFullscreen;
+  const exit = document.exitFullscreen || document.webkitExitFullscreen;
+  const noFs = 'This browser cannot go full screen here. Try the full screen key on your keyboard (F11), or on iPhone use Share, then Add to Home Screen.';
+  try{
+    if(fsOn()){ const p = exit.call(document); if(p && p.catch) p.catch(()=>{}); }
+    else if(enter){ const p = enter.call(el); if(p && p.catch) p.catch(()=>fsMsg(noFs)); }
+    else fsMsg(noFs);
+  }catch(e){ fsMsg(noFs); }
+  setTimeout(fsSync, 300);
+}
+$('fsbtn').addEventListener('click', toggleFullscreen);
+document.addEventListener('fullscreenchange', fsSync);
+document.addEventListener('webkitfullscreenchange', fsSync);
+fsSync();
+
 function start(){
   sfx.init();
   musicStart();
@@ -3039,6 +3229,7 @@ function frame(now){
   remesh();
   render();
   hud(dt);
+  syncTouch();
   if(playing) { saveT=(saveT||0)+dt; if(saveT>10){ saveT=0; saveAll(); } }
   requestAnimationFrame(frame);
 }
