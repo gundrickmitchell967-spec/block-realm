@@ -1209,14 +1209,15 @@ function furnUse(h){
 /* ---------- the TV: right-click it to turn it on and play the video (media/tv.mp4) on its screen ---------- */
 // the video is one file the game loads; it is only played on the screen of the player who turned the TV on
 const TV_VIDEO_URL = 'media/tv.mp4';
-const tv = { on:false, x:0, y:0, z:0, el:null, node:null, gain:null, prog:null, vao:null, vbo:null, tex:null, loc:null };
+const tv = { on:false, x:0, y:0, z:0, el:null, node:null, gain:null, prog:null, vao:null, vbo:null, tex:null, loc:null, url:null };
+const TV_NO_VIDEO = 'NO VIDEO FOUND: RIGHT-CLICK THE TV AGAIN TO CHOOSE ONE';
 function tvVideo(){
   if(tv.el) return tv.el;
   const v = document.createElement('video');
   v.src = TV_VIDEO_URL; v.preload = 'auto'; v.playsInline = true;
   v.style.display = 'none';
   v.addEventListener('ended', tvOff);
-  v.addEventListener('error', () => { tvOff(); flashHud('NO VIDEO: PUT THE FILE AT media/tv.mp4'); });
+  v.addEventListener('error', () => { tvOff(); flashHud(TV_NO_VIDEO); });
   document.body.appendChild(v);
   tv.el = v;
   return v;
@@ -1226,6 +1227,12 @@ function tvUse(h){
   if(!isFurn(h.id) || FURN[furnState(h.id).t].name !== 'TV') return false;
   sfx.init();
   const v = tvVideo();
+  if(v.error){ tvChooseFile(h); return true; }   // no video file was found: a right click lets you choose one from your computer
+  tvStart(h);
+  return true;
+}
+function tvStart(h){
+  const v = tv.el;
   if(sfx.ctx && !tv.node){
     try{ tv.node = sfx.ctx.createMediaElementSource(v); tv.gain = sfx.ctx.createGain(); tv.node.connect(tv.gain); tv.gain.connect(sfx.master); }
     catch(e){ tv.node = null; tv.gain = null; }
@@ -1233,10 +1240,25 @@ function tvUse(h){
   Object.assign(tv, {on:true, x:h.x, y:h.y, z:h.z});
   if(v.currentTime > 0) v.currentTime = 0;
   const p = v.play();
-  if(p && p.catch) p.catch(() => { tvOff(); flashHud('THE TV WOULD NOT PLAY'); });
+  if(p && p.catch) p.catch(() => { tvOff(); flashHud(v.error ? TV_NO_VIDEO : 'THE TV WOULD NOT PLAY'); });
   sfx.click();
   flashHud('TV ON');
-  return true;
+}
+// no video file was found: this opens a picker for a video from your computer. It plays only in this browser and is not uploaded
+function tvChooseFile(h){
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = 'video/*'; input.style.display = 'none';
+  input.addEventListener('change', () => {
+    const f = input.files && input.files[0];
+    input.remove();
+    if(!f) return;
+    if(tv.url) URL.revokeObjectURL(tv.url);
+    tv.url = URL.createObjectURL(f);
+    tv.el.src = tv.url;
+    tvStart(h);
+  });
+  document.body.appendChild(input);
+  input.click();
 }
 function tvOff(){ tv.on = false; if(tv.el) tv.el.pause(); }
 // is there still a TV at the spot (an unloaded spot counts as still there)
