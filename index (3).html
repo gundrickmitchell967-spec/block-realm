@@ -1,0 +1,1308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Block Realm</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#0b1020;font-family:'Courier New',monospace;color:#f4f1e4;user-select:none;-webkit-user-select:none}
+  canvas#c{position:fixed;inset:0;width:100vw;height:100vh;display:block;cursor:crosshair}
+  #cross{position:fixed;left:50%;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;pointer-events:none}
+  #cross:before,#cross:after{content:'';position:absolute;background:#fff;mix-blend-mode:difference}
+  #cross:before{left:8px;top:0;width:2px;height:18px}
+  #cross:after{top:8px;left:0;height:2px;width:18px}
+  #hud{position:fixed;left:12px;top:10px;font-size:13px;line-height:1.55;text-shadow:1px 1px 0 #000;pointer-events:none}
+  #hotbar{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:4px;max-width:100vw}
+  .slot{position:relative;width:76px;height:72px;border:3px solid #3a3f4c;background:rgba(10,12,18,.6);box-sizing:border-box;cursor:pointer;flex:0 0 auto;overflow:hidden}
+  .slot i{position:absolute;left:5px;right:5px;top:14px;bottom:26px;border:2px solid rgba(0,0,0,.45);background-repeat:no-repeat;image-rendering:pixelated}
+  .slot i.none{background:#1b1f2a}
+  .slot .key{position:absolute;left:3px;top:1px;font:bold 11px 'Courier New',monospace;color:#fff;text-shadow:1px 1px 0 #000}
+  .slot .nm{position:absolute;left:0;right:0;bottom:0;height:24px;padding:2px 2px 0;box-sizing:border-box;overflow:hidden;background:rgba(0,0,0,.35);font:bold 10px/12px 'Courier New',monospace;color:#fff;text-shadow:1px 1px 0 #000;text-align:center;word-break:break-word}
+  .slot .xbtn{position:absolute;top:1px;right:1px;width:18px;height:18px;padding:0;font:bold 13px/16px 'Courier New',monospace;background:#7a2a2a;color:#fff;border:1px solid #000;cursor:pointer;z-index:2}
+  .slot.sel{border-color:#ffe066}
+  #inv{position:fixed;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;background:rgba(8,12,22,.86)}
+  #invbox{width:min(800px,100%);max-height:100%;overflow:auto;box-sizing:border-box;padding:14px 16px;background:#161b26;border:3px solid #5b6578;display:flex;flex-direction:column;gap:8px;align-items:center}
+  #invbox h2{margin:0;font-size:22px;letter-spacing:.14em;text-shadow:2px 2px 0 #000}
+  .hint{margin:0;font-size:13px;line-height:1.5;color:#c9d1e0;text-align:center}
+  .lbl{align-self:flex-start;font:bold 12px 'Courier New',monospace;letter-spacing:.1em;color:#ffe066}
+  #invslots{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+  #catalog{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;width:100%}
+  .cat{display:flex;align-items:center;gap:8px;padding:6px;background:#222938;border:2px solid #3a3f4c;color:#fff;font:13px 'Courier New',monospace;text-align:left;cursor:pointer}
+  .cat:hover,.cat:focus-visible{border-color:#ffe066;outline:none}
+  .cat i{flex:0 0 auto;width:36px;height:36px;border:2px solid rgba(0,0,0,.45);background-repeat:no-repeat;image-rendering:pixelated}
+  .cat small{color:#ffe066;font-size:11px}
+  #invmsg{min-height:1.4em;margin:0;font-size:13px;color:#ffe066;text-align:center}
+  #selname{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);white-space:nowrap;font:bold 14px 'Courier New',monospace;color:#fff;text-shadow:1px 1px 0 #000,0 0 6px rgba(0,0,0,.6);background:rgba(0,0,0,.35);padding:2px 8px;pointer-events:none}
+  @media (max-width:700px){ #hotbar{gap:2px} .slot{width:44px;height:50px} .slot i{left:3px;right:3px;top:12px;bottom:3px} .slot .nm{display:none} .slot .key{font-size:9px} #selname{bottom:66px;font-size:12px} }
+  #menu{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(8,12,22,.72);padding:20px;text-align:center}
+  #menu h1{font-size:clamp(28px,7vw,52px);letter-spacing:.14em;margin:0 0 6px;text-shadow:3px 3px 0 #000}
+  #menu p{max-width:560px;line-height:1.6;color:#d4d9e6;font-size:14px;margin:6px 0}
+  .btn{font:bold 16px 'Courier New',monospace;width:260px;max-width:80vw;padding:12px;background:#2b3140;color:#fff;border:2px solid #5b6578;cursor:pointer;letter-spacing:.1em}
+  .btn:hover{background:#3d4558}
+  .btn:focus-visible,.slot:focus-visible{outline:3px solid #ffe066;outline-offset:2px}
+  #mpbox{display:flex;flex-direction:column;align-items:center;gap:8px;width:260px;max-width:80vw}
+  #mpbox input{font:14px 'Courier New',monospace;width:100%;box-sizing:border-box;padding:10px;background:#11151f;color:#fff;border:2px solid #5b6578}
+  #mpstatus{min-height:1.5em;color:#ffb3a7;font-size:13px;margin:0}
+  .tag{position:fixed;left:0;top:0;transform:translate(-50%,-100%);font-size:12px;background:rgba(0,0,0,.55);padding:2px 6px;white-space:nowrap;pointer-events:none;text-shadow:1px 1px 0 #000}
+  #chatlog{position:fixed;left:12px;bottom:96px;width:min(440px,70vw);max-height:260px;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;pointer-events:none;font-size:13px;line-height:1.35;text-shadow:1px 1px 0 #000;overflow:hidden}
+  .cl{background:rgba(0,0,0,.35);padding:2px 6px;word-break:break-word}
+  .cl.sys{color:#c9d1e0;font-style:italic}
+  .cl b{color:#ffe066;font-weight:bold}
+  #chatin{position:fixed;left:12px;bottom:96px;width:min(440px,70vw);box-sizing:border-box;font:14px 'Courier New',monospace;padding:8px;background:rgba(10,12,18,.9);color:#fff;border:2px solid #ffe066}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="cross"></div>
+<div id="hud"><div id="fps"></div><div id="pos"></div><div id="tgt"></div><div id="tm"></div><div id="mp"></div></div>
+<div id="tags"></div>
+<div id="chatlog" aria-live="polite"></div>
+<input id="chatin" maxlength="120" hidden aria-label="Chat message" placeholder="Type a message, Enter to send, Esc to cancel">
+<div id="selname"></div>
+<div id="hotbar"></div>
+<div id="menu">
+  <h1>BLOCK REALM</h1>
+  <div id="mainbtns" style="display:flex;flex-direction:column;align-items:center;gap:10px">
+    <button class="btn" id="play">PLAY</button>
+    <button class="btn" id="resume" hidden>RESUME</button>
+    <button class="btn" id="multi">MULTIPLAYER</button>
+    <button class="btn" id="leave" hidden>LEAVE SERVER</button>
+    <button class="btn" id="reset">RESET WORLD</button>
+    <button class="btn" id="sound">SOUND: ON</button>
+  </div>
+  <div id="mpbox" hidden>
+    <input id="mpname" maxlength="16" placeholder="Your name" aria-label="Your name">
+    <input id="mpurl" aria-label="Server address" placeholder="ws://localhost:8080/ws">
+    <button class="btn" id="mpgo">CONNECT</button>
+    <button class="btn" id="mpback">BACK</button>
+    <p id="mpstatus" role="status"></p>
+  </div>
+  <p>Mouse: look &middot; WASD: move &middot; Space: jump &middot; Shift: run<br>
+     Left click: break a block &middot; Right click: place the selected block<br>
+     1-8 or mouse wheel: choose an inventory slot &middot; E: block catalog (add or remove blocks)<br>
+     Right click a door: open or close it<br>
+     M: sound on or off &middot; Esc: pause and save<br>
+     Double-tap Space: fly (Space up, Shift down) &middot; T: chat with other players (multiplayer)</p>
+</div>
+
+<div id="inv" hidden>
+  <div id="invbox" role="dialog" aria-labelledby="invtitle">
+    <h2 id="invtitle">BLOCK CATALOG</h2>
+    <p class="hint">Click a block below to add it to your inventory. Click a slot to pick it, then add a block to replace it. Click the red × to remove a block.<br>Press <b>E</b> or <b>Esc</b> to close.</p>
+    <div class="lbl">YOUR INVENTORY (8 SLOTS)</div>
+    <div id="invslots"></div>
+    <div class="lbl">ALL BLOCKS</div>
+    <div id="catalog"></div>
+    <p id="invmsg" role="status"></p>
+    <button class="btn" id="invclose" type="button">CLOSE (E)</button>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ---------- settings and block types ---------- */
+const CS = 16, CH = 64;                 // chunk width and height in blocks
+const RD = 4;                           // render distance, in chunks
+const SEED = 1337;
+const DAY_LEN = 480;                    // seconds for one full day
+const PW = 0.3, PH = 1.8, EYE = 1.62;   // player width, height and eye height
+const SINGLE_ONLY = false;              // true in the build published as an artifact: no multiplayer (its sandbox blocks WebSockets)
+let mpMode = false;                     // true while connected to a server; the shared world then replaces the saved one
+// texture tiles in a 4x4 atlas: 0 grass top, 1 grass side, 2 dirt, 3 stone, 4 log side, 5 log top, 6 leaves,
+// 7 sand, 8 planks, 9 cobblestone, 10 brick
+const BLOCKS = [null,
+  {name:'Grass',       top:0, side:1, bot:2, sw:'#5ca040'},
+  {name:'Dirt',        top:2, side:2, bot:2, sw:'#86603c'},
+  {name:'Stone',       top:3, side:3, bot:3, sw:'#808084'},
+  {name:'Log',         top:5, side:4, bot:5, sw:'#8a6a40'},
+  {name:'Leaves',      top:6, side:6, bot:6, sw:'#3c7832'},
+  {name:'Sand',        top:7, side:7, bot:7, sw:'#dccf96'},
+  {name:'Planks',      top:8, side:8, bot:8, sw:'#b08450'},
+  {name:'Cobblestone', top:9, side:9, bot:9, sw:'#6e6e72'},
+  {name:'Brick',       top:10,side:10,bot:10,sw:'#96463a'},
+  {name:'Glass',       top:11,side:11,bot:11,sw:'#9fd8e6'},   // id 10: see-through
+  {name:'Lamp',        top:12,side:12,bot:12,sw:'#ffd76a'},   // id 11: always bright
+  {name:'Door',        top:13,side:13,bot:13,sw:'#7a4f2a'},   // id 12: right-click to open
+  {name:'Open door',   top:13,side:13,bot:13,sw:'#b98a55'}    // id 13: thin panel you can walk through
+];
+const GLASS_ID = 10, LAMP_ID = 11, DOOR_ID = 12, DOOR_OPEN_ID = 13;
+// solid blocks stop the player (an open door does not, and -1 means a chunk that is not loaded yet)
+function isSolidId(b){ return b!==0 && b!==DOOR_OPEN_ID; }
+// opaque blocks hide the faces behind them; glass lets you see through it
+function isOpaqueId(b){ return isSolidId(b) && b!==GLASS_ID; }
+const SLOTS = 8;                                       // the inventory has 8 slots
+const CATALOG = [1,2,3,4,5,6,7,8,9,10,11,12];          // every block a player can carry (the open door is a state, not an item)
+const DEFAULT_INV = [1,2,3,7,10,11,12,8];              // Grass, Dirt, Stone, Planks, Glass, Lamp, Door, Cobblestone
+const HOTBAR = DEFAULT_INV.slice();                    // the 8 inventory slots; null = empty slot (filled in by loadInv)
+const KEYS = ['1','2','3','4','5','6','7','8'];
+const KEYMAP = {Digit1:0,Digit2:1,Digit3:2,Digit4:3,Digit5:4,Digit6:5,Digit7:6,Digit8:7};
+// the six faces: outward normal n, two in-plane axes t1 and t2, and the face's base brightness
+const FACES = [
+  {n:[ 1,0,0], t1:[0,1,0], t2:[0,0,1], b:0.75},
+  {n:[-1,0,0], t1:[0,1,0], t2:[0,0,1], b:0.75},
+  {n:[0,1,0],  t1:[1,0,0], t2:[0,0,1], b:1.00},
+  {n:[0,-1,0], t1:[1,0,0], t2:[0,0,1], b:0.45},
+  {n:[0,0,1],  t1:[1,0,0], t2:[0,1,0], b:0.60},
+  {n:[0,0,-1], t1:[1,0,0], t2:[0,1,0], b:0.60}
+];
+const AO_B = [0.5, 0.66, 0.82, 1.0];   // brightness for 0..3 occluded corners
+
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+
+/* ---------- deterministic noise for the terrain ---------- */
+function rnd2(x,y,s){
+  let h = Math.imul(x|0,374761393) ^ Math.imul(y|0,668265263) ^ Math.imul(s|0,1442695041);
+  h = Math.imul(h ^ (h>>>13), 1274126177);
+  h ^= h>>>16;
+  return (h>>>0) / 4294967296;
+}
+function vnoise(x,y,s){
+  const xi=Math.floor(x), yi=Math.floor(y), xf=x-xi, yf=y-yi;
+  const u=xf*xf*(3-2*xf), v=yf*yf*(3-2*yf);
+  const a=rnd2(xi,yi,s), b=rnd2(xi+1,yi,s), c=rnd2(xi,yi+1,s), d=rnd2(xi+1,yi+1,s);
+  return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v;
+}
+function fbm(x,y,s){
+  let t=0, amp=0.5, f=1, norm=0;
+  for(let i=0;i<4;i++){ t+=amp*vnoise(x*f,y*f,s+i*7); norm+=amp; amp*=0.5; f*=2; }
+  return t/norm;
+}
+function heightAt(wx,wz){
+  const n = fbm(wx*0.011, wz*0.011, SEED)*0.7 + fbm(wx*0.045, wz*0.045, SEED+9)*0.3;
+  return clamp(Math.floor(20 + n*30), 6, 58);   // the top block sits at y = h-1
+}
+
+/* ---------- world storage: chunks are generated from the seed; edits are kept apart ---------- */
+const chunks = new Map();     // "cx,cz" -> chunk
+let edits = {};               // "cx,cz" -> { index: blockType }
+function chunkKey(cx,cz){ return cx+','+cz; }
+function loadEdits(){ try{ edits = JSON.parse(localStorage.getItem('blockrealm_edits_v1')||'{}') || {}; }catch(e){ edits = {}; } }
+function saveEdits(){ if(mpMode) return; try{ localStorage.setItem('blockrealm_edits_v1', JSON.stringify(edits)); }catch(e){} }
+
+function genChunk(cx,cz){
+  const data = new Uint8Array(CS*CS*CH);
+  const heights = new Int32Array(CS*CS);
+  for(let z=0;z<CS;z++) for(let x=0;x<CS;x++){
+    const wx=cx*CS+x, wz=cz*CS+z, h=heightAt(wx,wz), top=h-1, beach = top<=21;
+    heights[x+z*CS]=h;
+    for(let y=0;y<CH;y++){
+      let t=0;
+      if(y<=top){
+        if(y===0 || y<top-3) t=3;
+        else if(y<top) t = beach?7:2;
+        else t = beach?7:1;
+      }
+      data[x+z*CS+y*CS*CS]=t;
+    }
+  }
+  // trees: only where the whole canopy fits inside the chunk
+  for(let z=2;z<=CS-3;z++) for(let x=2;x<=CS-3;x++){
+    const wx=cx*CS+x, wz=cz*CS+z, h=heights[x+z*CS], top=h-1;
+    if(top<=21) continue;
+    if(rnd2(wx,wz,SEED+3) > 0.02) continue;
+    const trunk = 4 + Math.floor(rnd2(wx,wz,SEED+4)*2);
+    const set=(xx,yy,zz,t,onlyAir)=>{ if(xx<0||zz<0||xx>=CS||zz>=CS||yy<0||yy>=CH) return; const i=xx+zz*CS+yy*CS*CS; if(onlyAir && data[i]!==0) return; data[i]=t; };
+    for(let dy=trunk-2; dy<=trunk; dy++){
+      const r = dy>=trunk-1 ? 1 : 2;
+      for(let dz=-r;dz<=r;dz++) for(let dx=-r;dx<=r;dx++){
+        if(r===2 && Math.abs(dx)===2 && Math.abs(dz)===2) continue;
+        set(x+dx, h+dy, z+dz, 5, true);
+      }
+    }
+    for(let i=0;i<trunk;i++) set(x, h+i, z, 4, false);
+  }
+  const e = edits[chunkKey(cx,cz)];
+  if(e) for(const k in e) data[+k] = e[k];
+  return data;
+}
+function getBlock(wx,wy,wz){
+  if(wy<0 || wy>=CH) return 0;
+  const cx=Math.floor(wx/CS), cz=Math.floor(wz/CS);
+  const ch=chunks.get(chunkKey(cx,cz));
+  if(!ch) return -1;                          // not loaded yet: treated as solid
+  return ch.data[(wx-cx*CS) + (wz-cz*CS)*CS + wy*CS*CS];
+}
+function solidAt(wx,wy,wz){ return isSolidId(getBlock(wx,wy,wz)); }
+// records the change even when the chunk is not loaded, so it is applied when the chunk is generated later
+function setBlock(wx,wy,wz,t){
+  if(wy<0 || wy>=CH) return false;
+  const cx=Math.floor(wx/CS), cz=Math.floor(wz/CS);
+  const lx=wx-cx*CS, lz=wz-cz*CS, idx=lx+lz*CS+wy*CS*CS;
+  const k=chunkKey(cx,cz); (edits[k]||(edits[k]={}))[idx]=t;
+  const ch=chunks.get(k);
+  if(!ch) return true;
+  ch.data[idx]=t; ch.dirty=true;
+  // a block on the edge of a chunk also changes the faces of the neighbour
+  if(lx===0) markDirty(cx-1,cz); if(lx===CS-1) markDirty(cx+1,cz);
+  if(lz===0) markDirty(cx,cz-1); if(lz===CS-1) markDirty(cx,cz+1);
+  return true;
+}
+function markDirty(cx,cz){ const c=chunks.get(chunkKey(cx,cz)); if(c) c.dirty=true; }
+
+/* ---------- meshing: faces are only made where a block meets air, with simple corner shading ---------- */
+function tileOf(t,f){ const b=BLOCKS[t]; return f===2 ? b.top : f===3 ? b.bot : b.side; }
+// vertex layout: position (3), texture coordinates (2), tile (1), shade (1), glow (1) = 8 floats
+function buildMesh(ch){
+  const bx=ch.cx*CS, bz=ch.cz*CS;
+  const V=[], I=[];        // solid and lamp faces
+  const GV=[], GI=[];      // glass faces, drawn in a second, see-through pass
+  let nv=0, gnv=0;
+  for(let y=0;y<CH;y++) for(let z=0;z<CS;z++) for(let x=0;x<CS;x++){
+    const t=ch.data[x+z*CS+y*CS*CS]; if(!t) continue;
+    const wx=bx+x, wz=bz+z;
+    if(t===DOOR_OPEN_ID){
+      // an open door is a thin panel across the middle of the block, visible from both sides
+      const b0=nv;
+      for(const [qx,qy] of [[0,0],[1,0],[1,1],[0,1]]){
+        V.push(x+qx, y+qy, z+0.5, qx, qy, BLOCKS[DOOR_ID].top, 1, 0);
+        nv++;
+      }
+      I.push(b0,b0+1,b0+2, b0,b0+2,b0+3, b0,b0+2,b0+1, b0,b0+3,b0+2);
+      continue;
+    }
+    const isGlass = t===GLASS_ID, isLamp = t===LAMP_ID;
+    for(let f=0;f<6;f++){
+      const F=FACES[f], n=F.n, t1=F.t1, t2=F.t2;
+      const nb = getBlock(wx+n[0], y+n[1], wz+n[2]);
+      if(isGlass){ if(nb===GLASS_ID || isOpaqueId(nb)) continue; }   // glass against glass or a wall: hidden
+      else if(isOpaqueId(nb)) continue;
+      const tile=tileOf(t,f), ao=[0,0,0,0];
+      const glow = isLamp ? 1 : 0;
+      const base = isGlass ? gnv : nv;
+      const OUT = isGlass ? GV : V, IDX = isGlass ? GI : I;
+      for(let k=0;k<4;k++){
+        const a=(k===1||k===2)?1:0, b=(k>=2)?1:0;
+        const s1=a?1:-1, s2=b?1:-1;
+        const sd1=solidAt(wx+n[0]+s1*t1[0], y+n[1]+s1*t1[1], wz+n[2]+s1*t1[2]);
+        const sd2=solidAt(wx+n[0]+s2*t2[0], y+n[1]+s2*t2[1], wz+n[2]+s2*t2[2]);
+        const sdc=solidAt(wx+n[0]+s1*t1[0]+s2*t2[0], y+n[1]+s1*t1[1]+s2*t2[1], wz+n[2]+s1*t1[2]+s2*t2[2]);
+        ao[k] = (sd1&&sd2) ? 0 : 3 - ((sd1?1:0)+(sd2?1:0)+(sdc?1:0));
+        if(isLamp) ao[k] = 3;                      // lamps are not darkened by their corners
+        const px=x+(n[0]>0?1:0)+a*t1[0]+b*t2[0];
+        const py=y+(n[1]>0?1:0)+a*t1[1]+b*t2[1];
+        const pz=z+(n[2]>0?1:0)+a*t1[2]+b*t2[2];
+        const shade = isLamp ? 1 : F.b*AO_B[ao[k]];
+        OUT.push(px,py,pz, a,b, tile, shade, glow);
+        if(isGlass) gnv++; else nv++;
+      }
+      // the cross of the in-plane axes must point out of the block, or the face is wound the wrong way
+      const cr=[t1[1]*t2[2]-t1[2]*t2[1], t1[2]*t2[0]-t1[0]*t2[2], t1[0]*t2[1]-t1[1]*t2[0]];
+      const flip = (cr[0]*n[0]+cr[1]*n[1]+cr[2]*n[2]) < 0;
+      const tris = (ao[0]+ao[2] > ao[1]+ao[3]) ? [[1,2,3],[1,3,0]] : [[0,1,2],[0,2,3]];
+      for(const tr of tris){
+        if(flip) IDX.push(base+tr[0], base+tr[2], base+tr[1]);
+        else     IDX.push(base+tr[0], base+tr[1], base+tr[2]);
+      }
+    }
+  }
+  return {v:new Float32Array(V), i:new Uint32Array(I), gv:new Float32Array(GV), gi:new Uint32Array(GI)};
+}
+
+/* ---------- WebGL 2 setup ---------- */
+const cv = $('c');
+const GL = cv.getContext('webgl2', {antialias:false, alpha:false});
+if(!GL){ document.body.innerHTML = '<p style="padding:24px">This game needs WebGL 2, which this browser does not offer.</p>'; throw new Error('no webgl2'); }
+const gl = GL;
+function compile(type,src){
+  const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+function program(vs,fs){
+  const p=gl.createProgram();
+  gl.attachShader(p,compile(gl.VERTEX_SHADER,vs)); gl.attachShader(p,compile(gl.FRAGMENT_SHADER,fs));
+  gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  return p;
+}
+const prog = program(`#version 300 es
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec2 aUV;
+layout(location=2) in float aTile;
+layout(location=3) in float aShade;
+layout(location=4) in float aGlow;
+uniform mat4 uVP;
+uniform vec3 uOff;
+uniform vec3 uCam;
+out vec2 vUV; out float vTile; out float vShade; out float vDist; out float vGlow;
+void main(){
+  vec3 w = aPos + uOff;
+  gl_Position = uVP * vec4(w,1.0);
+  vUV = aUV; vTile = aTile; vShade = aShade; vGlow = aGlow;
+  vDist = distance(w, uCam);
+}`, `#version 300 es
+precision highp float;
+in vec2 vUV; in float vTile; in float vShade; in float vDist; in float vGlow;
+uniform sampler2D uAtlas;
+uniform float uLight;
+uniform float uAlpha;
+uniform vec3 uSky;
+uniform float uFogStart; uniform float uFogEnd;
+out vec4 o;
+void main(){
+  vec2 tile = vec2(mod(vTile,4.0), floor(vTile/4.0));
+  vec2 uvA = (tile + 0.03125 + clamp(vUV,0.0,1.0)*0.9375) / 4.0;
+  float lit = mix(uLight, 1.0, vGlow);          // lamps ignore the time of day
+  vec3 c = texture(uAtlas, uvA).rgb * vShade * lit;
+  float f = clamp((vDist - uFogStart) / (uFogEnd - uFogStart), 0.0, 1.0);
+  o = vec4(mix(c, uSky, f), uAlpha);
+}`);
+const line = program(`#version 300 es
+layout(location=0) in vec3 aPos;
+uniform mat4 uVP; uniform vec3 uOff;
+void main(){ gl_Position = uVP * vec4(aPos + uOff, 1.0); }`, `#version 300 es
+precision highp float;
+uniform vec4 uCol; out vec4 o;
+void main(){ o = uCol; }`);
+const U = {};
+for(const n of ['uVP','uOff','uCam','uLight','uSky','uFogStart','uFogEnd','uAtlas','uAlpha']) U[n]=gl.getUniformLocation(prog,n);
+const LU = {uVP:gl.getUniformLocation(line,'uVP'), uOff:gl.getUniformLocation(line,'uOff'), uCol:gl.getUniformLocation(line,'uCol')};
+
+// other players are drawn as plain shaded boxes: one program, one unit cube reused for every part
+const solid = program(`#version 300 es
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec3 aNor;
+uniform mat4 uVP; uniform mat4 uModel;
+out vec3 vNor;
+void main(){
+  vNor = mat3(uModel) * aNor;
+  gl_Position = uVP * uModel * vec4(aPos, 1.0);
+}`, `#version 300 es
+precision highp float;
+in vec3 vNor;
+uniform vec3 uCol; uniform float uLight;
+out vec4 o;
+void main(){
+  float s = 0.55 + 0.45 * max(dot(normalize(vNor), normalize(vec3(0.4, 1.0, 0.3))), 0.0);
+  o = vec4(uCol * s * uLight, 1.0);
+}`);
+const SU = {uVP:gl.getUniformLocation(solid,'uVP'), uModel:gl.getUniformLocation(solid,'uModel'), uCol:gl.getUniformLocation(solid,'uCol'), uLight:gl.getUniformLocation(solid,'uLight')};
+const cubeVAO = gl.createVertexArray();
+gl.bindVertexArray(cubeVAO);
+const cubeBuf = gl.createBuffer();
+{
+  const v=[];
+  for(const F of FACES){
+    const n=F.n, t1=F.t1, t2=F.t2;
+    for(const [a,b] of [[-1,-1],[1,-1],[1,1],[-1,-1],[1,1],[-1,1]]){
+      v.push(n[0]*0.5+t1[0]*a*0.5+t2[0]*b*0.5, n[1]*0.5+t1[1]*a*0.5+t2[1]*b*0.5, n[2]*0.5+t1[2]*a*0.5+t2[2]*b*0.5, n[0],n[1],n[2]);
+    }
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, cubeBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(v), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,3,gl.FLOAT,false,24,0);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1,3,gl.FLOAT,false,24,12);
+}
+gl.bindVertexArray(null);
+
+// the block atlas, drawn procedurally on a 64x64 canvas
+function makeAtlasCanvas(){
+  // 128x128 atlas, 4x4 tiles of 32 pixels. Each pattern is written at 16x16 and scaled up 2x,
+  // then fine grain is added so the texture reads as more detailed than before.
+  const c=document.createElement('canvas'); c.width=128; c.height=128;
+  const x=c.getContext('2d');
+  const g=(n,base,amp)=>base+(n-0.5)*amp;
+  const cb=v=>Math.max(0,Math.min(255,v|0));
+  function tile(i,fn){
+    const ox=(i%4)*32, oy=Math.floor(i/4)*32;
+    for(let py=0;py<32;py++) for(let px=0;px<32;px++){
+      const col=fn(px>>1,py>>1);
+      const grain=(rnd2(px,py,40+i)-0.5)*10;
+      x.fillStyle=`rgb(${cb(col[0]+grain)},${cb(col[1]+grain)},${cb(col[2]+grain)})`;
+      x.fillRect(ox+px,oy+py,1,1);
+    }
+  }
+  tile(0,(px,py)=>{ const n=rnd2(px,py,1); return [g(n,88,36),g(n,156,40),g(n,58,24)]; });              // grass top
+  tile(1,(px,py)=>{ const cut=3+(rnd2(px,0,5)>0.5?1:0); if(py<cut){ const n=rnd2(px,py,2); return [g(n,88,36),g(n,156,40),g(n,58,24)]; }
+                    const n=rnd2(px,py,3); return [g(n,132,40),g(n,94,34),g(n,58,26)]; });                  // grass side
+  tile(2,(px,py)=>{ const n=rnd2(px,py,4); return [g(n,132,40),g(n,94,34),g(n,58,26)]; });              // dirt
+  tile(3,(px,py)=>{ const n=rnd2(px,py,6); const crack=rnd2(px>>1,py>>1,7)<0.08 ? -26 : 0; return [g(n,126,44)+crack,g(n,126,44)+crack,g(n,130,44)+crack]; }); // stone
+  tile(4,(px,py)=>{ const n=rnd2(px,py,8); const d=(px%5===0)?-22:0; return [g(n,104,26)+d,g(n,74,22)+d,g(n,46,18)+d]; }); // log side
+  tile(5,(px,py)=>{ const d=Math.hypot(px-7.5,py-7.5); const ring=Math.floor(d)%2; const n=rnd2(px,py,9);
+                    return ring? [g(n,176,16),g(n,138,16),g(n,88,14)] : [g(n,150,16),g(n,112,16),g(n,66,14)]; }); // log top
+  tile(6,(px,py)=>{ const n=rnd2(px,py,10); if(n<0.12) return [30,70,30]; return [g(n,60,36),g(n,120,44),g(n,50,24)]; }); // leaves
+  tile(7,(px,py)=>{ const n=rnd2(px,py,11); return [g(n,222,20),g(n,208,20),g(n,152,20)]; });               // sand
+  tile(8,(px,py)=>{ const board=Math.floor(py/4), tint=board%2?-12:0; const n=rnd2(px,py,12);
+                    const seam=(py%4===0)||((px+board*5)%8===0); const d=seam?-40:0;
+                    return [g(n,176,18)+tint+d,g(n,132,18)+tint+d,g(n,80,14)+tint+d]; });                      // planks
+  tile(9,(px,py)=>{ const cell=rnd2(px>>2,py>>2,13); const mortar=(px%4===0)||(py%4===0); const n=rnd2(px,py,14);
+                    if(mortar) return [92,90,94]; return [g(cell,120,40)+(n-0.5)*12,g(cell,120,40)+(n-0.5)*12,g(cell,124,40)+(n-0.5)*12]; }); // cobblestone
+  tile(10,(px,py)=>{ const row=py>>2, mortar=(py%4===0)||((px+(row%2)*4)%8===0); const n=rnd2(px,py,15);
+                    if(mortar) return [206,198,190]; return [g(n,150,30),g(n,70,16),g(n,56,14)]; });                // brick
+  tile(11,(px,py)=>{ const edge=px<=1||px>=14||py<=1||py>=14; const shine=((px+py)%9===0);                         // glass
+                    if(edge) return [205,236,246]; if(shine) return [226,246,252]; return [150,206,224]; });
+  tile(12,(px,py)=>{ const d=Math.hypot(px-7.5,py-7.5); if(px<=1||px>=14||py<=1||py>=14) return [70,62,56];       // lamp
+                    if(d<3) return [255,252,224]; if(d<5.5) return [255,226,140]; return [222,168,80]; });
+  tile(13,(px,py)=>{ const n=rnd2(px,py,30); const seam=px%8===0;                                                 // wooden door
+                    const panel=((px>=2&&px<=6)||(px>=9&&px<=13))&&((py>=2&&py<=6)||(py>=9&&py<=13));
+                    if(px>=11&&px<=12&&py>=7&&py<=8) return [230,190,70];
+                    const base=seam?[90,56,30]:[134,88,48], d=panel?-14:0;
+                    return [g(n,base[0],14)+d, g(n,base[1],12)+d, g(n,base[2],10)+d]; });
+  return c;
+}
+const atlasTex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, atlasTex);
+gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+const ATLAS_CV = makeAtlasCanvas();
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ATLAS_CV);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+// outline around the block being looked at: the 12 edges of a cube
+const outlineVAO = gl.createVertexArray();
+gl.bindVertexArray(outlineVAO);
+const edgeVerts=[];
+for(let i=0;i<8;i++) for(const bit of [1,2,4]){
+  const j=i^bit; if(j<i) continue;
+  for(const c of [i,j]) edgeVerts.push((c&1)*1.004-0.002, ((c>>1)&1)*1.004-0.002, ((c>>2)&1)*1.004-0.002);
+}
+const outlineBuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, outlineBuf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(edgeVerts), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0);
+gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0);
+gl.bindVertexArray(null);
+
+const VERTEX_BYTES = 32;   // 8 floats per vertex
+function bindChunkAttribs(){
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,3,gl.FLOAT,false,VERTEX_BYTES,0);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1,2,gl.FLOAT,false,VERTEX_BYTES,12);
+  gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2,1,gl.FLOAT,false,VERTEX_BYTES,20);
+  gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3,1,gl.FLOAT,false,VERTEX_BYTES,24);
+  gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4,1,gl.FLOAT,false,VERTEX_BYTES,28);
+}
+function uploadChunk(ch, m){
+  // solid faces
+  if(!ch.vao){ ch.vao=gl.createVertexArray(); ch.vbo=gl.createBuffer(); ch.ibo=gl.createBuffer(); }
+  gl.bindVertexArray(ch.vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, ch.vbo); gl.bufferData(gl.ARRAY_BUFFER, m.v, gl.STATIC_DRAW);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ch.ibo); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, m.i, gl.STATIC_DRAW);
+  bindChunkAttribs();
+  ch.count = m.i.length;
+  // glass faces
+  if(!ch.gvao){ ch.gvao=gl.createVertexArray(); ch.gvbo=gl.createBuffer(); ch.gibo=gl.createBuffer(); }
+  gl.bindVertexArray(ch.gvao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, ch.gvbo); gl.bufferData(gl.ARRAY_BUFFER, m.gv, gl.STATIC_DRAW);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ch.gibo); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, m.gi, gl.STATIC_DRAW);
+  bindChunkAttribs();
+  ch.gcount = m.gi.length;
+  gl.bindVertexArray(null);
+}
+function disposeChunk(ch){
+  if(ch.vao){ gl.deleteVertexArray(ch.vao); gl.deleteBuffer(ch.vbo); gl.deleteBuffer(ch.ibo); }
+  if(ch.gvao){ gl.deleteVertexArray(ch.gvao); gl.deleteBuffer(ch.gvbo); gl.deleteBuffer(ch.gibo); }
+  ch.vao=null; ch.gvao=null;
+}
+
+/* ---------- matrices (column-major) ---------- */
+function perspective(fovy,aspect,n,f){
+  const t=1/Math.tan(fovy/2), nf=1/(n-f);
+  return [t/aspect,0,0,0, 0,t,0,0, 0,0,(f+n)*nf,-1, 0,0,2*f*n*nf,0];
+}
+function lookAt(e,c,up){
+  let zx=e[0]-c[0], zy=e[1]-c[1], zz=e[2]-c[2];
+  let l=Math.hypot(zx,zy,zz); zx/=l; zy/=l; zz/=l;
+  let xx=up[1]*zz-up[2]*zy, xy=up[2]*zx-up[0]*zz, xz=up[0]*zy-up[1]*zx;
+  l=Math.hypot(xx,xy,xz); xx/=l; xy/=l; xz/=l;
+  const yx=zy*xz-zz*xy, yy=zz*xx-zx*xz, yz=zx*xy-zy*xx;
+  return [xx,yx,zx,0, xy,yy,zy,0, xz,yz,zz,0,
+          -(xx*e[0]+xy*e[1]+xz*e[2]), -(yx*e[0]+yy*e[1]+yz*e[2]), -(zx*e[0]+zy*e[1]+zz*e[2]), 1];
+}
+function mul(a,b){
+  const o=new Array(16);
+  for(let c=0;c<4;c++) for(let r=0;r<4;r++){
+    let s=0; for(let k=0;k<4;k++) s+=a[k*4+r]*b[c*4+k];
+    o[c*4+r]=s;
+  }
+  return o;
+}
+
+/* ---------- player, physics and controls ---------- */
+const player = {x:8.5, y:40, z:8.5, vx:0, vy:0, vz:0, yaw:0, pitch:0, onGround:false, fly:false, lastSpace:0};
+let playing=false, sel=0, target=null, worldTime=DAY_LEN*0.3;
+const keys = {};
+function camDir(){
+  const cp=Math.cos(player.pitch);
+  return [-Math.sin(player.yaw)*cp, Math.sin(player.pitch), -Math.cos(player.yaw)*cp];
+}
+function collides(x,y,z){
+  const x0=Math.floor(x-PW), x1=Math.floor(x+PW-1e-4), z0=Math.floor(z-PW), z1=Math.floor(z+PW-1e-4);
+  const y0=Math.floor(y), y1=Math.floor(y+PH-1e-4);
+  for(let yy=y0;yy<=y1;yy++) for(let zz=z0;zz<=z1;zz++) for(let xx=x0;xx<=x1;xx++) if(isSolidId(getBlock(xx,yy,zz))) return true;
+  return false;
+}
+function moveAxis(axis,d){
+  if(d===0) return;
+  const P=player, steps=Math.ceil(Math.abs(d)/0.2), s=d/steps;
+  for(let i=0;i<steps;i++){
+    if(axis===0) P.x+=s; else if(axis===1) P.y+=s; else P.z+=s;
+    if(collides(P.x,P.y,P.z)){
+      // walking into a single block: step up onto it when there is room above
+      if((axis===0||axis===2) && P.onGround && !collides(P.x, P.y+1.02, P.z)){ P.y+=1.02; continue; }
+      if(axis===0) P.x-=s; else if(axis===1) P.y-=s; else P.z-=s;
+      if(axis===1){ if(s<0) P.onGround=true; P.vy=0; }
+      return;
+    }
+  }
+}
+function physics(dt){
+  const P=player;
+  let fw=(keys.KeyW?1:0)-(keys.KeyS?1:0), rt=(keys.KeyD?1:0)-(keys.KeyA?1:0);
+  // flying: no gravity, Space rises, Shift descends, and you move faster; blocks still stop you
+  const sp = P.fly ? 9.0 : ((keys.ShiftLeft||keys.ShiftRight) ? 6.0 : 4.3);
+  P.vx=0; P.vz=0;
+  if(fw||rt){
+    const len=Math.hypot(fw,rt); fw/=len; rt/=len;
+    P.vx=(-Math.sin(P.yaw)*fw + Math.cos(P.yaw)*rt)*sp;
+    P.vz=(-Math.cos(P.yaw)*fw - Math.sin(P.yaw)*rt)*sp;
+  }
+  if(P.fly){
+    P.vy = ((keys.Space?1:0) - ((keys.ShiftLeft||keys.ShiftRight)?1:0)) * 8;
+  } else {
+    P.vy-=26*dt; if(P.vy<-40) P.vy=-40;
+    if(keys.Space && P.onGround){ P.vy=8.6; sfx.jump(); }
+  }
+  P.onGround=false;
+  moveAxis(0,P.vx*dt);
+  moveAxis(2,P.vz*dt);
+  const impact = P.vy;                  // moveAxis clears vy when the player lands
+  moveAxis(1,P.vy*dt);
+  if(P.onGround && !P.wasGround && impact < -6) sfx.land();
+  P.wasGround = P.onGround;
+  if(P.onGround){
+    P.stepAcc = (P.stepAcc||0) + Math.hypot(P.vx,P.vz)*dt;
+    if(P.stepAcc > 2.3){
+      P.stepAcc = 0;
+      const under = getBlock(Math.floor(P.x), Math.floor(P.y-0.1), Math.floor(P.z));
+      sfx.step(under>0 ? under : 1);
+    }
+  }
+}
+function raycast(maxD){
+  const o=[player.x, player.y+EYE, player.z], d=camDir();
+  let x=Math.floor(o[0]), y=Math.floor(o[1]), z=Math.floor(o[2]);
+  const sx=d[0]>0?1:-1, sy=d[1]>0?1:-1, sz=d[2]>0?1:-1;
+  const tdx=Math.abs(1/(d[0]||1e-9)), tdy=Math.abs(1/(d[1]||1e-9)), tdz=Math.abs(1/(d[2]||1e-9));
+  let tmx = d[0]>0 ? (x+1-o[0])*tdx : (o[0]-x)*tdx;
+  let tmy = d[1]>0 ? (y+1-o[1])*tdy : (o[1]-y)*tdy;
+  let tmz = d[2]>0 ? (z+1-o[2])*tdz : (o[2]-z)*tdz;
+  let t=0, nx=0, ny=0, nz=0;
+  while(t<maxD){
+    if(tmx<tmy && tmx<tmz){ t=tmx; tmx+=tdx; x+=sx; nx=-sx; ny=0; nz=0; }
+    else if(tmy<tmz){ t=tmy; tmy+=tdy; y+=sy; ny=-sy; nx=0; nz=0; }
+    else { t=tmz; tmz+=tdz; z+=sz; nz=-sz; nx=0; ny=0; }
+    const b=getBlock(x,y,z);
+    if(b<0) return null;                       // ran into a chunk that is not loaded yet
+    if(b>0) return {x,y,z,nx,ny,nz,id:b};
+  }
+  return null;
+}
+function doBreak(){
+  const h=raycast(6); if(!h) return;
+  setBlock(h.x,h.y,h.z,0);
+  sfx.breakBlock(h.id);
+  mpSend({type:'edit', x:h.x, y:h.y, z:h.z, id:0});
+  flashHud('BROKE '+BLOCKS[h.id].name.toUpperCase());
+}
+// true if the box of block (x,y,z) overlaps the player
+function overlapsPlayer(x,y,z){
+  return x+1>player.x-PW && x<player.x+PW && z+1>player.z-PW && z<player.z+PW && y+1>player.y && y<player.y+PH;
+}
+// right-clicking a door opens it, or closes it again; a door will not close on the player
+function toggleDoor(h){
+  const closing = h.id===DOOR_OPEN_ID;   // an open door is what gets closed
+  if(closing && overlapsPlayer(h.x,h.y,h.z)) { flashHud('STEP OUT OF THE DOORWAY TO CLOSE IT'); return; }
+  const nid = closing ? DOOR_ID : DOOR_OPEN_ID;
+  setBlock(h.x,h.y,h.z,nid);
+  sfx.placeBlock(DOOR_ID);
+  mpSend({type:'edit', x:h.x, y:h.y, z:h.z, id:nid});
+  flashHud(closing ? 'DOOR CLOSED' : 'DOOR OPEN');
+}
+function doPlace(){
+  const h=raycast(6); if(!h) return;
+  if(h.id===DOOR_ID || h.id===DOOR_OPEN_ID){ toggleDoor(h); return; }
+  const id=HOTBAR[sel];
+  if(id==null){ flashHud('EMPTY SLOT: press E to choose a block'); return; }
+  const x=h.x+h.nx, y=h.y+h.ny, z=h.z+h.nz;
+  if(getBlock(x,y,z)!==0) return;
+  // never place a block inside the player
+  if(overlapsPlayer(x,y,z)) return;
+  setBlock(x,y,z,id);
+  sfx.placeBlock(id);
+  mpSend({type:'edit', x, y, z, id});
+}
+// ---------- inventory: 8 named slots along the bottom; E opens the block catalog ----------
+const INV_KEY = 'blockrealm_inv_v1';
+const ATLAS_URL = ATLAS_CV.toDataURL();      // the texture atlas as an image, used for the block icons
+// shows one 32-pixel tile of the atlas; a 400% background means each tile fills a quarter of the icon box
+function setIcon(el, t){
+  el.style.backgroundImage = 'url(' + ATLAS_URL + ')';
+  el.style.backgroundSize = '400% 400%';
+  el.style.backgroundPosition = ((t % 4) * 100 / 3) + '% ' + (Math.floor(t / 4) * 100 / 3) + '%';
+}
+function saveInv(){ try{ localStorage.setItem(INV_KEY, JSON.stringify(HOTBAR)); }catch(e){} }
+function loadInv(){
+  try{
+    const a = JSON.parse(localStorage.getItem(INV_KEY) || 'null');
+    if(Array.isArray(a) && a.length === SLOTS && a.every(v => v === null || (Number.isInteger(v) && v >= 1 && v <= 12))){
+      HOTBAR.splice(0, SLOTS, ...a); return;
+    }
+  }catch(e){}
+  HOTBAR.splice(0, SLOTS, ...DEFAULT_INV);
+}
+// one inventory slot; inInv adds the remove button used in the catalog
+function slotEl(i, inInv){
+  const id = HOTBAR[i];
+  const d = document.createElement('div');
+  d.className = 'slot';
+  d.title = id == null ? 'Empty slot' : BLOCKS[id].name;
+  const ic = document.createElement('i');
+  if(id == null) ic.className = 'none'; else setIcon(ic, BLOCKS[id].top);
+  d.appendChild(ic);
+  const k = document.createElement('span'); k.className = 'key'; k.textContent = KEYS[i]; d.appendChild(k);
+  const nm = document.createElement('span'); nm.className = 'nm';
+  nm.textContent = id == null ? 'EMPTY' : BLOCKS[id].name;
+  d.appendChild(nm);
+  if(inInv && id != null){
+    const x = document.createElement('button');
+    x.className = 'xbtn'; x.type = 'button'; x.textContent = '×'; x.title = 'Remove ' + BLOCKS[id].name;
+    x.onclick = e => { e.stopPropagation(); removeFromInv(i); };
+    d.appendChild(x);
+  }
+  d.onclick = () => { selectSlot(i); if(inInv) renderInv(); };
+  return d;
+}
+function markSel(){
+  document.querySelectorAll('#hotbar .slot').forEach((el, k) => el.classList.toggle('sel', k === sel));
+  document.querySelectorAll('#invslots .slot').forEach((el, k) => el.classList.toggle('sel', k === sel));
+}
+function selectSlot(i){
+  sel = i;
+  markSel();
+  $('selname').textContent = HOTBAR[i] == null
+    ? 'Selected: empty slot   (key ' + KEYS[i] + ')'
+    : 'Selected: ' + BLOCKS[HOTBAR[i]].name + '   (key ' + KEYS[i] + ')';
+}
+function buildHotbar(){
+  const hb = $('hotbar'); hb.innerHTML = '';
+  for(let i = 0; i < SLOTS; i++) hb.appendChild(slotEl(i, false));
+  selectSlot(sel);
+}
+function invMsg(text){ $('invmsg').textContent = text; }
+function renderInv(){
+  const slots = $('invslots'); slots.innerHTML = '';
+  for(let i = 0; i < SLOTS; i++) slots.appendChild(slotEl(i, true));
+  markSel();
+  const cat = $('catalog'); cat.innerHTML = '';
+  for(const id of CATALOG){
+    const b = document.createElement('button');
+    b.className = 'cat'; b.type = 'button'; b.title = BLOCKS[id].name;
+    const ic = document.createElement('i'); setIcon(ic, BLOCKS[id].top); b.appendChild(ic);
+    const t = document.createElement('span'); t.textContent = BLOCKS[id].name;
+    const at = HOTBAR.indexOf(id);
+    if(at >= 0){ const s = document.createElement('small'); s.textContent = '  key ' + KEYS[at]; t.appendChild(s); }
+    b.appendChild(t);
+    b.onclick = () => addToInv(id);
+    cat.appendChild(b);
+  }
+}
+function addToInv(id){
+  const name = BLOCKS[id].name;
+  if(HOTBAR.includes(id)){ invMsg(name + ' is already in your inventory'); return; }
+  let i = HOTBAR.indexOf(null);
+  if(i < 0){
+    i = sel;   // inventory is full: the selected slot gives way
+    invMsg('Inventory full: ' + (HOTBAR[i] == null ? 'empty' : BLOCKS[HOTBAR[i]].name) + ' replaced with ' + name);
+  } else invMsg('Added ' + name + ' to key ' + KEYS[i]);
+  HOTBAR[i] = id;
+  saveInv(); refreshInv();
+}
+function removeFromInv(i){
+  if(HOTBAR[i] == null) return;
+  invMsg('Removed ' + BLOCKS[HOTBAR[i]].name);
+  HOTBAR[i] = null;
+  saveInv(); refreshInv();
+}
+function refreshInv(){
+  buildHotbar();
+  if(invOpen) renderInv();
+}
+let invOpen = false;
+function openInv(){
+  if(!playing || chatOpen || invOpen) return;
+  invOpen = true;
+  for(const k in keys) keys[k] = false;
+  try{ document.exitPointerLock(); }catch(e){}
+  $('inv').hidden = false;
+  invMsg('');
+  renderInv();
+  $('invclose').focus();
+}
+function closeInv(){
+  if(!invOpen) return;
+  invOpen = false;
+  $('inv').hidden = true;
+  lockPointer();
+}
+$('invclose').addEventListener('click', closeInv);
+let flashT=0;
+function flashHud(text){ $('tm').textContent=text; flashT=2.0; }
+
+addEventListener('keydown',e=>{
+  if(chatOpen) return;                          // while typing in chat, keys belong to the chat box
+  if(e.code==='Space') e.preventDefault();
+  if(e.code==='KeyM' && !e.repeat && !(document.activeElement && document.activeElement.tagName==='INPUT')){ toggleSound(); return; }
+  if(invOpen){                                  // the catalog is open: only E or Esc do anything
+    if((e.code==='KeyE' || e.code==='Escape') && !e.repeat){ e.preventDefault(); closeInv(); }
+    return;
+  }
+  if(e.code==='KeyT' && playing && mpMode && !e.repeat){ e.preventDefault(); openChat(); return; }
+  if(e.code==='KeyE' && playing && !e.repeat){ e.preventDefault(); openInv(); return; }
+  if(!playing){ if(e.code==='Escape') pause(); return; }
+  if(e.code==='Escape'){ pause(); return; }
+  if(e.code==='Space' && !e.repeat){
+    // two quick taps of Space switch flying on or off
+    const now=performance.now();
+    if(now - player.lastSpace < 350){
+      player.fly = !player.fly; player.vy = 0;
+      flashHud(player.fly ? 'FLYING ON  (Space up, Shift down)' : 'FLYING OFF');
+    }
+    player.lastSpace = now;
+  }
+  keys[e.code]=true;
+  if(e.code in KEYMAP){ selectSlot(KEYMAP[e.code]); }
+});
+addEventListener('keyup',e=>{ keys[e.code]=false; });
+addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; });
+addEventListener('wheel',e=>{ if(playing && !invOpen) selectSlot((sel+(e.deltaY>0?1:-1)+SLOTS)%SLOTS); },{passive:true});
+document.addEventListener('mousemove',e=>{
+  if(!playing || document.pointerLockElement!==cv) return;
+  player.yaw -= e.movementX*0.0022;
+  player.pitch = clamp(player.pitch - e.movementY*0.0022, -1.55, 1.55);
+});
+function lockPointer(){
+  try{ const p = cv.requestPointerLock(); if(p && p.catch) p.catch(()=>{}); }catch(e){}
+}
+cv.addEventListener('mousedown',e=>{
+  if(!playing || invOpen) return;
+  if(document.pointerLockElement!==cv) lockPointer();   // a click after a join or a pause captures the mouse
+  if(document.pointerLockElement!==cv && e.button!==0) return;
+  if(e.button===0) doBreak(); else if(e.button===2) doPlace();
+});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+document.addEventListener('pointerlockchange',()=>{
+  if(!document.pointerLockElement && playing && !chatOpen && !invOpen) pause();   // releasing the mouse to type in chat or use the catalog is not a pause
+});
+
+/* ---------- sound: every effect is synthesised with Web Audio, so there are no sound files to load ---------- */
+const sfx = {
+  ctx:null, master:null, analyser:null, noiseBuf:null, on:true,
+  init(){
+    if(this.ctx){ if(this.ctx.state==='suspended') this.ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if(!AC) return;
+    try{
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = this.on ? 0.8 : 0;
+      this.analyser = this.ctx.createAnalyser(); this.analyser.fftSize = 512;
+      this.master.connect(this.analyser); this.analyser.connect(this.ctx.destination);
+      const len = this.ctx.sampleRate, buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate), d = buf.getChannelData(0);
+      for(let i=0;i<len;i++) d[i] = Math.random()*2-1;
+      this.noiseBuf = buf;
+    }catch(e){ this.ctx = null; }
+  },
+  setOn(v){
+    this.on = v;
+    if(this.master) this.master.gain.value = v ? 0.8 : 0;
+    try{ localStorage.setItem('blockrealm_sound_v1', v ? '1' : '0'); }catch(e){}
+  },
+  tone(f0, f1, dur, type, vol, g=1){
+    const c=this.ctx; if(!c || !this.on) return;
+    const t=c.currentTime, o=c.createOscillator(), gn=c.createGain();
+    o.type=type;
+    o.frequency.setValueAtTime(f0,t); o.frequency.exponentialRampToValueAtTime(Math.max(20,f1),t+dur);
+    gn.gain.setValueAtTime(0.0001,t); gn.gain.exponentialRampToValueAtTime(Math.max(0.0002,vol*g),t+0.008);
+    gn.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(gn); gn.connect(this.master); o.start(t); o.stop(t+dur+0.02);
+  },
+  noise(dur, vol, ftype, freq, q=1, g=1){
+    const c=this.ctx; if(!c || !this.on) return;
+    const t=c.currentTime, s=c.createBufferSource(), f=c.createBiquadFilter(), gn=c.createGain();
+    s.buffer=this.noiseBuf;
+    f.type=ftype; f.frequency.value=freq; f.Q.value=q;
+    gn.gain.setValueAtTime(Math.max(0.0002,vol*g),t); gn.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    s.connect(f); f.connect(gn); gn.connect(this.master);
+    s.start(t, Math.random()*0.8, dur+0.05); s.stop(t+dur+0.05);
+  },
+  step(id){
+    if(id===3 || id===9 || id===10){ this.noise(0.07,0.22,'bandpass',2400,1.2); this.tone(160,110,0.06,'triangle',0.08); }  // stone, cobble, brick
+    else if(id===4 || id===8){ this.tone(230,150,0.07,'triangle',0.12); this.noise(0.04,0.08,'highpass',1800); }           // wood and planks
+    else if(id===7){ this.noise(0.09,0.10,'highpass',3000); }                                                              // sand
+    else { this.noise(0.09,0.14,'lowpass',700); }                                                                          // grass, dirt, leaves
+  },
+  jump(){ this.tone(260,520,0.14,'sine',0.10); },
+  land(){ this.tone(140,55,0.18,'sine',0.25); this.noise(0.12,0.16,'lowpass',500); },
+  breakBlock(id,g=1){ this.noise(0.22,0.8,'bandpass',600+id*180,0.8,g); this.tone(240,90,0.12,'triangle',0.2,g); },
+  placeBlock(id,g=1){ this.tone(360,250,0.07,'square',0.08,g); this.noise(0.03,0.3,'bandpass',1400,2,g); },
+  click(){ this.tone(880,880,0.03,'square',0.04); }
+};
+sfx.on = (()=>{ try{ return localStorage.getItem('blockrealm_sound_v1') !== '0'; }catch(e){ return true; } })();
+function toggleSound(){
+  sfx.init();
+  sfx.setOn(!sfx.on);
+  $('sound').textContent = 'SOUND: ' + (sfx.on ? 'ON' : 'OFF');
+  if(sfx.on) sfx.click();
+}
+
+/* ---------- multiplayer: a small server keeps the shared world and relays players and block changes ---------- */
+const mp = { ws:null, id:0, others:new Map(), sendT:0, dropped:false };
+const SKIN_RGB = hexRGB('#e8c39e'), LEGS_RGB = hexRGB('#2d3a5c'), FACE_RGB = hexRGB('#2a1a10');
+// each part of a player model: centre and size, relative to the feet and facing direction
+const PARTS = [
+  {c:[0,1.1,0],    s:[0.5,0.7,0.3],   col:'body'},
+  {c:[-0.44,1.1,0],s:[0.2,0.7,0.2],   col:'body'},
+  {c:[0.44,1.1,0], s:[0.2,0.7,0.2],   col:'body'},
+  {c:[-0.15,0.37,0],s:[0.28,0.75,0.3],col:'legs'},
+  {c:[0.15,0.37,0],s:[0.28,0.75,0.3], col:'legs'},
+  {c:[0,1.6,0],    s:[0.5,0.5,0.5],   col:'skin'},
+  {c:[0,1.6,-0.26],s:[0.3,0.12,0.02], col:'face'}
+];
+function hexRGB(h){ const n=parseInt(h.slice(1),16); return [(n>>16&255)/255,(n>>8&255)/255,(n&255)/255]; }
+function partMatrix(px,py,pz,yaw,c,s){
+  const cs=Math.cos(yaw), sn=Math.sin(yaw);
+  const T=[1,0,0,0, 0,1,0,0, 0,0,1,0, px,py,pz,1];
+  const R=[cs,0,-sn,0, 0,1,0,0, sn,0,cs,0, 0,0,0,1];
+  const C=[1,0,0,0, 0,1,0,0, 0,0,1,0, c[0],c[1],c[2],1];
+  const S=[s[0],0,0,0, 0,s[1],0,0, 0,0,s[2],0, 0,0,0,1];
+  return mul(mul(mul(T,R),C),S);
+}
+function mpSend(msg){ if(mp.ws && mp.ws.readyState===1) mp.ws.send(JSON.stringify(msg)); }
+function mpStatus(t){ $('mpstatus').textContent=t; }
+function defaultWS(){
+  if(location.protocol==='http:' || location.protocol==='https:') return (location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws';
+  return 'ws://localhost:8080/ws';
+}
+function showMain(){ $('mainbtns').hidden=false; $('mpbox').hidden=true; }
+function showMP(){
+  $('mainbtns').hidden=true; $('mpbox').hidden=false;
+  let saved={}; try{ saved=JSON.parse(sessionStorage.getItem('blockrealm_mp')||'{}')||{}; }catch(e){}
+  if(!$('mpname').value) $('mpname').value = saved.name || '';
+  if(!$('mpurl').value) $('mpurl').value = saved.url || defaultWS();
+  $('mpname').focus();
+}
+function addRemote(p){
+  const tag=document.createElement('div'); tag.className='tag'; tag.textContent=p.name; tag.hidden=true;
+  $('tags').appendChild(tag);
+  mp.others.set(p.id, {id:p.id, name:p.name, rgb:hexRGB(p.color||'#4b9be6'),
+    x:p.x, y:p.y, z:p.z, yaw:p.yaw||0, tx:p.x, ty:p.y, tz:p.z, tyaw:p.yaw||0, tag});
+}
+function removeRemote(id){
+  const o=mp.others.get(id); if(!o) return;
+  o.tag.remove(); mp.others.delete(id);
+}
+function preloadAround(x,z){
+  const pcx=Math.floor(x/CS), pcz=Math.floor(z/CS);
+  for(let dz=-2;dz<=2;dz++) for(let dx=-2;dx<=2;dx++){
+    const cx=pcx+dx, cz=pcz+dz, k=chunkKey(cx,cz);
+    if(!chunks.has(k)) chunks.set(k,{cx,cz,data:genChunk(cx,cz),vao:null,vbo:null,ibo:null,count:0,dirty:true});
+  }
+  for(let dz=-2;dz<=2;dz++) for(let dx=-2;dx<=2;dx++) markDirty(pcx+dx,pcz+dz);
+  for(let i=0;i<40;i++) remesh();
+}
+function connectMP(){
+  if(mp.ws) return;
+  sfx.init();
+  const url = $('mpurl').value.trim() || defaultWS();
+  const name = ($('mpname').value.trim().replace(/[^\w \-.]/g,'').slice(0,16)) || 'Builder';
+  try{ sessionStorage.setItem('blockrealm_mp', JSON.stringify({url,name})); }catch(e){}
+  let ws;
+  try{ ws = new WebSocket(url); }catch(e){ mpStatus('That is not a valid server address.'); return; }
+  mp.ws = ws;
+  mpStatus('Connecting to ' + url + ' ...');
+  const timer = setTimeout(()=>{
+    if(!mpMode){ mpStatus('No answer from the server. Check the address and that the server is running.'); try{ ws.close(); }catch(e){} }
+  }, 6000);
+  ws.onopen = ()=>{ ws.send(JSON.stringify({type:'hello', name})); };
+  ws.onmessage = ev=>{
+    let m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
+    if(m.type==='welcome'){ clearTimeout(timer); enterWorld(m); }
+    else if(mpMode) onServerMessage(m);
+  };
+  ws.onclose = ()=>{
+    clearTimeout(timer);
+    mp.ws = null;
+    if(mpMode){ mpDropped(); }
+    else { mpStatus('Could not connect. Check the address and that the server is running.'); }
+  };
+}
+function enterWorld(m){
+  mpMode = true; mp.id = m.id;
+  for(const k in edits) delete edits[k];
+  for(const [x,y,z,t] of m.edits) setBlock(x,y,z,t);
+  for(const ch of chunks.values()) disposeChunk(ch);
+  chunks.clear();
+  const sx = 8.5 + (m.id % 4) * 2, sz = 8.5;
+  player.x = sx; player.z = sz; player.vx = player.vy = player.vz = 0;
+  player.y = heightAt(Math.floor(sx), Math.floor(sz)) + 3;
+  preloadAround(sx, sz);
+  mp.others.clear();
+  for(const p of m.players) addRemote(p);
+  mp.sendT = 0;
+  start();
+}
+function onServerMessage(m){
+  if(m.type==='join'){ removeRemote(m.id); addRemote(m); }
+  else if(m.type==='leave'){ removeRemote(m.id); }
+  else if(m.type==='chat'){ addChatLine(String(m.name||'Player'), String(m.text||''), 'chat'); }
+  else if(m.type==='system'){ addChatLine('', String(m.text||''), 'system'); }
+  else if(m.type==='move'){
+    const o=mp.others.get(m.id); if(!o) return;
+    o.tx=m.x; o.ty=m.y; o.tz=m.z; o.tyaw=m.yaw;
+  }
+  else if(m.type==='edit'){
+    if(m.by===mp.id) return;                       // already applied locally
+    const prev = getBlock(m.x,m.y,m.z);
+    if(!setBlock(m.x,m.y,m.z,m.id)) return;
+    const d = Math.hypot(m.x+0.5-player.x, m.y+0.5-player.y, m.z+0.5-player.z);
+    const g = Math.max(0, 1 - d/28);
+    if(g>0){ if(m.id===0) sfx.breakBlock(prev>0?prev:3, g); else sfx.placeBlock(m.id, g); }
+  }
+}
+function mpDropped(){
+  if(mp.dropped) return;
+  mp.dropped = true;
+  playing = false;
+  $('menu').hidden = false; showMP();
+  mpStatus('Lost the connection to the server. Reloading...');
+  try{ sessionStorage.setItem('blockrealm_notice','lost'); }catch(e){}
+  setTimeout(()=>location.reload(), 2500);
+}
+function leaveServer(){
+  mp.dropped = true;
+  try{ if(mp.ws) mp.ws.close(); }catch(e){}
+  location.reload();
+}
+
+/* ---------- chat: press T in multiplayer, type, press Enter ---------- */
+let chatOpen = false;
+function openChat(){
+  chatOpen = true;
+  for(const k in keys) keys[k] = false;
+  $('chatin').value = ''; $('chatin').hidden = false;
+  try{ document.exitPointerLock(); }catch(e){}
+  $('chatin').focus();
+}
+function closeChat(){
+  chatOpen = false;
+  $('chatin').hidden = true; $('chatin').blur();
+  lockPointer();
+}
+function sendChat(){
+  const text = $('chatin').value.replace(/[\u0000-\u001f]/g,'').trim().slice(0,120);
+  if(text) mpSend({type:'chat', text});
+  closeChat();
+}
+function addChatLine(name, text, kind){
+  const log = $('chatlog');
+  const line = document.createElement('div');
+  line.className = kind === 'system' ? 'cl sys' : 'cl';
+  if(kind !== 'system'){
+    const who = document.createElement('b'); who.textContent = name + ': '; line.appendChild(who);
+  }
+  line.appendChild(document.createTextNode(text));   // text is never treated as HTML
+  log.appendChild(line);
+  while(log.children.length > 12) log.removeChild(log.firstChild);
+}
+$('chatin').addEventListener('keydown', e=>{
+  e.stopPropagation();
+  if(e.key === 'Enter'){ e.preventDefault(); sendChat(); }
+  else if(e.key === 'Escape'){ e.preventDefault(); closeChat(); }
+});
+
+/* ---------- saving ---------- */
+function savePlayer(){
+  if(mpMode) return;
+  try{ localStorage.setItem('blockrealm_player_v1', JSON.stringify({x:player.x,y:player.y,z:player.z,yaw:player.yaw,pitch:player.pitch,t:worldTime})); }catch(e){}
+}
+function loadPlayer(){
+  try{
+    const s=JSON.parse(localStorage.getItem('blockrealm_player_v1')||'null');
+    if(s){ Object.assign(player,{x:s.x,y:s.y,z:s.z,yaw:s.yaw,pitch:s.pitch}); worldTime=s.t||worldTime; return true; }
+  }catch(e){}
+  return false;
+}
+let resetting=false;   // set during a world reset so the page-unload save does not write the old edits back
+function saveAll(){ if(resetting) return; saveEdits(); savePlayer(); }
+
+/* ---------- starting, pausing and resetting ---------- */
+let played=false;
+// which menu buttons make sense right now
+function menuState(){
+  $('play').hidden = played || mpMode;
+  $('resume').hidden = !played;
+  $('multi').hidden = played || SINGLE_ONLY;
+  $('leave').hidden = !mpMode;
+  $('reset').hidden = mpMode;
+  $('sound').textContent = 'SOUND: ' + (sfx.on ? 'ON' : 'OFF');
+}
+function start(){
+  sfx.init();
+  played = true;
+  $('menu').hidden=true; playing=true; keys.__reset=false;
+  lockPointer();
+  lastT=performance.now();
+}
+function pause(){
+  if(!playing && !$('menu').hidden) return;
+  if(invOpen){ invOpen=false; $('inv').hidden=true; }
+  playing=false; for(const k in keys) keys[k]=false;
+  saveAll();
+  menuState();
+  showMain();
+  $('menu').hidden=false;
+  if(document.pointerLockElement){ try{ document.exitPointerLock(); }catch(e){} }
+}
+$('play').addEventListener('click',start);
+$('resume').addEventListener('click',start);
+$('multi').addEventListener('click',showMP);
+$('mpback').addEventListener('click',showMain);
+$('mpgo').addEventListener('click',connectMP);
+$('mpname').addEventListener('keydown',e=>{ if(e.key==='Enter') connectMP(); });
+$('mpurl').addEventListener('keydown',e=>{ if(e.key==='Enter') connectMP(); });
+$('leave').addEventListener('click',leaveServer);
+$('sound').addEventListener('click',()=>{ sfx.init(); toggleSound(); });
+$('reset').addEventListener('click',()=>{
+  if(!confirm('Reset the world? All blocks you placed or broke will be lost.')) return;
+  resetting=true;
+  try{ localStorage.removeItem('blockrealm_edits_v1'); localStorage.removeItem('blockrealm_player_v1'); }catch(e){}
+  location.reload();
+});
+
+/* ---------- chunk loading and meshing ---------- */
+let meshBudget=3, genBudget=3;
+function ensureChunks(){
+  const pcx=Math.floor(player.x/CS), pcz=Math.floor(player.z/CS);
+  const want=[];
+  for(let dz=-RD;dz<=RD;dz++) for(let dx=-RD;dx<=RD;dx++){
+    const d=dx*dx+dz*dz; if(d<=RD*RD+RD) want.push([pcx+dx,pcz+dz,d]);
+  }
+  want.sort((a,b)=>a[2]-b[2]);
+  let made=0;
+  for(const [cx,cz] of want){
+    if(made>=genBudget) break;
+    const k=chunkKey(cx,cz);
+    if(chunks.has(k)) continue;
+    const ch={cx,cz,data:genChunk(cx,cz),vao:null,vbo:null,ibo:null,count:0,dirty:true};
+    chunks.set(k,ch); made++;
+    markDirty(cx+1,cz); markDirty(cx-1,cz); markDirty(cx,cz+1); markDirty(cx,cz-1);
+  }
+  for(const [k,ch] of chunks){
+    if(Math.max(Math.abs(ch.cx-pcx),Math.abs(ch.cz-pcz))>RD+2){ disposeChunk(ch); chunks.delete(k); }
+  }
+}
+function remesh(){
+  const pcx=Math.floor(player.x/CS), pcz=Math.floor(player.z/CS);
+  const dirty=[];
+  for(const ch of chunks.values()) if(ch.dirty) dirty.push(ch);
+  dirty.sort((a,b)=>(Math.abs(a.cx-pcx)+Math.abs(a.cz-pcz))-(Math.abs(b.cx-pcx)+Math.abs(b.cz-pcz)));
+  for(let i=0;i<Math.min(meshBudget,dirty.length);i++){
+    const ch=dirty[i];
+    uploadChunk(ch, buildMesh(ch));
+    ch.dirty=false;
+  }
+}
+
+/* ---------- sky and light ---------- */
+function daylight(){
+  const t=(worldTime/DAY_LEN)%1, sun=-Math.cos(t*Math.PI*2);
+  return clamp((sun+0.25)/0.45,0,1);
+}
+
+/* ---------- rendering ---------- */
+let lastT=performance.now();
+function resize(){
+  const dpr=Math.min(1.5,window.devicePixelRatio||1);
+  const w=Math.floor(innerWidth*dpr), h=Math.floor(innerHeight*dpr);
+  if(cv.width!==w||cv.height!==h){ cv.width=w; cv.height=h; }
+  gl.viewport(0,0,cv.width,cv.height);
+}
+function render(){
+  resize();
+  const dl=daylight();
+  const night=[0.03,0.04,0.10], day=[0.47,0.70,1.0];
+  const sky=[0,1,2].map(i=>night[i]+(day[i]-night[i])*dl);
+  gl.clearColor(sky[0],sky[1],sky[2],1);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
+  const eye=[player.x, player.y+EYE, player.z];
+  const d=camDir();
+  const V=lookAt(eye,[eye[0]+d[0],eye[1]+d[1],eye[2]+d[2]],[0,1,0]);
+  const Pm=perspective(70*Math.PI/180, cv.width/cv.height, 0.05, 600);
+  const VP=mul(Pm,V);
+  gl.useProgram(prog);
+  gl.uniformMatrix4fv(U.uVP,false,new Float32Array(VP));
+  gl.uniform3f(U.uCam,eye[0],eye[1],eye[2]);
+  gl.uniform1f(U.uLight,0.2+0.8*dl);
+  gl.uniform3f(U.uSky,sky[0],sky[1],sky[2]);
+  gl.uniform1f(U.uFogStart,(RD-1)*CS);
+  gl.uniform1f(U.uFogEnd,(RD+0.6)*CS);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,atlasTex); gl.uniform1i(U.uAtlas,0);
+  // opaque pass
+  gl.uniform1f(U.uAlpha,1.0);
+  for(const ch of chunks.values()){
+    if(!ch.count || !ch.vao) continue;
+    gl.uniform3f(U.uOff,ch.cx*CS,0,ch.cz*CS);
+    gl.bindVertexArray(ch.vao);
+    gl.drawElements(gl.TRIANGLES,ch.count,gl.UNSIGNED_INT,0);
+  }
+  // glass pass: blended, drawn after the opaque blocks, no depth writes
+  gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+  gl.depthMask(false);
+  gl.uniform1f(U.uAlpha,0.45);
+  for(const ch of chunks.values()){
+    if(!ch.gcount || !ch.gvao) continue;
+    gl.uniform3f(U.uOff,ch.cx*CS,0,ch.cz*CS);
+    gl.bindVertexArray(ch.gvao);
+    gl.drawElements(gl.TRIANGLES,ch.gcount,gl.UNSIGNED_INT,0);
+  }
+  gl.depthMask(true);
+  gl.disable(gl.BLEND);
+  // the outline of the block being looked at
+  if(target){
+    gl.disable(gl.CULL_FACE);
+    gl.useProgram(line);
+    gl.uniformMatrix4fv(LU.uVP,false,new Float32Array(VP));
+    gl.uniform3f(LU.uOff,target.x,target.y,target.z);
+    gl.uniform4f(LU.uCol,0.05,0.05,0.05,1);
+    gl.bindVertexArray(outlineVAO);
+    gl.drawArrays(gl.LINES,0,24);
+    gl.enable(gl.CULL_FACE);
+  }
+  // other players
+  if(mpMode && mp.others.size){
+    gl.disable(gl.CULL_FACE);
+    gl.useProgram(solid);
+    gl.uniformMatrix4fv(SU.uVP,false,new Float32Array(VP));
+    gl.uniform1f(SU.uLight,0.25+0.75*dl);
+    gl.bindVertexArray(cubeVAO);
+    for(const o of mp.others.values()){
+      for(const P of PARTS){
+        const col = P.col==='body' ? o.rgb : P.col==='legs' ? LEGS_RGB : P.col==='skin' ? SKIN_RGB : FACE_RGB;
+        gl.uniform3f(SU.uCol,col[0],col[1],col[2]);
+        gl.uniformMatrix4fv(SU.uModel,false,new Float32Array(partMatrix(o.x,o.y,o.z,o.yaw,P.c,P.s)));
+        gl.drawArrays(gl.TRIANGLES,0,36);
+      }
+    }
+    gl.enable(gl.CULL_FACE);
+    // name tags sit above each head
+    for(const o of mp.others.values()){
+      const p = projectPoint(VP, o.x, o.y+2.05, o.z);
+      if(p){ o.tag.hidden=false; o.tag.style.left=p[0]+'px'; o.tag.style.top=p[1]+'px'; }
+      else o.tag.hidden=true;
+    }
+  }
+  gl.bindVertexArray(null);
+}
+function projectPoint(m,x,y,z){
+  const cw = m[3]*x + m[7]*y + m[11]*z + m[15];
+  if(cw <= 0.01) return null;
+  const nx = (m[0]*x + m[4]*y + m[8]*z + m[12]) / cw;
+  const ny = (m[1]*x + m[5]*y + m[9]*z + m[13]) / cw;
+  return [(nx*0.5+0.5)*innerWidth, (1-(ny*0.5+0.5))*innerHeight];
+}
+
+/* ---------- HUD ---------- */
+let hudT=0, fpsN=0, fpsT=0, fps=0;
+function hud(dt){
+  hudT-=dt;
+  fpsN++; fpsT+=dt; if(fpsT>=0.5){ fps=Math.round(fpsN/fpsT); fpsN=0; fpsT=0; }
+  if(flashT>0){ flashT-=dt; if(flashT<=0) $('tm').textContent=''; }
+  if(hudT>0) return;
+  hudT=0.15;
+  const t=target? BLOCKS[target.id].name : '';
+  $('fps').textContent='FPS '+fps+'   CHUNKS '+chunks.size;
+  $('pos').textContent='X '+player.x.toFixed(1)+'  Y '+player.y.toFixed(1)+'  Z '+player.z.toFixed(1)+(player.fly?'  FLYING':'');
+  $('tgt').textContent=t?'LOOKING AT '+t.toUpperCase():'';
+  $('mp').textContent = mpMode ? 'ONLINE: ' + (mp.others.size+1) + ' PLAYER' + (mp.others.size ? 'S' : '') + '  (you are ' + mp.id + ')' + (document.pointerLockElement ? '' : '   CLICK THE GAME TO LOOK AROUND') : '';
+  const h=Math.floor(((worldTime/DAY_LEN)%1)*24);
+  $('tm').textContent = $('tm').textContent || (daylight()>0.5 ? 'DAY' : 'NIGHT')+'  '+String(h).padStart(2,'0')+':00';
+}
+
+/* ---------- main loop ---------- */
+function frame(now){
+  const dt=Math.min(0.05,(now-lastT)/1000); lastT=now;
+  if(playing){
+    worldTime+=dt;
+    physics(dt);
+    target=raycast(6);
+  } else target=null;
+  if(playing && mpMode){
+    mp.sendT -= dt;
+    if(mp.sendT <= 0){ mp.sendT = 0.1; mpSend({type:'move', x:player.x, y:player.y, z:player.z, yaw:player.yaw, pitch:player.pitch}); }
+  }
+  for(const o of mp.others.values()){            // ease other players toward their last reported position
+    const k = 1 - Math.exp(-dt*12);
+    o.x += (o.tx-o.x)*k; o.y += (o.ty-o.y)*k; o.z += (o.tz-o.z)*k;
+    let d = o.tyaw - o.yaw; d = Math.atan2(Math.sin(d), Math.cos(d)); o.yaw += d*k;
+  }
+  ensureChunks();
+  remesh();
+  render();
+  hud(dt);
+  if(playing) { saveT=(saveT||0)+dt; if(saveT>10){ saveT=0; saveAll(); } }
+  requestAnimationFrame(frame);
+}
+let saveT=0;
+
+/* ---------- start-up ---------- */
+loadEdits();
+loadInv();
+buildHotbar();
+{
+  // generate the chunks under the player before the first frame, so there is ground to stand on
+  const spawnH=heightAt(8,8);
+  if(!loadPlayer()){ player.x=8.5; player.z=8.5; player.y=spawnH+0.2; }
+  const pcx=Math.floor(player.x/CS), pcz=Math.floor(player.z/CS);
+  for(let dz=-2;dz<=2;dz++) for(let dx=-2;dx<=2;dx++){
+    const cx=pcx+dx, cz=pcz+dz;
+    chunks.set(chunkKey(cx,cz),{cx,cz,data:genChunk(cx,cz),vao:null,vbo:null,ibo:null,count:0,dirty:true});
+  }
+  for(let dz=-2;dz<=2;dz++) for(let dx=-2;dx<=2;dx++){ markDirty(pcx+dx,pcz+dz); }
+  for(let i=0;i<40;i++){ remesh(); }
+}
+addEventListener('beforeunload',saveAll);
+menuState();
+try{
+  if(sessionStorage.getItem('blockrealm_notice')){
+    sessionStorage.removeItem('blockrealm_notice');
+    $('menu').hidden=false; showMP();
+    mpStatus('The connection to the server was lost. Connect again to rejoin.');
+  }
+}catch(e){}
+requestAnimationFrame(frame);
+
+// for testing from the outside
+window.VOX = {
+  chunks, player, keys, getBlock, setBlock, raycast, start, pause, selectSlot,
+  get playing(){ return playing; }, get target(){ return target; },
+  doBreak, doPlace, daylight, get worldTime(){ return worldTime; }, set worldTime(v){ worldTime=v; },
+  BLOCKS, HOTBAR, KEYS, CATALOG, DEFAULT_INV, GLASS_ID, LAMP_ID, DOOR_ID, DOOR_OPEN_ID, toggleDoor, overlapsPlayer,
+  openInv, closeInv, addToInv, removeFromInv, get invOpen(){ return invOpen; },
+  get sel(){ return sel; }, get selLabel(){ return $('selname').textContent; },
+  mp, sfx, connectMP, toggleSound, enterWorld,
+  get mpMode(){ return mpMode; }, get remotes(){ return mp.others.size; },
+  // loudest sample in the last analyser window, to confirm that sound is actually produced
+  sfxPeak(){
+    const a = sfx.analyser; if(!a) return 0;
+    const d = new Float32Array(a.fftSize); a.getFloatTimeDomainData(d);
+    let m=0; for(const v of d) m=Math.max(m,Math.abs(v)); return m;
+  }
+};
+</script>
+</body>
+</html>
