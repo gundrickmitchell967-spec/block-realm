@@ -233,6 +233,30 @@
 #mappanel .mapbtns{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
 #mappanel .mapbtns .btn{width:auto;padding:8px 10px;font-size:12px}
 #mappanel .hint{margin:0;font-size:12px;text-align:center}
+  #casinopanel{max-width:520px}
+  #casinotabs{display:flex;gap:6px}
+  #bets{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center}
+  #bets .chip{min-width:58px;padding:6px 8px;font:inherit;font-size:12px;background:#2a3142;color:#ffe066;border:2px solid #5b6578;cursor:pointer}
+  #bets .chip:hover{background:#384158}
+  #slotbet{width:130px;font:inherit;font-size:16px;text-align:center;padding:6px;background:#0d1119;color:#ffe066;border:2px solid #5b6578}
+  #casinoslots,#casinowheel{display:flex;flex-direction:column;align-items:center;gap:10px;width:100%}
+  #cabinet{width:100%;box-sizing:border-box;padding:12px;border-radius:14px;background:linear-gradient(#d8323f,#8d1521);border:4px solid #f0c446;box-shadow:0 0 18px rgba(240,196,70,.35);display:flex;flex-direction:column;align-items:center;gap:10px}
+  #marquee{font-size:22px;font-weight:bold;letter-spacing:.2em;color:#fff3b0;text-shadow:0 0 8px #ffd23f,0 0 16px #ff9d00;animation:marq 1.2s steps(2,end) infinite}
+  @keyframes marq{50%{text-shadow:0 0 14px #fff,0 0 24px #ffb300}}
+  #reelwin{display:flex;gap:8px;padding:10px;background:#0c0f16;border:4px solid #f0c446;border-radius:8px}
+  .reel{display:flex;align-items:center;justify-content:center;width:82px;height:86px;background:#f7f4ea;border:2px solid #222;border-radius:6px;font-weight:900;font-size:26px;color:#111;box-shadow:inset 0 -10px 14px rgba(0,0,0,.15)}
+  .reel.SEVEN{color:#d01a1a;font-size:46px}
+  .reel.BAR{color:#111;font-size:17px;background:#fff}
+  .reel.BELL{color:#b8860b;font-size:30px}
+  .reel.CHERRY{color:#c4162a;font-size:19px}
+  .reel.LEMON{color:#c9a400;font-size:19px}
+  .reel.PLUM{color:#7a2fb0;font-size:19px}
+  .reel.spin{filter:blur(1.5px)}
+  #wheelcv{width:260px;height:260px;max-width:100%}
+  .streakday{display:inline-flex;width:34px;height:34px;align-items:center;justify-content:center;border:2px solid #5b6578;background:#0d1119;color:#9aa3b5;font-weight:bold;margin:0 2px}
+  .streakday.done{background:#2f7d4f;color:#fff;border-color:#7ee39a}
+  .streakday.today{border-color:#ffe066;color:#ffe066;box-shadow:0 0 8px #ffe066}
+  #jobpick{font:inherit;padding:6px;background:#0d1119;color:#ffe066;border:2px solid #5b6578;max-width:100%}
 </style>
 </head>
 <body>
@@ -455,12 +479,29 @@
   <div id="casinopanel" role="dialog" aria-labelledby="casinotitle">
     <h2 id="casinotitle">CASINO</h2>
     <p class="hint" id="casinocoins"></p>
+    <div id="casinotabs"><button class="tab on" type="button" data-ctab="slots">SLOTS</button><button class="tab" type="button" data-ctab="wheel">WHEEL</button></div>
+    <div id="bets">
+      <button class="chip" type="button" data-add="10">+10</button>
+      <button class="chip" type="button" data-add="100">+100</button>
+      <button class="chip" type="button" data-add="1000">+1000</button>
+      <button class="chip" type="button" data-add="max">MAX</button>
+      <button class="chip" type="button" data-add="0">CLEAR</button>
+      <input id="slotbet" type="number" min="1" max="50000" step="1" value="10" aria-label="Bet" placeholder="Bet">
+    </div>
     <div id="casinoslots">
-      <p class="hint">Three reels. Three SEVENs pays 60 times your bet, three of anything else pays 8 times, and two alike gets your bet back. Otherwise the bet is lost.</p>
-      <div id="slotreels" aria-live="polite"><span id="reel0">?</span><span id="reel1">?</span><span id="reel2">?</span></div>
-      <input id="slotbet" type="number" min="1" max="1000" step="1" value="10" aria-label="Bet" placeholder="Bet">
+      <div id="cabinet">
+        <div id="marquee">LUCKY 7</div>
+        <div id="reelwin"><span class="reel" id="reel0">?</span><span class="reel" id="reel1">?</span><span class="reel" id="reel2">?</span></div>
+      </div>
       <button class="btn" id="slotspin" type="button">SPIN</button>
       <p class="hint" id="slotmsg"></p>
+      <p class="hint">Three SEVENs pays 60 times your bet. Three of anything else pays 8 times. Two alike gets your bet back. Otherwise the bet is lost.</p>
+    </div>
+    <div id="casinowheel" hidden>
+      <canvas id="wheelcv" width="300" height="300" aria-label="Prize wheel"></canvas>
+      <button class="btn" id="wheelspin" type="button">SPIN THE WHEEL</button>
+      <p class="hint" id="wheelmsg"></p>
+      <p class="hint">The wheel has 30 segments: 0x (the bet is lost) most of the time, 1x (the bet comes back), 2x, 3x, 5x and a rare 10x.</p>
     </div>
     <button class="btn" id="casinoclose" type="button">CLOSE (E)</button>
   </div>
@@ -469,14 +510,25 @@
   <div id="shoppanel" role="dialog" aria-labelledby="shoptitle">
     <h2 id="shoptitle">SHOP</h2>
     <p class="hint" id="shopcoins"></p>
-    <div id="shoptabs"><button class="tab on" type="button" data-tab="items">ITEMS</button><button class="tab" type="button" data-tab="plots">MY PLOTS</button><button class="tab" type="button" data-tab="land">BUY LAND</button><button class="tab" type="button" data-tab="job">JOB</button><button class="tab" type="button" data-tab="bountyshop">BOUNTY</button></div>
+    <div id="shoptabs"><button class="tab on" type="button" data-tab="items">ITEMS</button><button class="tab" type="button" data-tab="plots">MY PLOTS</button><button class="tab" type="button" data-tab="land">BUY LAND</button><button class="tab" type="button" data-tab="job">JOB</button><button class="tab" type="button" data-tab="rewards">REWARDS</button><button class="tab" type="button" data-tab="bountyshop">BOUNTY</button></div>
     <div id="shopitems" class="pane"></div>
     <div id="shopplots" class="pane" hidden></div>
     <div id="shopland" class="pane" hidden></div>
     <div id="shopjob" class="pane" hidden>
-      <p class="hint">Sweep the shop floor for the shopkeeper. He pays 10 cash a minute, up to 150 for a shift. A shift lasts 15 minutes at most, then there is a 5 minute break. You keep earning while you are in the game.</p>
+      <p class="hint">Pick a job and start a shift. A job pays once a minute while the shift lasts, then there is a 5 minute break. You keep earning while you are in the game.</p>
+      <select id="jobpick" aria-label="Job"></select>
+      <p class="hint" id="jobdesc"></p>
       <p class="hint" id="jobstate"></p>
       <button class="btn" id="jobbtn" type="button">START SHIFT</button>
+    </div>
+    <div id="shoprewards" class="pane" hidden>
+      <p class="hint">Sign in once a day for a reward. Each day in a row pays more, up to day 7. Missing a day starts the count again.</p>
+      <div id="streakdays"></div>
+      <p class="hint" id="dailystate"></p>
+      <button class="btn" id="dailybtn" type="button">SIGN IN</button>
+      <p class="hint">Playtime: every 10 minutes you play (moving around, not standing idle) banks 20 cash. Up to 3 rewards can wait for you.</p>
+      <p class="hint" id="playstate"></p>
+      <button class="btn" id="playbtn" type="button">CLAIM PLAYTIME</button>
     </div>
     <div id="shopbounty" class="pane" hidden>
       <p class="hint">A bounty is cash someone puts on a player. Smack that player (aim at them and press F) to take it: they stand still for 15 seconds. Then come back here to claim it.</p>
@@ -1040,7 +1092,10 @@ const isLampOn = b => b===LAMP_ID || b===LAMP_TOP_ID;
 const isLampTopId = b => b===LAMP_TOP_ID || b===LAMP_OFF_TOP_ID;
 const isLampBottomId = b => b===LAMP_ID || b===LAMP_OFF_ID;
 const lampId = (top, on) => top ? (on ? LAMP_TOP_ID : LAMP_OFF_TOP_ID) : (on ? LAMP_ID : LAMP_OFF_ID);
-const MAX_ID = Math.max(LAMP_OFF_TOP_ID, FURN_MAX);   // highest block id (matches the server)
+const SLOT_BOTTOM_ID = 300, SLOT_TOP_ID = 301;      // the casino's slot machine, two blocks high; not in the catalog, the casino places them
+BLOCKS[SLOT_BOTTOM_ID] = {name:'Slot Machine', top:94, side:92, bot:95, sw:'#b5242e'};
+BLOCKS[SLOT_TOP_ID]    = {name:'Slot Machine', top:94, side:93, bot:95, sw:'#b5242e'};
+const MAX_ID = Math.max(LAMP_OFF_TOP_ID, FURN_MAX, SLOT_TOP_ID);   // highest block id (matches the server)
 BLOCKS[LAMP_OFF_ID]     = {name:'Lamp (off)', top:76, side:76, bot:76, sw:'#8a8680'};
 BLOCKS[LAMP_OFF_TOP_ID] = {name:'Lamp (off)', top:76, side:76, bot:76, sw:'#8a8680'};
 const GLOWSTONE_ID = 47;                // a full block that gives light by itself
@@ -1193,7 +1248,7 @@ CASINO.casino = true; CASINO.counterZ = -1;         // no counter in the casino
 const CASINO_SITES = [CASINO];
 const SHOP_SITES = [SHOP, SHOP_HOUSE_A, CASINO];
 // the slot machines: three in the back row of the casino, each two gold blocks high. More machines go in this list.
-const CASINO_MACHINE_XS = [2, 4, 6], CASINO_MACHINE_Z = SHOP_D - 2, MACHINE_ID = 18;
+const CASINO_MACHINE_XS = [2, 4, 6], CASINO_MACHINE_Z = SHOP_D - 2;
 // which slot machine (0, 1, 2...) the block at (wx,wy,wz) is part of, or -1
 function machineAt(wx, wy, wz){
   for(const S of CASINO_SITES){
@@ -1219,7 +1274,7 @@ function shopBlockAtSite(S, wx, wy, wz, h){
   if(hy > SHOP_H + 1) return 0;
   const wall = lx === 0 || lz === 0 || lx === SHOP_W - 1 || lz === SHOP_D - 1;
   if(!wall){
-    if(S.casino && lz === CASINO_MACHINE_Z && (hy === 1 || hy === 2) && CASINO_MACHINE_XS.includes(lx)) return MACHINE_ID;   // a slot machine
+    if(S.casino && lz === CASINO_MACHINE_Z && (hy === 1 || hy === 2) && CASINO_MACHINE_XS.includes(lx)) return hy === 1 ? SLOT_BOTTOM_ID : SLOT_TOP_ID;   // a slot machine
     if(hy === 1 && lz === S.counterZ && lx >= 2 && lx <= SHOP_W - 3) return 7;   // the counter
     return 0;                                       // the room is empty
   }
@@ -2389,6 +2444,27 @@ function makeAtlasCanvas(){
                     if((px===3||px===12)&&(py===3||py===12)) return [120,122,128];
                     return [g(n,190,18)+band,g(n,192,18)+band,g(n,198,18)+band]; });
   tile(18,(px,py)=>{ const n=rnd2(px,py,54); if(n>0.93) return [255,250,170]; return [g(n,236,18),g(n,192,18),g(n,58,18)]; }); // gold
+  // the slot machine: a red cabinet with a window of three reels (92 the front, 93 the marquee, 94 the roof, 95 the base)
+  tile(92,(px,py)=>{
+    if(px===0||px===15||py===0||py===15) return [230,190,60];                       // gold trim
+    if(py>=3&&py<=9&&px>=3&&px<=12){                                                  // the reel window
+      if(px===6||px===9) return [90,90,100];                                          // the gaps between the reels
+      const lit = py>=5&&py<=7;
+      if(px<6)  return lit ? [220,40,40]  : [25,25,35];                               // a red seven on the first reel
+      if(px<9)  return lit ? [240,190,40] : [25,25,35];                               // a gold bar on the second
+      return lit ? [40,160,220] : [25,25,35];                                         // a blue bell on the third
+    }
+    if(py>=12&&py<=14&&px>=4&&px<=11) return [226,184,64];                           // the coin tray
+    return [170,30,30];                                                               // the red cabinet
+  });
+  tile(93,(px,py)=>{
+    if(px===0||px===15||py===0||py===15) return ((px+py)%2===0) ? [255,240,150] : [120,90,30];   // bulbs around the sign
+    const x = 11 - Math.floor((py-5)*0.7);
+    const seven = (py===4&&px>=4&&px<=11) || (py>=5&&py<=12&&(px===x||px===x-1));
+    return seven ? [255,215,70] : [110,12,22];                                        // a gold seven on the sign
+  });
+  tile(94,(px,py)=>{ const edge = px<=1||px>=14||py<=1||py>=14; return edge ? [230,190,60] : [150,22,34]; });   // the roof
+  tile(95,(px,py)=>[70,70,80]);                                                         // the base
   tile(19,(px,py)=>{ const frame = px<=1||px>=14||py<=1||py>=14||py===5||py===10||py===15;                         // bookshelf
                     if(frame) return [146,102,58];
                     const pal=[[170,44,40],[44,90,170],[70,140,70],[210,170,60],[120,70,150]];
@@ -3383,6 +3459,56 @@ function openCasino(){
 }
 function renderCasino(){ $('casinocoins').textContent = 'You have ' + fmtCash(myCoins) + ' to play with.'; }
 $('casinoclose').addEventListener('click', closeShop);
+// the casino's tabs: SLOTS and WHEEL share the bet
+for(const b of document.querySelectorAll('#casinotabs .tab')) b.addEventListener('click', () => {
+  for(const t of document.querySelectorAll('#casinotabs .tab')) t.classList.toggle('on', t === b);
+  const wheel = b.dataset.ctab === 'wheel';
+  $('casinoslots').hidden = wheel; $('casinowheel').hidden = !wheel;
+  if(wheel) drawWheel();
+});
+// the wheel: 30 segments with these multipliers (the server has the same list, WHEEL_MULTS)
+const WHEEL_MULTS = [0,2,0,1,0,0,3,0,1,0,2,0,0,5,0,1,0,2,0,0,10,0,1,0,0,0,0,0,0,0];
+const WHEEL_COLORS = {0:'#3a3f4d', 1:'#2f7d4f', 2:'#2f6fb0', 3:'#8a4fc0', 5:'#e0a21a', 10:'#d8323f'};
+let wheelAngle = 0, wheelFrame = 0;
+function drawWheel(){
+  const cv = $('wheelcv'), g = cv.getContext('2d'), R = cv.width / 2, seg = 2 * Math.PI / WHEEL_MULTS.length;
+  g.clearRect(0, 0, cv.width, cv.height);
+  g.save(); g.translate(R, R); g.rotate(wheelAngle);
+  WHEEL_MULTS.forEach((mult, i) => {
+    g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, R - 6, i * seg, (i + 1) * seg); g.closePath();
+    g.fillStyle = WHEEL_COLORS[mult]; g.fill(); g.strokeStyle = '#111'; g.lineWidth = 1; g.stroke();
+    g.save(); g.rotate(i * seg + seg / 2); g.fillStyle = '#fff'; g.font = 'bold 12px sans-serif'; g.textAlign = 'right';
+    g.fillText(mult ? mult + 'x' : '0', R - 14, 4); g.restore();
+  });
+  g.restore();
+  g.fillStyle = '#ffe066'; g.beginPath(); g.moveTo(R - 10, 2); g.lineTo(R + 10, 2); g.lineTo(R, 24); g.closePath(); g.fill();   // the pointer at the top
+}
+function spinWheel(m){
+  const seg = 2 * Math.PI / WHEEL_MULTS.length, from = wheelAngle;
+  // the angle that brings the chosen segment under the pointer at the top, after several full turns
+  let to = -Math.PI / 2 - (m.index * seg + seg / 2);
+  while(to < from + 5 * 2 * Math.PI) to += 2 * Math.PI;
+  const t0 = performance.now(), dur = 3500;
+  cancelAnimationFrame(wheelFrame);
+  const step = now => {
+    const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 3);
+    wheelAngle = from + (to - from) * e; drawWheel();
+    if(k < 1){ wheelFrame = requestAnimationFrame(step); return; }
+    $('wheelspin').disabled = false;
+    $('wheelmsg').textContent = m.mult === 0 ? 'No win this time.' : m.mult === 1 ? 'Your bet comes back.' : m.mult + 'x! You win ' + (m.win - m.bet) + ' cash.';
+    if(m.win > m.bet) sfx.click();
+    if(casinoMode) renderCasino();
+  };
+  wheelFrame = requestAnimationFrame(step);
+}
+$('wheelspin').addEventListener('click', () => {
+  if(!mpMode){ $('wheelmsg').textContent = 'The wheel needs the multiplayer server.'; return; }
+  const bet = casinoBet();
+  if(bet === null){ $('wheelmsg').textContent = 'Bet between 1 and ' + SLOT_MAX_BET + '.'; return; }
+  $('wheelspin').disabled = true; setTimeout(() => { $('wheelspin').disabled = false; }, 6000);
+  $('wheelmsg').textContent = 'Spinning...';
+  mpSend({type:'wheel', bet});
+});
 function coinSpan(){ const s = document.createElement('span'); s.className = 'coinicon'; s.innerHTML = COIN_SVG; return s; }
 function shopNote(text){ $('shopmsg').textContent = text; }
 // a top-down picture of the measured plot: grass, the blocks already built on it, and a house for each building
@@ -3451,10 +3577,11 @@ function canMerge(a, b){
 function setShopTab(name){
   for(const b of document.querySelectorAll('#shoptabs .tab')) b.classList.toggle('on', b.dataset.tab === name);
   $('shopitems').hidden = name !== 'items'; $('shopplots').hidden = name !== 'plots'; $('shopland').hidden = name !== 'land';
-  $('shopjob').hidden = name !== 'job'; $('shopbounty').hidden = name !== 'bountyshop';
+  $('shopjob').hidden = name !== 'job'; $('shoprewards').hidden = name !== 'rewards'; $('shopbounty').hidden = name !== 'bountyshop';
   shopTab = name;
   if(name === 'job') renderJob();
   if(name === 'bountyshop') renderBountyShop();
+  if(name === 'rewards') askRewards();
 }
 for(const b of document.querySelectorAll('#shoptabs .tab')) b.addEventListener('click', () => setShopTab(b.dataset.tab));
 // the pause menu's leaderboard: the top players in each column (names are shown as text only)
@@ -3703,30 +3830,98 @@ $('shopclose').addEventListener('click', closeShop);
 // the code is checked in the browser only; it keeps casual visitors out of the panel, it is not a real lock
 /* ---------- the shop's job, the slot machine, claiming a bounty, and smacking ---------- */
 let shopTab = 'items';
-let shiftState = {on: false, paid: 0, endsAt: 0, breakUntil: 0};
+let shiftState = {on: false, job: -1, paid: 0, endsAt: 0, breakUntil: 0};
 let bountyState = {list: [], claim: 0};
 let freezeUntil = 0;                                   // a smacked player stands still until this time (performance.now)
 function renderJob(){
-  const now = Date.now();
+  const now = Date.now(), on = shiftState.on, job = JOBS[on ? shiftState.job : jobPick] || JOBS[0];
+  $('jobdesc').textContent = job.desc + ' Pays ' + job.perMin + ' cash a minute, up to ' + job.perMin * job.shiftMin + ' a shift.';
   $('jobstate').textContent = !mpMode ? 'The job needs the multiplayer server.'
-    : shiftState.on ? 'On shift: ' + shiftState.paid + ' cash earned so far, ' + Math.max(0, Math.ceil((shiftState.endsAt - now) / 60000)) + ' minutes to go.'
+    : on ? 'On shift as ' + job.name + ': ' + shiftState.paid + ' cash earned so far, ' + Math.max(0, Math.ceil((shiftState.endsAt - now) / 60000)) + ' minutes to go.'
     : shiftState.breakUntil > now ? 'On a break: ' + Math.ceil((shiftState.breakUntil - now) / 60000) + ' minutes left.'
     : 'You are not working right now.';
-  $('jobbtn').textContent = shiftState.on ? 'END SHIFT' : 'START SHIFT';
+  $('jobbtn').textContent = on ? 'END SHIFT' : 'START SHIFT';
   $('jobbtn').disabled = !mpMode;
+  $('jobpick').disabled = on;
 }
-$('jobbtn').addEventListener('click', () => mpSend({type:'job', action: shiftState.on ? 'stop' : 'start'}));
+// the shop's jobs (the server has the same list, JOBS): each pays once a minute of a shift
+const JOBS = [
+  {name:'Shop sweeper', perMin:12, shiftMin:15, desc:'Sweep the shop floor for the shopkeeper.'},
+  {name:'Stock clerk', perMin:14, shiftMin:15, desc:'Count and shelve the stock behind the counter.'},
+  {name:'Delivery runner', perMin:16, shiftMin:12, desc:'Run parcels between the shops and the plots.'},
+  {name:"Surveyor's helper", perMin:18, shiftMin:10, desc:'Hold the measuring pole for the Land Surveyor.'},
+];
+let jobPick = 0;
+JOBS.forEach((j, i) => { const o = document.createElement('option'); o.value = i; o.textContent = j.name + ' (' + j.perMin + ' a minute)'; $('jobpick').appendChild(o); });
+$('jobpick').addEventListener('change', () => { jobPick = +$('jobpick').value; renderJob(); });
+$('jobbtn').addEventListener('click', () => mpSend({type:'job', action: shiftState.on ? 'stop' : 'start', job: jobPick}));
+// the rewards: the daily sign-in, and the playtime rewards waiting to be claimed (the page asks again every few seconds while open)
+let rewardState = null;
+function askRewards(){ mpSend({type:'reward', action:'get'}); }
+setInterval(() => { if(shopOpen && shopTab === 'rewards') askRewards(); }, 5000);
+function renderRewards(){
+  const r = rewardState; if(!r) return;
+  const box = $('streakdays'); box.textContent = '';
+  for(let d = 1; d <= 7; d++){
+    const cell = document.createElement('span');
+    const done = d < r.daily.day || (r.daily.claimed && d === r.daily.day), today = d === r.daily.day && !r.daily.claimed;
+    cell.className = 'streakday' + (done ? ' done' : today ? ' today' : '');
+    cell.textContent = d; box.appendChild(cell);
+  }
+  $('dailystate').textContent = r.daily.claimed ? 'Signed in today: ' + r.daily.streak + (r.daily.streak === 1 ? ' day' : ' days') + ' in a row. Come back tomorrow.' : 'Sign in for day ' + r.daily.day + ' of the streak: ' + fmtCash(r.daily.pay) + '.';
+  $('dailybtn').disabled = r.daily.claimed || !mpMode;
+  $('playstate').textContent = (r.play.banked ? r.play.banked + (r.play.banked === 1 ? ' reward' : ' rewards') + ' waiting: ' + fmtCash(r.play.pay) + '. ' : '') + 'The next one is in ' + r.play.nextIn + (r.play.nextIn === 1 ? ' minute.' : ' minutes.');
+  $('playbtn').disabled = !r.play.banked || !mpMode;
+}
+$('dailybtn').addEventListener('click', () => mpSend({type:'reward', action:'daily'}));
+$('playbtn').addEventListener('click', () => mpSend({type:'reward', action:'play'}));
 function renderBountyShop(){
   $('bountyclaim').textContent = bountyState.claim ? 'You have a bounty to claim: ' + bountyState.claim + ' cash.' : 'You have no bounty to claim right now.';
   $('bountyclaimbtn').disabled = !bountyState.claim;
 }
 $('bountyclaimbtn').addEventListener('click', () => mpSend({type:'claim'}));
+const SLOT_MAX_BET = 50000;   // the most a player may put on one spin or one wheel turn (the server has the same limit)
+// the bet: the chips add to it, MAX puts in what you have (up to the most a spin may take)
+function casinoBet(){
+  const bet = Math.trunc(Number($('slotbet').value));
+  return Number.isFinite(bet) && bet >= 1 && bet <= SLOT_MAX_BET ? bet : null;
+}
+for(const c of document.querySelectorAll('#bets .chip')) c.addEventListener('click', () => {
+  const v = c.dataset.add, cur = Math.max(0, Math.trunc(Number($('slotbet').value)) || 0);
+  const next = v === 'max' ? Math.min(myCoins, SLOT_MAX_BET) : v === '0' ? 0 : Math.min(SLOT_MAX_BET, cur + Number(v));
+  $('slotbet').value = next;
+});
+// the reels spin, then stop one after another when the server answers (or give up after a few seconds)
+const SLOT_NAMES = ['SEVEN', 'BAR', 'BELL', 'CHERRY', 'LEMON', 'PLUM'];
+const SLOT_TEXT = {SEVEN:'7', BAR:'BAR', BELL:'BELL', CHERRY:'CHERRY', LEMON:'LEMON', PLUM:'PLUM'};
+let reelTimer = 0, reelGiveUp = 0;
+function setReel(i, name){ const el = $('reel' + i); el.className = 'reel ' + name; el.textContent = SLOT_TEXT[name]; }
+function stopReels(){ clearInterval(reelTimer); clearTimeout(reelGiveUp); reelTimer = 0; for(let i = 0; i < 3; i++) $('reel' + i).classList.remove('spin'); }
+function startReels(){
+  stopReels();
+  for(let i = 0; i < 3; i++) $('reel' + i).classList.add('spin');
+  reelTimer = setInterval(() => { for(let i = 0; i < 3; i++) setReel(i, SLOT_NAMES[Math.floor(Math.random() * SLOT_NAMES.length)]); }, 80);
+  reelGiveUp = setTimeout(stopReels, 4000);
+}
+function showSlotResult(m){
+  stopReels();
+  m.reels.forEach((name, i) => setTimeout(() => { setReel(i, name); $('reel' + i).classList.remove('spin'); }, 250 + i * 300));
+  setTimeout(() => {
+    $('slotmsg').textContent = m.win > m.bet ? 'You won ' + (m.win - m.bet) + ' cash!'
+      : m.win === m.bet ? 'A pair: your ' + m.bet + ' cash comes back'
+      : 'No win this time.';
+    $('slotspin').disabled = false;
+    if(m.win > m.bet) sfx.click();
+    if(casinoMode) renderCasino();
+  }, 250 + 2 * 300 + 50);
+}
 $('slotspin').addEventListener('click', () => {
   if(!mpMode){ $('slotmsg').textContent = 'The slot machine needs the multiplayer server.'; return; }
-  const bet = Math.trunc(Number($('slotbet').value));
-  if(!Number.isFinite(bet) || bet < 1 || bet > 1000){ $('slotmsg').textContent = 'Bet between 1 and 1000.'; return; }
-  $('slotspin').disabled = true; setTimeout(() => { $('slotspin').disabled = false; }, 1600);   // a spin takes a moment
+  const bet = casinoBet();
+  if(bet === null){ $('slotmsg').textContent = 'Bet between 1 and ' + SLOT_MAX_BET + '.'; return; }
+  $('slotspin').disabled = true; setTimeout(() => { $('slotspin').disabled = false; }, 4000);
   $('slotmsg').textContent = 'Spinning...';
+  startReels();
   mpSend({type:'slots', bet});
 });
 function renderBountyList(){
@@ -4539,8 +4734,9 @@ function onServerMessage(m){
     editsDirty = true; lightDirty = true;
   }
   else if(m.type==='cashlog'){ cashEntries = m.entries || []; if(cashVisible()) renderCash(); }
+  else if(m.type==='rewardstate'){ rewardState = m; if(shopOpen && shopTab === 'rewards') renderRewards(); }
   else if(m.type==='shift'){
-    shiftState = {on: !!m.on, paid: m.paid || 0, endsAt: m.endsAt || 0, breakUntil: m.breakUntil || 0};
+    shiftState = {on: !!m.on, job: m.job, paid: m.paid || 0, endsAt: m.endsAt || 0, breakUntil: m.breakUntil || 0};
     if(shopOpen && shopTab === 'job') renderJob();
   }
   else if(m.type==='bounties'){
@@ -4548,14 +4744,8 @@ function onServerMessage(m){
     if(shopOpen && shopTab === 'bountyshop') renderBountyShop();
     if(cashVisible()) renderBountyList();
   }
-  else if(m.type==='slotresult'){
-    [0, 1, 2].forEach(i => { $('reel' + i).textContent = m.reels[i]; });
-    $('slotmsg').textContent = m.win > m.bet ? 'You won ' + (m.win - m.bet) + ' cash!'
-      : m.win === m.bet ? 'A pair: your ' + m.bet + ' cash comes back'
-      : 'No win this time.';
-    if(m.win > 0) sfx.click();
-    if(casinoMode) renderCasino();
-  }
+  else if(m.type==='wheelresult'){ spinWheel(m); }
+  else if(m.type==='slotresult'){ showSlotResult(m); }
   else if(m.type==='freeze'){
     freezeUntil = performance.now() + m.seconds * 1000;
     flashHud('SMACKED! YOU CANNOT MOVE FOR ' + m.seconds + ' SECONDS');
@@ -4566,7 +4756,7 @@ function onServerMessage(m){
     sfx.click();
   }
   else if(m.type==='notice'){
-    const t = fmtNums(m.text || ''); if(/^NOT ENOUGH|^YOU DO NOT HAVE/.test(t)) sfx.error(); flashHud(t); if(shopOpen) shopNote(t); if(cashVisible()) $('trademsg').textContent = t;
+    const t = fmtNums(m.text || ''); if(/^NOT ENOUGH|^YOU DO NOT HAVE/.test(t)) sfx.error(); flashHud(t); if(shopOpen) shopNote(t); if(casinoMode){ $('slotmsg').textContent = t; $('wheelmsg').textContent = t; } if(cashVisible()) $('trademsg').textContent = t;
     if(/^YOUR PLOT IS READY/.test(t)){ plotNameDraft = ''; survey = {a:null, b:null}; if(shopOpen) renderShop(); }
   }
   else if(m.type==='bypass'){ adminBypass = m.on === true; syncInvisBtn(); flashHud(adminBypass ? 'BREAK ANY BLOCK IS ON' : 'BREAK ANY BLOCK IS OFF'); }

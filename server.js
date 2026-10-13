@@ -19,7 +19,7 @@ const MAX_PLAYERS = Number(process.env.MAX_PLAYERS) || 16;     // across both wo
 const PAGE = path.join(__dirname, 'public', 'index.html');
 const CH = 64;                  // world height in blocks
 const REACH = 12;               // a block change must be this close to the player's last reported position
-const MAX_BLOCK_ID = 299;       // highest block id a player may place (see BLOCKS in index.html: MAX_ID there must match)
+const MAX_BLOCK_ID = 301;       // highest block id a player may place (see BLOCKS in index.html: MAX_ID there must match)
 const COLORS = ['#e6594b', '#4b9be6', '#58c25a', '#e6c44b', '#b35ae6', '#4be6d6', '#e6894b', '#e64b9b'];
 const DAY_LEN = 480;            // seconds for one full day (the same as in index.html)
 const PLOT_RATE = 20, PLOT_MIN = 3, PLOT_MAX = 32;   // a plot costs this much cash per block; its sides are between these lengths
@@ -134,16 +134,31 @@ function logTxn(w, e) {
   scheduleSave(w);
 }
 // ---- the shop's job, the bounties, and the slot machine ----
-const JOB_PAY = 10, JOB_EVERY = 60000, JOB_MAX = 150, JOB_SHIFT = 15 * 60000, JOB_BREAK = 5 * 60000;   // a shift pays 10 cash a minute, up to 150; then a 5 minute break
+// the shop's jobs: a shift pays each job's cash a minute, and the most a shift can pay is perMin * shiftMin. The client has the same list (JOBS in index.html).
+const JOBS = [
+  { name: 'Shop sweeper',      perMin: 12, shiftMin: 15, desc: 'Sweep the shop floor for the shopkeeper.' },
+  { name: 'Stock clerk',       perMin: 14, shiftMin: 15, desc: 'Count and shelve the stock behind the counter.' },
+  { name: 'Delivery runner',   perMin: 16, shiftMin: 12, desc: 'Run parcels between the shops and the plots.' },
+  { name: "Surveyor's helper", perMin: 18, shiftMin: 10, desc: 'Hold the measuring pole for the Land Surveyor.' },
+];
+const JOB_EVERY = 60000, JOB_BREAK = 5 * 60000;   // a shift pays once a minute; then a 5 minute break
+// rewards: a daily sign-in (day 1 pays 50, each day in a row adds 15, up to day 7 at 140; a missed day starts again)
+// and playtime (every 10 minutes of play banks 20 cash, up to 3 waiting; only time spent moving around counts)
+const DAILY_BASE = 50, DAILY_STEP = 15, DAILY_CAP_DAY = 7;
+const PLAY_BLOCK = (Number(process.env.PLAY_BLOCK_SECONDS) || 600) * 1000;   // 10 minutes of play per reward (the variable is for testing)
+const PLAY_REWARD = 20, PLAY_BANK_MAX = 3, PLAY_ACTIVE = 60000;
 const SMACK_FREEZE = 15;                                        // seconds a bountied player stands still after a smack
 const CLAIM_MS = 10 * 60000;                                    // a claim waits this long for the claimer to take it to the shop
 const SLOT_SYMBOLS = ['SEVEN', 'BAR', 'BELL', 'CHERRY', 'LEMON', 'PLUM'];
+const SLOT_MAX_BET = 50000;                                    // the most a player may put on one spin or one wheel turn
+// the wheel: 30 segments, each with a multiplier (0 = the bet is lost). Its odds pay back about 93 cash for every 100 bet.
+const WHEEL_MULTS = [0,2,0,1,0,0,3,0,1,0,2,0,0,5,0,1,0,2,0,0,10,0,1,0,0,0,0,0,0,0];
 // what a spin pays, as a multiple of the stake: 0 = the stake is lost, 1 = the stake comes back
 function slotPay(r) {
   if (r[0] === r[1] && r[1] === r[2]) return r[0] === 0 ? 60 : 8;
   return (r[0] === r[1] || r[1] === r[2] || r[0] === r[2]) ? 1 : 0;
 }
-function shiftMsg(p) { return { type: 'shift', on: !!p.shift, paid: p.shift ? p.shift.paid : 0, endsAt: p.shift ? p.shift.start + JOB_SHIFT : 0, breakUntil: p.shiftBreakUntil || 0 }; }
+function shiftMsg(p) { return { type: 'shift', on: !!p.shift, job: p.shift ? p.shift.job : -1, paid: p.shift ? p.shift.paid : 0, endsAt: p.shift ? p.shift.start + JOBS[p.shift.job].shiftMin * 60000 : 0, breakUntil: p.shiftBreakUntil || 0 }; }
 function endShift(p, text) {
   const paid = p.shift.paid;
   p.shift = null; p.shiftBreakUntil = Date.now() + JOB_BREAK;
@@ -162,18 +177,47 @@ function jobTick() {
   const now = Date.now();
   for (const p of players.values()) {
     if (!p.joined || !p.shift) continue;
-    const w = p.world, s = p.shift;
+    const w = p.world, s = p.shift, job = JOBS[s.job];
     if (now - s.lastPay >= JOB_EVERY) {
-      s.lastPay = now; s.paid += JOB_PAY;
-      w.coins.set(p.pid, (w.coins.get(p.pid) || 0) + JOB_PAY);
-      logTxn(w, { kind: 'job', amount: JOB_PAY, to: p.pid, toName: p.name });
+      s.lastPay = now; s.paid += job.perMin;
+      w.coins.set(p.pid, (w.coins.get(p.pid) || 0) + job.perMin);
+      logTxn(w, { kind: 'job', amount: job.perMin, to: p.pid, toName: p.name });
       sendTo(p, walletMsg(w, p));
       sendTo(p, shiftMsg(p));
     }
-    if (p.shift && (p.shift.paid >= JOB_MAX || now - p.shift.start >= JOB_SHIFT)) endShift(p, 'YOUR SHIFT IS OVER');
+    if (p.shift && (s.paid >= job.perMin * job.shiftMin || now - s.start >= job.shiftMin * 60000)) endShift(p, 'YOUR SHIFT IS OVER');
   }
 }
 setInterval(jobTick, 10000);
+// playtime: a player who has moved in the last minute gets 10 minutes of playtime for every 10 minutes they play
+function rewardTick() {
+  const now = Date.now();
+  for (const p of players.values()) {
+    if (!p.joined || !p.pid || !p.world || now - (p.movedAt || 0) > PLAY_ACTIVE) continue;
+    const r = rewardsOf(p.world, p.pid);
+    r.play += 10000;
+    if (r.play >= PLAY_BLOCK) { r.play -= PLAY_BLOCK; if (r.banked < PLAY_BANK_MAX) r.banked++; }
+  }
+}
+setInterval(rewardTick, 10000);
+function rewardsOf(w, pid) {
+  let r = w.rewards.get(pid);
+  if (!r) { r = { day: '', streak: 0, play: 0, banked: 0 }; w.rewards.set(pid, r); }
+  return r;
+}
+function dayKey(t) { return new Date(t).toISOString().slice(0, 10); }
+function dailyPay(streak) { return DAILY_BASE + DAILY_STEP * (Math.min(Math.max(streak, 1), DAILY_CAP_DAY) - 1); }
+function rewardState(w, p) {
+  const now = Date.now(), r = rewardsOf(w, p.pid);
+  const claimed = r.day === dayKey(now);
+  const streak = claimed || r.day === dayKey(now - 86400000) ? r.streak : 0;   // a streak survives until a day is missed
+  const next = claimed ? streak : streak + 1;                                    // the day the next sign-in would be
+  return {
+    type: 'rewardstate',
+    daily: { claimed, streak, day: ((next - 1) % DAILY_CAP_DAY) + 1, pay: dailyPay(next) },
+    play: { banked: r.banked, pay: r.banked * PLAY_REWARD, nextIn: Math.ceil((PLAY_BLOCK - r.play) / 60000), max: PLAY_BANK_MAX },
+  };
+}
 // the transactions a player is part of, newest first, worded from that player's side
 function cashLogFor(w, p) {
   const out = [];
@@ -194,6 +238,12 @@ function cashLogFor(w, p) {
       if (e.won > e.amount) { dir = '+'; text = 'Won ' + (e.won - e.amount) + ' at the slots'; }
       else if (e.won < e.amount) { dir = '-'; text = 'Lost ' + (e.amount - e.won) + ' at the slots'; }
     }
+    else if (e.kind === 'wheel' && e.from === p.pid) {
+      if (e.won > e.amount) { dir = '+'; text = 'Won ' + (e.won - e.amount) + ' at the wheel'; }
+      else if (e.won < e.amount) { dir = '-'; text = 'Lost ' + (e.amount - e.won) + ' at the wheel'; }
+    }
+    else if (e.kind === 'daily' && e.to === p.pid) { dir = '+'; text = 'Daily sign-in reward'; }
+    else if (e.kind === 'playtime' && e.to === p.pid) { dir = '+'; text = 'Playtime reward'; }
     if (dir) out.push({ t: e.t, dir, text, amount: e.amount });
   }
   return out.slice(-40).reverse();
@@ -231,7 +281,8 @@ for (const w of Object.values(WORLDS)) {
   w.tools = new Map();     // hashed player id -> hacker tools they own (each one can be used once)
   w.mail = new Map();      // lowercase name -> the messages waiting for that player: [{ from, text, at }]
   w.bounties = new Map();  // target's id -> { amount, name }: cash paid out to whoever smacks them
-  w.claims = new Map();    // claimer's id -> { amount, target, until }: a bounty smacked, to be claimed at the shop
+  w.claims = new Map();
+  w.rewards = new Map();   // player's id -> { day, streak, play, banked }: the daily sign-in and the playtime rewards    // claimer's id -> { amount, target, until }: a bounty smacked, to be claimed at the shop
   w.plots = [];            // plots of land: { x0, z0, x1, z1 (inclusive), owner (hashed id), ownerName, name, price }
   w.offers = new Map();    // offers to buy a plot, kept while the server runs: id -> offer
   w.log = [];              // the latest cash transactions in this world
@@ -244,7 +295,7 @@ for (const w of Object.values(WORLDS)) {
     const list = Array.isArray(data) ? data : data.edits;          // older saves were just the list of edits
     for (const [pid, n] of (Array.isArray(data) ? [] : (data.coins || []))) w.coins.set(pid, n);
     for (const [pid, n] of (Array.isArray(data) ? [] : (data.tools || []))) w.tools.set(pid, n);
-    if (!Array.isArray(data)) { w.plots = data.plots || []; w.log = data.log || []; for (const [to, list] of (data.mail || [])) w.mail.set(to, list); for (const [k, v] of (data.bounties || [])) w.bounties.set(k, v); for (const [k, v] of (data.claims || [])) w.claims.set(k, v); }
+    if (!Array.isArray(data)) { w.plots = data.plots || []; w.log = data.log || []; for (const [to, list] of (data.mail || [])) w.mail.set(to, list); for (const [k, v] of (data.bounties || [])) w.bounties.set(k, v); for (const [k, v] of (data.claims || [])) w.claims.set(k, v); for (const [k, v] of (data.rewards || [])) w.rewards.set(k, v); }
     for (const [k, v, o] of list) { if (v === 260 || v === 261) continue; w.edits.set(k, v); if (o !== undefined) w.owners.set(k, o); }   // the removed camera and screen blocks
     for (const L of Array.isArray(data) ? [] : (data.locks || [])) {
       const lo = L.lower.split(',').map(Number);
@@ -268,7 +319,7 @@ function saveWorld(w) {
   const locks = [...new Set(w.locks.values())].map(L => ({ lower: L.lower.join(','), owner: L.owner, salt: L.salt, digest: L.digest, allowed: [...L.allowed] }));
   const tmp = w.file + '.tmp';
   try {
-    fs.writeFileSync(tmp, JSON.stringify({ edits, locks, coins: [...w.coins], tools: [...w.tools], plots: w.plots, log: w.log, mail: [...w.mail], bounties: [...w.bounties], claims: [...w.claims] }));
+    fs.writeFileSync(tmp, JSON.stringify({ edits, locks, coins: [...w.coins], tools: [...w.tools], plots: w.plots, log: w.log, mail: [...w.mail], bounties: [...w.bounties], claims: [...w.claims], rewards: [...w.rewards] }));
     fs.renameSync(tmp, w.file);
   } catch (e) {
     console.error(`${w.name}: could not save the world:`, e.message);
@@ -620,7 +671,7 @@ wss.on('connection', (ws) => {
       p.x = Math.max(-1e6, Math.min(1e6, m.x));
       p.y = Math.max(-10, Math.min(200, m.y));
       p.z = Math.max(-1e6, Math.min(1e6, m.z));
-      p.yaw = m.yaw; p.pitch = m.pitch;
+      p.yaw = m.yaw; p.pitch = m.pitch; p.movedAt = Date.now();
       if (!p.hidden) broadcast(w, { type: 'move', id, x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch }, id);
       return;
     }
@@ -748,15 +799,49 @@ wss.on('connection', (ws) => {
       const now = Date.now(), fail = text => sendTo(p, { type: 'notice', text });
       if (!p.pid) return fail('YOU CANNOT WORK HERE YET');
       if (m.action === 'start') {
+        const job = JOBS[m.job];
+        if (!Number.isInteger(m.job) || !job) return fail('CHOOSE A JOB');
         if (p.shift) return fail('YOU ARE ALREADY ON A SHIFT');
         if (p.shiftBreakUntil > now) return fail('ON A BREAK: ' + Math.ceil((p.shiftBreakUntil - now) / 60000) + ' MINUTES LEFT');
-        p.shift = { start: now, lastPay: now, paid: 0 };
+        p.shift = { start: now, lastPay: now, paid: 0, job: m.job };
         sendTo(p, shiftMsg(p));
-        return fail('SHIFT STARTED: ' + JOB_PAY + ' CASH A MINUTE, UP TO ' + JOB_MAX);
+        return fail('SHIFT STARTED AS ' + job.name.toUpperCase() + ': ' + job.perMin + ' CASH A MINUTE');
       }
       if (m.action === 'stop') {
         if (!p.shift) return fail('YOU ARE NOT ON A SHIFT');
         return endShift(p, 'YOU LEFT YOUR SHIFT');
+      }
+      return;
+    }
+
+    if (m.type === 'reward') {
+      // the daily sign-in and the playtime rewards (the state is sent back after every change)
+      const fail = text => sendTo(p, { type: 'notice', text }), now = Date.now();
+      if (!p.pid) return fail('YOU CANNOT CLAIM YET');
+      const r = rewardsOf(w, p.pid);
+      if (m.action === 'get') return sendTo(p, rewardState(w, p));
+      if (m.action === 'daily') {
+        if (r.day === dayKey(now)) return fail('YOU HAVE ALREADY SIGNED IN TODAY');
+        r.streak = r.day === dayKey(now - 86400000) ? r.streak + 1 : 1;
+        r.day = dayKey(now);
+        const pay = dailyPay(r.streak);
+        w.coins.set(p.pid, (w.coins.get(p.pid) || 0) + pay);
+        logTxn(w, { kind: 'daily', amount: pay, to: p.pid, toName: p.name });
+        sendTo(p, walletMsg(w, p));
+        sendTo(p, { type: 'notice', text: 'DAILY REWARD: ' + pay + ' CASH, DAY ' + r.streak + ' IN A ROW' });
+        scheduleSave(w);
+        return sendTo(p, rewardState(w, p));
+      }
+      if (m.action === 'play') {
+        if (r.banked < 1) return fail('NO PLAYTIME REWARD YET');
+        const pay = r.banked * PLAY_REWARD;
+        r.banked = 0;
+        w.coins.set(p.pid, (w.coins.get(p.pid) || 0) + pay);
+        logTxn(w, { kind: 'playtime', amount: pay, to: p.pid, toName: p.name });
+        sendTo(p, walletMsg(w, p));
+        sendTo(p, { type: 'notice', text: 'PLAYTIME REWARD: ' + pay + ' CASH' });
+        scheduleSave(w);
+        return sendTo(p, rewardState(w, p));
       }
       return;
     }
@@ -813,12 +898,30 @@ wss.on('connection', (ws) => {
       return sendTo(p, { type: 'notice', text: 'BOUNTY CLAIMED: ' + c.amount + ' CASH' });
     }
 
+    if (m.type === 'wheel') {
+      // the wheel: the bet is taken, the wheel stops on a random segment here, and that segment's multiplier pays out
+      const fail = text => sendTo(p, { type: 'notice', text }), now = Date.now();
+      const bet = Number.isInteger(m.bet) ? m.bet : 0;
+      if (!p.pid) return fail('YOU CANNOT PLAY YET');
+      if (bet < 1 || bet > SLOT_MAX_BET) return fail('BET BETWEEN 1 AND ' + SLOT_MAX_BET);
+      if (p.spinAt && now - p.spinAt < 1500) return;      // one turn at a time
+      const mine = w.coins.get(p.pid) || 0;
+      if (mine < bet) return fail('YOU DO NOT HAVE THAT MUCH CASH');
+      p.spinAt = now;
+      const index = crypto.randomInt(WHEEL_MULTS.length);
+      const mult = WHEEL_MULTS[index], win = bet * mult;
+      w.coins.set(p.pid, mine - bet + win);
+      logTxn(w, { kind: 'wheel', amount: bet, won: win, from: p.pid, fromName: p.name });
+      sendTo(p, { type: 'wheelresult', index, mult, bet, win });
+      sendTo(p, walletMsg(w, p));
+      return;
+    }
     if (m.type === 'slots') {
       // the slot machine: the stake is taken, the reels are turned here, and the payout is worked out here too
       const fail = text => sendTo(p, { type: 'notice', text }), now = Date.now();
       const bet = Number.isInteger(m.bet) ? m.bet : 0;
       if (!p.pid) return fail('YOU CANNOT PLAY YET');
-      if (bet < 1 || bet > 1000) return fail('BET BETWEEN 1 AND 1000');
+      if (bet < 1 || bet > SLOT_MAX_BET) return fail('BET BETWEEN 1 AND ' + SLOT_MAX_BET);
       if (p.spinAt && now - p.spinAt < 1500) return;      // one spin at a time
       const mine = w.coins.get(p.pid) || 0;
       if (mine < bet) return fail('YOU DO NOT HAVE THAT MUCH CASH');
