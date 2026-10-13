@@ -29,6 +29,7 @@
   #catalog{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;width:100%}
   .cat{display:flex;align-items:center;gap:8px;padding:6px;background:#222938;border:2px solid #3a3f4c;color:#fff;font:13px 'Courier New',monospace;text-align:left;cursor:pointer}
   #cattabs{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;width:100%}
+  #roomtabs{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;width:100%;margin-bottom:6px}
   .tab{font:bold 11px 'Courier New',monospace;padding:6px 8px;background:#222938;color:#c9d1e0;border:2px solid #3a3f4c;cursor:pointer;letter-spacing:.06em}
   .tab:hover{border-color:#8a94ab}
   .tab.on{border-color:#ffe066;color:#ffe066;background:#2f3749}
@@ -158,6 +159,7 @@
     <div id="invslots"></div>
     <div class="lbl">BLOCKS: PICK A TAB TO FILTER</div>
     <div id="cattabs"></div>
+    <div id="roomtabs"></div>
     <div id="catalog"></div>
     <p id="invmsg" role="status"></p>
     <button class="btn" id="invclose" type="button">CLOSE (E)</button>
@@ -180,7 +182,7 @@ let mpMode = false;                     // true while connected to a server; the
 // 11 glass, 12 lamp, 13 wooden door, 14 gravel, 15 clay, 16 snow, 17 iron, 18 gold, 19 bookshelf side, 20 coal ore,
 // 21 wool, 22 bed sheet, 23 bed side
 const BLOCKS = [null,
-  {name:'Grass',       top:0, side:1, bot:2, sw:'#5ca040'},
+  {name:'Grass',       top:0, side:2, bot:2, sw:'#5ca040'},   // grass on top, dirt on the sides
   {name:'Dirt',        top:2, side:2, bot:2, sw:'#86603c'},
   {name:'Stone',       top:3, side:3, bot:3, sw:'#808084'},
   {name:'Log',         top:5, side:4, bot:5, sw:'#8a6a40'},
@@ -267,7 +269,7 @@ const CARCASS = (open, t=25) => open
 // the quartz top of a base unit: every counter top sits at the same height (0.9), so they line up
 const QTOP = [B(0,0.86,0,1,0.9,1,54)];
 const FURN_A = [
-  {name:'Toilet', icon:64, sw:'#f2f2ee', seat:{u:0.5,v:0.45,h:0.46}, fn: () => [
+  {name:'Toilet', icon:64, sw:'#f2f2ee', seat:{u:0.5,v:0.45,h:0.46}, acts:[{box:[0.15,0.9,0.0,0.85,1.01,0.3], flush:true}], fn: () => [
     B(0.22,0,0.18,0.78,0.42,0.8,64),          // bowl
     B(0.2,0.42,0.2,0.8,0.46,0.82,64),         // rim
     B(0.3,0.44,0.48,0.7,0.47,0.74,66),        // dark water
@@ -306,42 +308,45 @@ const FURN_A = [
   {name:'Kitchen Sink', icon:54, sw:'#ece6dc', noOpen:true, states:[{},{open:1},{water:1},{open:1,water:1}],
    acts:[{box:[0.35,0.6,0,0.65,1.01,0.4], flag:'water', on:'WATER ON', off:'WATER OFF'}],
    fn: f => [
-    ...CARCASS(false),
-    ...QTOP,
+    B(0.02,0.08,0.02,0.98,0.78,0.94,25), B(0.04,0,0.04,0.96,0.08,0.88,66),   // the cabinet, a little lower so the basin has depth
+    // the counter top, with a hole for the basin
+    B(0,0.78,0,1,0.9,0.25,54), B(0,0.78,0.8,1,0.9,1,54), B(0,0.78,0.25,0.2,0.9,0.8,54), B(0.8,0.78,0.25,1,0.9,0.8,54),
     B(0,0.9,0,1,1.0,0.07,54),                 // backsplash
-    B(0.2,0.9,0.25,0.8,0.92,0.8,66),          // basin
+    // the basin is sunk into the top: a steel bowl, 0.12 deep, with a dark floor
+    B(0.22,0.78,0.27,0.78,0.8,0.78,66),       // the floor of the bowl
+    B(0.2,0.78,0.25,0.22,0.9,0.8,65), B(0.78,0.78,0.25,0.8,0.9,0.8,65),        // the side walls
+    B(0.2,0.78,0.25,0.8,0.9,0.27,65), B(0.2,0.78,0.78,0.8,0.9,0.8,65),         // the back and front walls
     B(0.46,0.9,0.1,0.54,1.0,0.16,65),         // tap post
     B(0.46,0.96,0.16,0.54,0.98,0.36,65),      // spout, arched over the basin
-    ...(f.water ? [B(0.24,0.92,0.3,0.76,0.95,0.75,68,64,64), B(0.47,0.92,0.26,0.53,0.96,0.3,68,68,68,0.5)] : []),   // running water: a stream from the tap into the basin
+    ...(f.water ? [B(0.24,0.8,0.3,0.76,0.84,0.76,68,64,64), B(0.47,0.84,0.26,0.53,0.96,0.3,68,68,68,0.5)] : []),   // water sits inside the bowl; the stream falls from the tap into it
     // the doors under the sink stay shut
-    B(0.03,0.1,0.94,0.47,0.82,0.99,24),       // left door
-    B(0.53,0.1,0.94,0.97,0.82,0.99,24),       // right door
+    B(0.03,0.1,0.94,0.47,0.74,0.99,24),       // left door
+    B(0.53,0.1,0.94,0.97,0.74,0.99,24),       // right door
     B(0.4,0.6,0.99,0.44,0.7,1.0,65),
     B(0.56,0.6,0.99,0.6,0.7,1.0,65)
   ]},
   {name:'Fridge', icon:65, sw:'#c8ccd2', tall:true, states:[{},{open:1},{top:1},{top:1,open:1}],
    fn: f => f.top ? [
-    B(0.02,0,0.02,0.98,1,0.92,64),            // white body, joined to the fridge below
     B(0.02,0.96,0.02,0.98,1,0.92,65),         // steel roof trim
     ...(f.open ? [
       ...SHELL(0.02,0,0.02,0.98,1,0.92,64,0.05),
       B(0.07,0.5,0.07,0.93,0.53,0.9,65),      // a shelf inside
-      OPEN_DOOR(0.03,0.97,0.92,0.01,0.99,65),
-      B(0.03,0.12,1.75,0.12,0.4,1.79,66)      // handle
+      OPEN_DOOR(0.03,0.97,0.92,0.01,0.99,65)
     ] : [
+      B(0.02,0,0.02,0.98,1,0.92,64),          // white body, joined to the fridge below (solid only when shut)
       B(0.03,0.01,0.92,0.97,0.99,0.99,65),    // freezer door
-      B(0.03,0.985,0.99,0.97,1.015,1.0,66),   // the seam between the freezer and the fridge
-      B(0.86,0.15,0.99,0.9,0.4,1.02,66)       // handle
+      B(0.03,0.985,0.99,0.97,1.015,1.0,66)    // the seam between the freezer and the fridge
     ])
    ] : [
     B(0.04,0,0.04,0.96,0.06,0.88,66),         // dark plinth at the bottom
-    B(0.02,0.06,0.02,0.98,1,0.92,64),         // white body
     ...(f.open ? [
       ...SHELL(0.02,0.06,0.02,0.98,1,0.92,64,0.05),
-      B(0.07,0.5,0.07,0.93,0.53,0.9,65),      // a shelf inside
+      B(0.07,0.36,0.1,0.93,0.37,0.85,11,11,11,0.3), B(0.07,0.6,0.1,0.93,0.61,0.85,11,11,11,0.3),   // two glass shelves
+      B(0.3,0.93,0.3,0.7,0.945,0.7,12,12,12,1),   // a light in the fridge, so the food shows
       OPEN_DOOR(0.03,0.97,0.92,0.01,0.99,65),
       B(0.03,0.5,1.75,0.12,0.75,1.79,66)      // handle
     ] : [
+      B(0.02,0.06,0.02,0.98,1,0.92,64),       // white body (solid only when shut)
       B(0.03,0.07,0.92,0.97,0.99,0.99,65),    // fridge door
       B(0.03,0.985,0.99,0.97,1.015,1.0,66),   // the seam
       B(0.86,0.6,0.99,0.9,0.85,1.02,66)       // handle
@@ -554,6 +559,8 @@ const FURN_B = [
     B(0.62,0.14,0.8,0.68,0.19,0.82,67)
   ]}
 ];
+// a switch for any ceiling light: right-click it to switch it on or off
+const ceilingUse = h => { const on = !furnState(h.id).f.lit; furnChange(h, f => { f.lit = on ? 1 : 0; return f; }); sfx.click(); flashHud(on ? 'LIGHT ON' : 'LIGHT OFF'); return true; };
 // the newest pieces go last, so every number already given to a piece or a state stays the same
 const FURN_C = [
   // hangs from the underside of a ceiling. It is lit when placed; right-click it to switch it on or off
@@ -572,6 +579,32 @@ const FURN_C = [
    fn: f => [
     B(0.3,0.3,0,0.7,0.7,0.1,77),              // the plate, against the wall
     ...(f.on ? [B(0.44,0.5,0.1,0.56,0.68,0.2,65)] : [B(0.44,0.32,0.1,0.56,0.5,0.2,65)])   // the lever: up is on
+  ]},
+  // a round dome under the ceiling, bright when on
+  {name:'Ceiling Dome', icon:12, sw:'#f4f1e8', mount:'ceiling', states:[{lit:1},{}], use: ceilingUse,
+   fn: f => [
+    B(0.36,0.96,0.36,0.64,1,0.64,17),         // the plate
+    B(0.2,0.84,0.2,0.8,0.96,0.8,f.lit?12:76,f.lit?12:76,f.lit?12:76,f.lit?1:0),   // the dome, glowing when on
+    B(0.16,0.82,0.16,0.84,0.86,0.84,17)       // its rim
+   ]},
+  // a small spotlight set into the ceiling
+  {name:'Ceiling Spot', icon:12, sw:'#f4f1e8', mount:'ceiling', states:[{lit:1},{}], use: ceilingUse,
+   fn: f => [
+    B(0.38,0.94,0.38,0.62,1,0.62,17),         // the plate
+    B(0.3,0.8,0.3,0.7,0.94,0.7,66),           // the housing
+    B(0.34,0.74,0.34,0.66,0.8,0.66,f.lit?12:76,f.lit?12:76,f.lit?12:76,f.lit?1:0)   // the lens, glowing when on
+   ]},
+  // plants that grow on the grass: thin and low, and you walk through them
+  {name:'Grass Tuft', icon:0, sw:'#5ca040', fn: () => [
+    B(0.3,0,0.46,0.36,0.42,0.54,0), B(0.46,0,0.3,0.54,0.5,0.36,0), B(0.62,0,0.46,0.68,0.36,0.54,0), B(0.46,0,0.62,0.54,0.3,0.68,0)
+  ]},
+  {name:'Red Flower', icon:86, sw:'#c83a3a', fn: () => [B(0.46,0,0.46,0.54,0.5,0.54,0), B(0.32,0.5,0.32,0.68,0.68,0.68,86)]},
+  {name:'Yellow Flower', icon:87, sw:'#ecc43c', fn: () => [B(0.46,0,0.46,0.54,0.5,0.54,0), B(0.32,0.5,0.32,0.68,0.68,0.68,87)]},
+  {name:'Blue Flower', icon:88, sw:'#3c64dc', fn: () => [B(0.46,0,0.46,0.54,0.5,0.54,0), B(0.32,0.5,0.32,0.68,0.68,0.68,88)]},
+  {name:'White Flower', icon:89, sw:'#f0f0ec', fn: () => [B(0.46,0,0.46,0.54,0.5,0.54,0), B(0.32,0.5,0.32,0.68,0.68,0.68,89)]},
+  // the mess the toilet leaves on the floor: it stays until the toilet is flushed
+  {name:'Poop', icon:90, sw:'#5a3a20', fn: () => [
+    B(0.28,0,0.28,0.72,0.14,0.72,90), B(0.36,0.14,0.36,0.64,0.27,0.64,90), B(0.44,0.27,0.44,0.56,0.37,0.56,90)
   ]}
 ];
 // every piece, in order. A piece's states are listed in states (the first is its normal one). Each state is one
@@ -600,32 +633,40 @@ const addOther = t => FURN[t].states.forEach((s, i) => {
 for(let t = 0; t < FURN_OLD; t++) addNormal(t);     // the normal state of every piece comes first
 for(let t = 0; t < FURN_OLD; t++) addOther(t);
 for(let t = FURN_OLD; t < FURN.length; t++){ addNormal(t); addOther(t); }
-const FURN_MAX = FURN_BASE + FURN_VAR.length*4 - 1;
+// the first 50 variants keep the numbers they always had (58 to 257). The newer ones are numbered from NEW_BASE on,
+// so the dark lamps (258 and 259) keep their numbers in saved worlds
+const FURN_OLD_VARS = 50, NEW_BASE = 260;
+const idOfVar = (vi, f) => vi < FURN_OLD_VARS ? FURN_BASE + vi*4 + f : NEW_BASE + (vi - FURN_OLD_VARS)*4 + f;
+if(FURN_VAR.length < FURN_OLD_VARS) console.error('furniture numbering: expected at least ' + FURN_OLD_VARS + ' variants');
+const FURN_MAX = Math.max(...FURN_VAR.map((_, vi) => idOfVar(vi, 3)));
+const VAR_OF = new Int32Array(FURN_MAX + 1).fill(-1);      // block number -> its variant (-1 when it is not furniture)
+const FACE_OF = new Int8Array(FURN_MAX + 1);               // block number -> the facing it turns to
+FURN_VAR.forEach((_, vi) => { for(let f = 0; f < 4; f++){ VAR_OF[idOfVar(vi, f)] = vi; FACE_OF[idOfVar(vi, f)] = f; } });
 const FURN_NORMAL = new Set(FURN.map((ty, t) => FVI[t][flagKey(withCell(ty, ty.states[0], 0))]));   // the normal state of each piece
-const FURN_BASES = FURN.map((ty, t) => FURN_BASE + FVI[t][flagKey(withCell(ty, ty.states[0], 0))]*4);   // the block a player carries, facing front
-const furnVar = (t, f, facing) => FURN_BASE + FVI[t][flagKey(f)]*4 + facing;   // NaN if the piece has no such state
+const FURN_BASES = FURN.map((ty, t) => idOfVar(FVI[t][flagKey(withCell(ty, ty.states[0], 0))], 0));   // the block a player carries, facing front
+const furnVar = (t, f, facing) => idOfVar(FVI[t][flagKey(f)], facing);   // NaN if the piece has no such state
 for(let vi = 0; vi < FURN_VAR.length; vi++) for(let f = 0; f < 4; f++){
   const v = FURN_VAR[vi];
-  BLOCKS[FURN_BASE + vi*4 + f] = {name:v.name, top:FURN[v.t].icon, side:FURN[v.t].icon, bot:FURN[v.t].icon, sw:FURN[v.t].sw};
+  BLOCKS[idOfVar(vi, f)] = {name:v.name, top:FURN[v.t].icon, side:FURN[v.t].icon, bot:FURN[v.t].icon, sw:FURN[v.t].sw};
 }
 const GLASS_ID = 10, LAMP_ID = 11, LAMP_TOP_ID = 26;
 const DOOR_ID = 12, DOOR_OPEN_ID = 13, DOOR_TOP_ID = 14, DOOR_TOP_OPEN_ID = 15;
 const BED_FOOT_ID = 16, BED_HEAD_ID = 17;
 // a lamp switched off: the same two blocks with a dark lantern, given the numbers just after the furniture
-const LAMP_OFF_ID = FURN_MAX+1, LAMP_OFF_TOP_ID = FURN_MAX+2;
+const LAMP_OFF_ID = 258, LAMP_OFF_TOP_ID = 259;   // fixed, so the dark lamps in a saved world stay dark lamps
 const isLampId = b => b===LAMP_ID || b===LAMP_TOP_ID || b===LAMP_OFF_ID || b===LAMP_OFF_TOP_ID;
 const isLampOn = b => b===LAMP_ID || b===LAMP_TOP_ID;
 const isLampTopId = b => b===LAMP_TOP_ID || b===LAMP_OFF_TOP_ID;
 const isLampBottomId = b => b===LAMP_ID || b===LAMP_OFF_ID;
 const lampId = (top, on) => top ? (on ? LAMP_TOP_ID : LAMP_OFF_TOP_ID) : (on ? LAMP_ID : LAMP_OFF_ID);
-const MAX_ID = LAMP_OFF_TOP_ID;          // highest block id (matches the server)
+const MAX_ID = Math.max(LAMP_OFF_TOP_ID, FURN_MAX);   // highest block id (matches the server)
 BLOCKS[LAMP_OFF_ID]     = {name:'Lamp (off)', top:76, side:76, bot:76, sw:'#8a8680'};
 BLOCKS[LAMP_OFF_TOP_ID] = {name:'Lamp (off)', top:76, side:76, bot:76, sw:'#8a8680'};
 const GLOWSTONE_ID = 47;                // a full block that gives light by itself
 // blocks that give light: lamps (both halves) and glowstone
 const LIGHT_SRC = new Uint8Array(MAX_ID+1);
 LIGHT_SRC[LAMP_ID] = LIGHT_SRC[LAMP_TOP_ID] = LIGHT_SRC[GLOWSTONE_ID] = 1;
-FURN_VAR.forEach((v, vi) => { if(v.f.lit) for(let f = 0; f < 4; f++) LIGHT_SRC[FURN_BASE + vi*4 + f] = 1; });   // a ceiling light that is on
+FURN_VAR.forEach((v, vi) => { if(v.f.lit) for(let f = 0; f < 4; f++) LIGHT_SRC[idOfVar(vi, f)] = 2; });   // a ceiling light that is on: brighter than a lamp
 const DOOR_PAIR = {12:13, 13:12, 14:15, 15:14};   // open <-> closed for each half of a door
 const isDoorId = b => b >= 12 && b <= 15;
 const isOpenDoor = b => b === DOOR_OPEN_ID || b === DOOR_TOP_OPEN_ID;
@@ -641,23 +682,55 @@ const SLOTS = 8;                                       // the inventory has 8 sl
 // food: items you carry and put in the fridge. They have numbers of their own, and can never be placed as blocks
 const ITEMS = [
   {name:'Apple',  icon:78, sw:'#c83a2c'}, {name:'Bread',  icon:79, sw:'#c89a5c'}, {name:'Milk',   icon:80, sw:'#f2f2f8'},
-  {name:'Cheese', icon:81, sw:'#f2c84a'}, {name:'Carrot', icon:82, sw:'#e8822c'}, {name:'Juice',  icon:83, sw:'#f4a028'}
+  {name:'Cheese', icon:81, sw:'#f2c84a'}, {name:'Carrot', icon:82, sw:'#e8822c'}, {name:'Juice',  icon:83, sw:'#f4a028'},
+  {name:'Glass',  icon:84, sw:'#cfeaf4'}, {name:'Water Glass', icon:85, sw:'#4f9fd8'}
 ];
 const ITEM_BASE = 1000;
 const ITEM_IDS = ITEMS.map((_, i) => ITEM_BASE + i);
 ITEMS.forEach((it, i) => { BLOCKS[ITEM_BASE + i] = {name:it.name, top:it.icon, side:it.icon, bot:it.icon, sw:it.sw}; });
 const isItem = b => b >= ITEM_BASE;
+const GLASS_CUP_ID = ITEM_BASE + 6, WATER_CUP_ID = ITEM_BASE + 7;   // an empty glass, and one full of water
+// plants and the poop lie on the floor: you walk through them, and they are not blocks you can place
+const DECOR_NAMES = ['Grass Tuft','Red Flower','Yellow Flower','Blue Flower','White Flower','Poop'];
+const DECOR_T = new Set(FURN.map((_, t) => t).filter(t => DECOR_NAMES.includes(FURN[t].name)));
+const PLANT_IDS = FURN_BASES.filter((_, t) => DECOR_T.has(t) && FURN[t].name !== 'Poop');
+const POOP_ID = FURN_BASES[FURN.findIndex(p => p.name === 'Poop')];
+const PLANT_TUFT_ID = FURN_BASES[FURN.findIndex(p => p.name === 'Grass Tuft')];
+const FLOWER_IDS = ['Red Flower','Yellow Flower','Blue Flower','White Flower'].map(n => FURN_BASES[FURN.findIndex(p => p.name === n)]);
+const SINK_NAMES = ['Kitchen Sink','Bathroom Sink'];
+const isSinkId = b => isFurn(b) && SINK_NAMES.includes(FURN[furnState(b).t].name);
 const CATS = [
-  {name:'Nature',       ids:[1,2,6,18,19,20,5,36,37,33,55,56,57]},
+  {name:'Nature',       ids:[1,2,6,18,19,20,5,36,37,33,55,56,57, ...PLANT_IDS]},
   {name:'Wood',         ids:[4,7,27,28,29,30,31,32,23]},
   {name:'Stone',        ids:[3,8,35,34,9,38,39,40,53,54]},
   {name:'Colors',       ids:[25,41,42,43,44,45,46]},
   {name:'Ores & Metal', ids:[24,48,49,50,21,22,51,52]},
   {name:'Light & Glass',ids:[10,11,47]},
-  {name:'Furniture',    ids:[12,16,...FURN_BASES]},
+  {name:'Furniture',    ids:[12,16,...FURN_BASES.filter((_, t) => !DECOR_T.has(t))]},
   {name:'Food',         ids:ITEM_IDS}
 ];
 const CATALOG = CATS.flatMap(c => c.ids);      // every block a player can carry
+// the rooms the Furniture tab can be filtered by
+const ROOMS = ['All','Kitchen','Bathroom','Bedroom','Living room','Lighting','Other'];
+const FURN_ROOM = {'Toilet':'Bathroom','Bathroom Sink':'Bathroom','Bathtub':'Bathroom','Washing Machine':'Bathroom','Trash Can':'Bathroom',
+  'Kitchen Sink':'Kitchen','Fridge':'Kitchen','Microwave':'Kitchen','Coffee Machine':'Kitchen','Counter':'Kitchen','Kitchen Cabinet':'Kitchen','Oven':'Kitchen','Dishwasher':'Kitchen',
+  'Bed':'Bedroom','Nightstand':'Bedroom','Drawers':'Bedroom','Chest':'Bedroom',
+  'Sofa':'Living room','Chair':'Living room','Table':'Living room','TV':'Living room','Bookshelf':'Living room','Rug':'Living room','Fireplace':'Living room','Computer Desk':'Living room',
+  'Ceiling Light':'Lighting','Ceiling Dome':'Lighting','Ceiling Spot':'Lighting','Light Switch':'Lighting'};
+function roomOf(id){ if(id === 16) return 'Bedroom'; if(isFurn(id)) return FURN_ROOM[FURN[furnState(id).t].name] || 'Other'; return 'Other'; }
+let roomFilter = 'All';                          // the room the Furniture tab shows
+function renderRooms(){
+  const box = $('roomtabs'); box.innerHTML = '';
+  if(catFilter !== 'Furniture') return;
+  for(const name of ROOMS){
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'tab' + (name === roomFilter ? ' on' : '');
+    b.textContent = name.toUpperCase();
+    b.onclick = () => { roomFilter = name; renderInv(); };
+    box.appendChild(b);
+  }
+}
+FURN_VAR.forEach((v, vi) => { if(DECOR_NAMES.includes(FURN[v.t].name)) for(let f = 0; f < 4; f++) NONSOLID.add(idOfVar(vi, f)); });
 let catFilter = 'All';                         // the catalog tab that is open
 const DEFAULT_INV = [1,2,3,7,10,11,12,8];              // Grass, Dirt, Stone, Planks, Glass, Lamp, Door, Cobblestone
 const HOTBAR = DEFAULT_INV.slice();                    // the 8 inventory slots; null = empty slot (filled in by loadInv)
@@ -725,6 +798,18 @@ function genChunk(cx,cz){
       data[x+z*CS+y*CS*CS]=t;
     }
   }
+  // grass tufts and flowers on the top of the ground (they are not blocks: you walk through them)
+  for(let z=0;z<CS;z++) for(let x=0;x<CS;x++){
+    const wx=cx*CS+x, wz=cz*CS+z, h=heights[x+z*CS];
+    if(h-1<=21 || h>=CH-1) continue;            // not on the beach, and not at the top of the world
+    const r=rnd2(wx,wz,SEED+20);
+    let t;
+    if(r<0.1) t=PLANT_TUFT_ID;
+    else if(r<0.13) t=FLOWER_IDS[Math.floor(rnd2(wx,wz,SEED+21)*FLOWER_IDS.length)];
+    else continue;
+    const i=x+z*CS+h*CS*CS;                     // the air just above the grass
+    if(data[i]===0) data[i]=t;
+  }
   // trees: only where the whole canopy fits inside the chunk
   for(let z=2;z<=CS-3;z++) for(let x=2;x<=CS-3;x++){
     const wx=cx*CS+x, wz=cz*CS+z, h=heights[x+z*CS], top=h-1;
@@ -789,11 +874,11 @@ function hasLight(data){
 }
 function lightAt(x,y,z){ return lightMap.get(lk(x,y,z)) || 0; }
 // spreads light outwards from one lamp, one step at a time, through blocks that let light pass
-function spreadLight(x0,y0,z0){
+function spreadLight(x0,y0,z0,s=1){
   const seen = new Set([lk(x0,y0,z0)]);
   let frontier = [[x0,y0,z0]];
   for(let d=0; d<=LIGHT_RANGE && frontier.length; d++){
-    const v = 1 - d/(LIGHT_RANGE+1);
+    const v = Math.min(1, s*(1 - d/(LIGHT_RANGE+1)));
     const next = [];
     for(const [x,y,z] of frontier){
       const k = lk(x,y,z);
@@ -822,7 +907,7 @@ function relightLamps(){
     const d = ch.data;
     for(let i=0;i<d.length;i++){
       if(!LIGHT_SRC[d[i]]) continue;
-      spreadLight(ch.cx*CS + (i%CS), Math.floor(i/(CS*CS)), ch.cz*CS + Math.floor(i/CS)%CS);
+      spreadLight(ch.cx*CS + (i%CS), Math.floor(i/(CS*CS)), ch.cz*CS + Math.floor(i/CS)%CS, LIGHT_SRC[d[i]] >= 2 ? 1.8 : 1);
     }
   }
   const redo = new Set();
@@ -868,10 +953,10 @@ function doorThinZ(wx,y,wz){ return isSolidId(getBlock(wx-1,y,wz)) || isSolidId(
 // 0 at the foot to 2 at the head) and across it (v runs 0 to 1). Each cell draws only the part of them that lies inside it.
 // x and z are chunk-local, as in buildMesh; wx and wz are world positions, used to look at the neighbouring cell.
 // furniture: each state of a piece has 4 block numbers, one per facing (furniture faces the player when placed)
-function isFurn(b){ return b >= FURN_BASE && b <= FURN_MAX; }
-function isFurnBase(b){ return isFurn(b) && FURN_NORMAL.has((b - FURN_BASE) >> 2) && ((b - FURN_BASE) & 3) === 0; }
-function furnState(b){ return FURN_VAR[(b - FURN_BASE) >> 2]; }
-function furnFacing(b){ return (b - FURN_BASE) & 3; }
+function isFurn(b){ return b >= 0 && b < VAR_OF.length && VAR_OF[b] >= 0; }
+function isFurnBase(b){ return isFurn(b) && FACE_OF[b] === 0 && FURN_NORMAL.has(VAR_OF[b]); }
+function furnState(b){ return FURN_VAR[VAR_OF[b]]; }
+function furnFacing(b){ return FACE_OF[b]; }
 // the facing a piece gets when put down: it turns to face the player
 function facingFromYaw(yaw){
   const fx = Math.sin(yaw), fz = Math.cos(yaw);      // the direction from the piece to the player
@@ -905,6 +990,20 @@ function emitFurn(V, I, nv, x, y, z, b){
     const r = rotBoxAt([x0,p[1],p[2]], [x1,p[4],p[5]], f, ty.wide ? c+0.5 : 0.5);
     nv = emitBox(V, I, nv, [x+r.lo[0], y+r.lo[1], z+r.lo[2]], [x+r.hi[0], y+r.hi[1], z+r.hi[2]], {top:p[6], side:p[7], bot:p[8]}, p[9]);
   }
+  return nv;
+}
+// the food and drink in an open fridge, drawn on its shelves: 12 slots in three rows of four
+function emitFridgeFood(V, I, nv, x, y, z, t, wx, wz){
+  const slots = fridges.get(wx+','+y+','+wz); if(!slots) return nv;
+  const f = furnFacing(t), rows = [0.11, 0.37, 0.61];
+  slots.forEach((food, i) => {
+    if(!food) return;
+    const c = i % 4, r = Math.floor(i / 4);
+    const x0 = 0.12 + c*0.2, z0 = 0.3, y0 = rows[r];
+    const rr = rotBoxAt([x0, y0, z0], [x0 + 0.14, y0 + 0.2, z0 + 0.26], f, 0.5);
+    const ic = BLOCKS[food].top;
+    nv = emitBox(V, I, nv, [x+rr.lo[0], y+rr.lo[1], z+rr.lo[2]], [x+rr.hi[0], y+rr.hi[1], z+rr.hi[2]], {top:ic, side:ic, bot:ic}, 0.3);
+  });
   return nv;
 }
 // the other half of a tall or wide piece, if there is one next to this block: [x,y,z] or null
@@ -962,6 +1061,7 @@ function furnAct(h){
   for(const a of ty.acts){
     const b = a.box;
     if(m[0] < b[0] || m[0] > b[3] || m[1] < b[1] || m[1] > b[4] || m[2] < b[2] || m[2] > b[5]) continue;
+    if(a.flush){ flushToilet(h); return true; }
     if(a.flag){
       let on = false;
       furnChange(h, f => { on = !f[a.flag]; f[a.flag] = on; return f; });
@@ -1043,6 +1143,7 @@ function sitOnFurniture(h){
   let u = s.u - 0.5, w = s.v - 0.5, fx = 0, fz = 1;
   for(let i = 0; i < f; i++){ [u, w] = [-w, u]; [fx, fz] = [-fz, fx]; }   // turned as the piece is turned
   seatPlayer(h.x + 0.5 + u, h.y + s.h, h.z + 0.5 + w, Math.atan2(-fx, -fz), null, [fx, fz]);
+  if(FURN[v.t].name === 'Toilet') player.seat.toilet = {x:h.x, y:h.y, z:h.z, front:[fx, fz]};
 }
 function sitOnBed(h){
   seatPlayer(h.x + 0.5, h.y + 0.5625, h.z + 0.5, player.yaw, {x:h.x, y:h.y, z:h.z}, null);
@@ -1055,9 +1156,31 @@ function standUp(){
   if(s.front){
     for(const d of [1.0, 0.7, 0.4]){
       const x = s.x + s.front[0]*d, z = s.z + s.front[1]*d;
-      for(const dy of [0, 0.6, 1.2]) if(!collides(x, s.y + dy, z)){ player.x = x; player.y = s.y + dy; player.z = z; player.vy = 0; return; }
+      for(const dy of [0, 0.6, 1.2]) if(!collides(x, s.y + dy, z)){ player.x = x; player.y = s.y + dy; player.z = z; player.vy = 0; if(s.toilet) leaveToilet(s.toilet); return; }
     }
   }
+  if(s.toilet) leaveToilet(s.toilet);
+}
+// getting up off the toilet leaves a mess on the floor beside it, on a cell the player is not standing in
+function leaveToilet(t){
+  const [fx, fz] = t.front;
+  for(const [dx, dz] of [[fx,fz], [-fx,-fz], [fz,-fx], [-fz,fx]]){
+    const x = t.x + dx, z = t.z + dz, y = t.y;
+    if(getBlock(x, y, z) !== 0 || !isSolidId(getBlock(x, y-1, z)) || overlapsPlayer(x, y, z)) continue;
+    placeCell(x, y, z, POOP_ID);
+    sfx.poop();
+    flashHud('YOU LEFT A MESS: right-click the flush button on the toilet');
+    return;
+  }
+}
+// the flush button: whatever was left on the floor near the toilet goes down with the water
+function flushToilet(h){
+  let gone = false;
+  for(let dx = -2; dx <= 2; dx++) for(let dz = -2; dz <= 2; dz++){
+    if(getBlock(h.x+dx, h.y, h.z+dz) === POOP_ID){ placeCell(h.x+dx, h.y, h.z+dz, 0); gone = true; }
+  }
+  sfx.flush();
+  flashHud(gone ? 'FLUSHED' : 'FLUSHED: NOTHING TO FLUSH');
 }
 
 /* ---------- food: hold food and right-click an open fridge to put it in. Open the fridge to take food out ---------- */
@@ -1065,6 +1188,8 @@ const FRIDGE_KEY = 'blockrealm_fridge_v1', FRIDGE_SLOTS = 12;
 const fridges = new Map();      // "x,y,z" of a fridge's bottom half -> its food: an item number per slot, 0 when empty
 try{ const o = JSON.parse(localStorage.getItem(FRIDGE_KEY) || '{}'); for(const k in o) if(Array.isArray(o[k])) fridges.set(k, o[k]); }catch(e){}
 function saveFridges(){ try{ localStorage.setItem(FRIDGE_KEY, JSON.stringify(Object.fromEntries(fridges))); }catch(e){} }
+// the food on the shelves is part of the fridge's mesh, so its chunk is meshed again when the food changes
+function refreshFridge(key){ const [x,z] = key.split(',').map(Number).filter((v, i) => i !== 1); markDirty(Math.floor(x/CS), Math.floor(z/CS)); }
 const isFridge = b => isFurn(b) && FURN[furnState(b).t].name === 'Fridge';
 const fridgeKey = h => furnState(h.id).f.top ? h.x+','+(h.y-1)+','+h.z : h.x+','+h.y+','+h.z;
 function fridgeFood(key){
@@ -1081,7 +1206,7 @@ function fridgeUse(h){
 function putFood(h, food){
   const slots = fridgeFood(fridgeKey(h)), i = slots.indexOf(0);
   if(i < 0){ flashHud('THE FRIDGE IS FULL'); return; }
-  slots[i] = food; saveFridges();
+  slots[i] = food; saveFridges(); refreshFridge(fridgeKey(h));
   sfx.click();
   flashHud('PUT ' + BLOCKS[food].name.toUpperCase() + ' IN THE FRIDGE');
 }
@@ -1116,7 +1241,7 @@ function takeFood(i){
   const free = HOTBAR.indexOf(null);
   if(free < 0){ $('fridgemsg').textContent = 'Your inventory is full: free a slot first'; return; }
   HOTBAR[free] = food; slots[i] = 0;
-  saveFridges(); saveInv(); buildHotbar();
+  saveFridges(); refreshFridge(fridgeOpen.key); saveInv(); buildHotbar();
   $('fridgemsg').textContent = 'Took ' + BLOCKS[food].name + ' out of the fridge';
   renderFridge();
 }
@@ -1255,7 +1380,11 @@ function buildMesh(ch){
       nv=emitBox(V,I,nv, [x+0.2,y+0.86,z+0.2], [x+0.8,y+0.94,z+0.8], {top:17,side:17,bot:17}, rim);
       continue;
     }
-    if(isFurn(t)){ nv=emitFurn(V,I,nv,x,y,z,t); continue; }
+    if(isFurn(t)){
+      nv=emitFurn(V,I,nv,x,y,z,t);
+      if(isFridge(t) && furnState(t).f.open && !furnState(t).f.top) nv=emitFridgeFood(V,I,nv,x,y,z,t,wx,wz);
+      continue;
+    }
     if(t===BED_FOOT_ID || t===BED_HEAD_ID){
       nv=emitBed(V,I,nv,x,y,z,wx,wz,t===BED_HEAD_ID,lightAt(wx,y+1,wz));
       continue;
@@ -1409,6 +1538,12 @@ function makeAtlasCanvas(){
       x.fillRect(ox+px,oy+py,1,1);
     }
   }
+  tile(84,(px,py)=>{ const n=rnd2(px,py,120); const e=px<2||px>13||py<2||py>13; return e ? [200,226,236] : [g(n,196,8),g(n,230,8),g(n,240,6)]; });   // an empty glass
+  tile(85,(px,py)=>{ const n=rnd2(px,py,121); const e=px<2||px>13||py<3; return e ? [190,220,236] : [g(n,60,14),g(n,140,16),g(n,210,14)]; });   // a glass of water
+  const flowerTile = (i, r, gc, b) => tile(i,(px,py)=>{ const n=rnd2(px,py,130+i); const d=Math.hypot(px-7.5,py-7.5);
+    if(d<=1.8) return [240,205,60]; if(d<=5.2) return [g(n,r,14),g(n,gc,14),g(n,b,14)]; return [g(n,88,36),g(n,156,40),g(n,58,24)]; });
+  flowerTile(86,200,40,40); flowerTile(87,236,196,50); flowerTile(88,60,100,220); flowerTile(89,240,240,236);   // flower heads on grass
+  tile(90,(px,py)=>{ const n=rnd2(px,py,140); return [g(n,96,18),g(n,62,14),g(n,34,10)]; });   // poop
   tile(0,(px,py)=>{ const n=rnd2(px,py,1); return [g(n,88,36),g(n,156,40),g(n,58,24)]; });              // grass top
   tile(1,(px,py)=>{ const cut=3+(rnd2(px,0,5)>0.5?1:0); if(py<cut){ const n=rnd2(px,py,2); return [g(n,88,36),g(n,156,40),g(n,58,24)]; }
                     const n=rnd2(px,py,3); return [g(n,132,40),g(n,94,34),g(n,58,26)]; });                  // grass side
@@ -1785,7 +1920,7 @@ function placeItem(id,x,y,z,dir,face){
     const extra = ty.tall ? [x,y+1,z] : ty.wide ? [x+furnDir(f)[0], y, z+furnDir(f)[1]] : null;
     if(extra && (getBlock(extra[0],extra[1],extra[2])!==0 || overlapsPlayer(extra[0],extra[1],extra[2]))) return false;
     if(extra) placeCell(extra[0],extra[1],extra[2], furnVar(t, ty.tall ? {top:1} : {lv:0, c:1}, f));
-    placeCell(x,y,z, id + f); return true;       // furniture turns to face the player when it is put down
+    placeCell(x,y,z, idOfVar(VAR_OF[id], f)); return true;       // furniture turns to face the player when it is put down
   }
   placeCell(x,y,z,id);
   return true;
@@ -1845,9 +1980,38 @@ function placeBunk(h){
   sfx.placeBlock(BED_FOOT_ID);
   flashHud('BUNK BED: THE TOP BUNK IS READY');
 }
+// a glass of water is drunk: it goes back to an empty glass
+function drinkWater(){
+  HOTBAR[sel] = GLASS_CUP_ID; saveInv(); buildHotbar();
+  sfx.drink();
+  flashHud('AHH, THAT HITS THE SPOT');
+}
+// how loud a running tap is from where the player stands: 0 when no tap is running nearby
+function tapVolume(){
+  let best = 0;
+  const px = Math.floor(player.x), py = Math.floor(player.y), pz = Math.floor(player.z);
+  for(let dx = -6; dx <= 6; dx++) for(let dz = -6; dz <= 6; dz++) for(let dy = -1; dy <= 2; dy++){
+    const b = getBlock(px+dx, py+dy, pz+dz);
+    if(!isSinkId(b) || !furnState(b).f.water) continue;
+    best = Math.max(best, 1 - Math.hypot(dx, dz)/7);
+  }
+  return best;
+}
 function doPlace(){
-  const h=raycast(6); if(!h) return;
+  const h=raycast(6);
+  // holding a glass of water: right-click drinks it, unless you are working a door, a light, the fridge or a bed
+  if(HOTBAR[sel]===WATER_CUP_ID && !(h && (isDoorId(h.id) || isLampId(h.id) || isFurn(h.id) || h.id===BED_FOOT_ID || h.id===BED_HEAD_ID))){ drinkWater(); return; }
+  if(!h) return;
   if(isDoorId(h.id)){ toggleDoor(h); return; }
+  // an empty glass held under a sink's basin fills up, while the tap is running
+  if(isSinkId(h.id) && HOTBAR[sel]===GLASS_CUP_ID){
+    const m = furnModelPoint(h);
+    if(m[0] > 0.22 && m[0] < 0.78 && m[2] > 0.3 && m[2] < 0.76 && m[1] > 0.7){   // the bowl: the top of the block reads as y 1.0
+      if(furnState(h.id).f.water){ HOTBAR[sel] = WATER_CUP_ID; saveInv(); buildHotbar(); sfx.pour(); flashHud('THE GLASS IS FULL OF WATER'); }
+      else flashHud('TURN ON THE TAP FIRST');
+      return;
+    }
+  }
   if(isLampId(h.id)){ toggleLamp(h); return; }                     // right-click switches a lamp on or off
   if(isFridge(h.id)){ fridgeUse(h); return; }                        // a fridge: its door, and the food in it
   if(isFurn(h.id) && (furnAct(h) || furnOpenToggle(h) || furnUse(h))) return;   // right-click works a tap, a plug, a door or a switch
@@ -1859,7 +2023,7 @@ function doPlace(){
   }
   const id=HOTBAR[sel];
   if(id==null){ flashHud('EMPTY SLOT: press E to choose a block'); return; }
-  if(isItem(id)){ flashHud('FOOD GOES IN THE FRIDGE: open one, then right-click it'); return; }
+  if(isItem(id)){ flashHud('FOOD AND DISHES GO IN THE FRIDGE: open one, then right-click it'); return; }
   const x=h.x+h.nx, y=h.y+h.ny, z=h.z+h.nz;
   const mt = isFurnBase(id) ? FURN[furnState(id).t].mount : null;
   if(mt === 'ceiling' && h.ny !== -1){ flashHud('HANG THE LIGHT UNDER A CEILING'); return; }
@@ -1943,9 +2107,11 @@ function renderInv(){
   for(let i = 0; i < SLOTS; i++) slots.appendChild(slotEl(i, true));
   markSel();
   renderTabs();
+  renderRooms();
   const cat = $('catalog'); cat.innerHTML = '';
   const shown = catFilter === 'All' ? CATALOG : (CATS.find(c => c.name === catFilter) || {ids:[]}).ids;
   for(const id of shown){
+    if(catFilter === 'Furniture' && roomFilter !== 'All' && roomOf(id) !== roomFilter) continue;
     const b = document.createElement('button');
     b.className = 'cat'; b.type = 'button'; b.title = BLOCKS[id].name;
     const ic = document.createElement('i'); setIcon(ic, BLOCKS[id].top); b.appendChild(ic);
@@ -2195,7 +2361,26 @@ const sfx = {
   chat(){ this.tone(523,784,0.12,'sine',0.12); },
   // a soft falling tone when someone climbs into bed
   bed(){ this.tone(330,220,0.5,'sine',0.10); },
-  click(){ this.tone(880,880,0.03,'square',0.04); }
+  click(){ this.tone(880,880,0.03,'square',0.04); },
+  // the toilet flushing: a rush of water, then a gurgle going down
+  flush(){ this.noise(1.6,0.35,'bandpass',900,0.6); this.noise(1.2,0.2,'lowpass',1400,0.7); this.tone(420,110,1.0,'sine',0.08); },
+  // a glass filling from the tap: a splash that rises as the water comes up
+  pour(){ this.noise(0.7,0.25,'bandpass',1200,1.2); this.tone(340,900,0.7,'sine',0.05); },
+  // a drink: three little gulps
+  drink(){ [0,0.2,0.4].forEach(d => setTimeout(() => { this.tone(520,300,0.12,'sine',0.12); this.noise(0.06,0.12,'bandpass',1400,2); }, d*1000)); },
+  // something heavy landing on the floor
+  poop(){ this.tone(120,60,0.2,'triangle',0.2); },
+  // a running tap: a hiss that gets louder as you come close (vol 0 to 1)
+  water(vol){
+    const c=this.ctx; if(!c) return;
+    if(!this.waterSrc){
+      const s=c.createBufferSource(), f=c.createBiquadFilter(), g=c.createGain();
+      s.buffer=this.noiseBuf; s.loop=true; f.type='bandpass'; f.frequency.value=1800; f.Q.value=0.6; g.gain.value=0;
+      s.connect(f); f.connect(g); g.connect(this.master); s.start();
+      this.waterSrc=s; this.waterGain=g;
+    }
+    this.waterGain.gain.setTargetAtTime(this.on ? vol*0.12 : 0, c.currentTime, 0.1);
+  }
 };
 sfx.on = (()=>{ try{ return localStorage.getItem('blockrealm_sound_v1') !== '0'; }catch(e){ return true; } })();
 function toggleSound(){
@@ -2838,6 +3023,7 @@ function frame(now){
     if(!player.sleeping && !player.seat) physics(dt);      // asleep or sitting, the player stays where they are
     target=raycast(6);
   } else target=null;
+  if(playing && sfx.ctx){ waterT -= dt; if(waterT <= 0){ waterT = 0.2; sfx.water(tapVolume()); } }
   if(playing && mpMode){
     mp.sendT -= dt;
     voiceT -= dt; if(voiceT <= 0){ voiceT = 0.25; updateVoice(); }
@@ -2856,7 +3042,7 @@ function frame(now){
   if(playing) { saveT=(saveT||0)+dt; if(saveT>10){ saveT=0; saveAll(); } }
   requestAnimationFrame(frame);
 }
-let saveT=0;
+let saveT=0, waterT=0;
 
 /* ---------- start-up ---------- */
 loadEdits();
@@ -2888,6 +3074,7 @@ requestAnimationFrame(frame);
 
 // for testing from the outside
 window.VOX = {
+  BLOCKS, lightAt, isSolidId, standUp, POOP_ID, GLASS_CUP_ID, WATER_CUP_ID, MAX_ID, FURN_ROOM, ROOMS, drinkWater, flushToilet, leaveToilet, tapVolume, emitFridgeFood, idOfVar, VAR_OF, roomOf,
   chunks, player, keys, getBlock, setBlock, raycast, start, pause, selectSlot,
   get playing(){ return playing; }, get target(){ return target; },
   doBreak, doPlace, daylight, get worldTime(){ return worldTime; }, set worldTime(v){ worldTime=v; },
