@@ -59,6 +59,9 @@
   .btn:focus-visible,.slot:focus-visible{outline:3px solid #ffe066;outline-offset:2px}
   #mpbox{display:flex;flex-direction:column;align-items:center;gap:8px;width:260px;max-width:80vw}
   #mpbox input{font:14px 'Courier New',monospace;width:100%;box-sizing:border-box;padding:10px;background:#11151f;color:#fff;border:2px solid #5b6578}
+  #mpbox .worldpick{display:flex;gap:8px;width:100%}
+  #mpbox .worldpick .btn{flex:1;width:auto;font-size:12px;padding:10px 4px}
+  #mpbox .btn.sel{background:#ffe066;color:#1a1a1a;border-color:#ffe066}
   #mpstatus{min-height:1.5em;color:#ffb3a7;font-size:13px;margin:0}
   .tag{position:fixed;left:0;top:0;transform:translate(-50%,-100%);font-size:12px;background:rgba(0,0,0,.55);padding:2px 6px;white-space:nowrap;pointer-events:none;text-shadow:1px 1px 0 #000}
   #chatlog{position:fixed;left:12px;bottom:96px;width:min(440px,70vw);max-height:260px;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;pointer-events:none;font-size:13px;line-height:1.35;text-shadow:1px 1px 0 #000;overflow:hidden}
@@ -172,7 +175,6 @@
       <button class="btn" id="leave" hidden>LEAVE SERVER</button>
       <button class="btn" id="adminbtn" type="button">ADMIN CODE</button>
       <button class="btn" id="settings">SETTINGS</button>
-      <button class="btn" id="reset">RESET WORLD</button>
     </div>
     <div id="settingsbox" hidden>
       <h2>SETTINGS</h2>
@@ -185,6 +187,12 @@
     <div id="mpbox" hidden>
       <input id="mpname" maxlength="16" placeholder="Your name" aria-label="Your name">
       <input id="mpurl" aria-label="Server address" placeholder="ws://localhost:8080/ws">
+      <p class="hint">Choose a world</p>
+      <div class="worldpick">
+        <button class="btn" id="worldpublic" type="button">PUBLIC WORLD</button>
+        <button class="btn" id="worldour" type="button">OUR WORLD</button>
+      </div>
+      <input id="mppass" type="password" maxlength="32" placeholder="OUR WORLD password" aria-label="OUR WORLD password" autocomplete="off" hidden>
       <button class="btn" id="mpgo">CONNECT</button>
       <button class="btn ghost" id="mpback">BACK</button>
       <p id="mpstatus" role="status"></p>
@@ -2757,11 +2765,22 @@ function showSettings(){
   $('mainbtns').hidden=true; $('mpbox').hidden=true; $('settingsbox').hidden=false;
   syncSettings();
 }
+// the world to join: PUBLIC WORLD anybody can join, or OUR WORLD, which needs its password (never saved)
+let mpWorld = 'public';
+function pickWorld(w){
+  mpWorld = w;
+  $('worldpublic').classList.toggle('sel', w === 'public');
+  $('worldour').classList.toggle('sel', w === 'our');
+  $('mppass').hidden = w !== 'our';
+}
+$('worldpublic').addEventListener('click', () => pickWorld('public'));
+$('worldour').addEventListener('click', () => pickWorld('our'));
 function showMP(){
   $('mainbtns').hidden=true; $('mpbox').hidden=false; $('settingsbox').hidden=true;
   let saved={}; try{ saved=JSON.parse(sessionStorage.getItem('blockrealm_mp')||'{}')||{}; }catch(e){}
   if(!$('mpname').value) $('mpname').value = saved.name || '';
   if(!$('mpurl').value) $('mpurl').value = saved.url || defaultWS();
+  pickWorld(saved.world === 'our' ? 'our' : 'public');
   $('mpname').focus();
 }
 function tagText(o){
@@ -2796,7 +2815,10 @@ function connectMP(){
   sfx.init();
   const url = $('mpurl').value.trim() || defaultWS();
   const name = ($('mpname').value.trim().replace(/[^\w \-.]/g,'').slice(0,16)) || 'Builder';
-  try{ sessionStorage.setItem('blockrealm_mp', JSON.stringify({url,name})); }catch(e){}
+  const world = mpWorld, password = world === 'our' ? $('mppass').value : '';
+  if(world === 'our' && !password){ mpStatus('Type the OUR WORLD password first.'); return; }
+  try{ sessionStorage.setItem('blockrealm_mp', JSON.stringify({url,name,world})); }catch(e){}
+  let denied = '';                                  // the server's reason, if it refuses us
   let ws;
   try{ ws = new WebSocket(url); }catch(e){ mpStatus('That is not a valid server address.'); return; }
   mp.ws = ws;
@@ -2804,9 +2826,10 @@ function connectMP(){
   const timer = setTimeout(()=>{
     if(!mpMode){ mpStatus('No answer from the server. Check the address and that the server is running.'); try{ ws.close(); }catch(e){} }
   }, 6000);
-  ws.onopen = ()=>{ ws.send(JSON.stringify({type:'hello', name})); };
+  ws.onopen = ()=>{ ws.send(JSON.stringify({type:'hello', name, world, password})); };
   ws.onmessage = ev=>{
     let m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
+    if(m.type==='denied'){ denied = m.msg || 'Could not join.'; mpStatus(denied); return; }
     if(m.type==='welcome'){ clearTimeout(timer); enterWorld(m); }
     else if(mpMode) onServerMessage(m);
   };
@@ -2815,11 +2838,12 @@ function connectMP(){
     mp.ws = null;
     adminRole = null; spectate.id = null;
     if(mpMode){ mpDropped(); }
-    else { mpStatus('Could not connect. Check the address and that the server is running.'); }
+    else { mpStatus(denied || 'Could not connect. Check the address and that the server is running.'); }
   };
 }
 function enterWorld(m){
   mpMode = true; mp.id = m.id;
+  if(m.worldName) flashHud('JOINED ' + m.worldName);
   if(m.mob) cowReceive(m.mob);
   if(typeof m.time==='number') worldTime = m.time;   // start at the server's time of day
   for(const k in edits) delete edits[k];
@@ -2952,8 +2976,7 @@ function loadPlayer(){
   }catch(e){}
   return false;
 }
-let resetting=false;   // set during a world reset so the page-unload save does not write the old edits back
-function saveAll(){ if(resetting) return; if(editsDirty){ saveEdits(); editsDirty=false; } savePlayer(); }
+function saveAll(){ if(editsDirty){ saveEdits(); editsDirty=false; } savePlayer(); }
 
 /* ---------- starting, pausing and resetting ---------- */
 let played=false;
@@ -2963,7 +2986,6 @@ function menuState(){
   $('resume').hidden = !played;
   $('multi').hidden = played || SINGLE_ONLY;
   $('leave').hidden = !mpMode;
-  $('reset').hidden = mpMode;
   syncSettings();
 }
 /* ---------- touch screens: a joystick to walk, drag to look, and round buttons for the actions ---------- */
@@ -3183,12 +3205,6 @@ $('mpname').addEventListener('keydown',e=>{ if(e.key==='Enter') connectMP(); });
 $('mpurl').addEventListener('keydown',e=>{ if(e.key==='Enter') connectMP(); });
 $('leave').addEventListener('click',leaveServer);
 $('sound').addEventListener('click',()=>{ sfx.init(); toggleSound(); });
-$('reset').addEventListener('click',()=>{
-  if(!confirm('Reset the world? All blocks you placed or broke will be lost.')) return;
-  resetting=true;
-  try{ localStorage.removeItem('blockrealm_edits_v1'); localStorage.removeItem('blockrealm_player_v1'); }catch(e){}
-  location.reload();
-});
 
 /* ---------- chunk loading and meshing ---------- */
 let meshBudget=3, genBudget=3;
