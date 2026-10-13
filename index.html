@@ -64,10 +64,10 @@
   #doorowner,#doorvisit{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%}
   #doorpanel input{font:16px 'Courier New',monospace;width:100%;box-sizing:border-box;padding:10px;text-align:center;letter-spacing:.2em;background:#11151f;color:#fff;border:2px solid #5b6578}
   #doormsg{min-height:1.4em;margin:0;font-size:13px;color:#ffe066;text-align:center}
-  #shopbox{position:fixed;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;background:rgba(8,12,22,.86)}
-  #shoppanel{display:flex;flex-direction:column;align-items:center;gap:10px;width:min(460px,100%);max-height:100%;overflow:auto;box-sizing:border-box;padding:18px;background:#161b26;border:3px solid #5b6578}
-  #shoppanel h2{margin:0;font-size:20px;letter-spacing:.14em;text-shadow:2px 2px 0 #000}
-  #shopcoins{margin:0;font-size:14px;color:#ffe066;text-align:center;display:flex;align-items:center;justify-content:center;gap:6px}
+  #shopbox,#casinobox{position:fixed;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box;background:rgba(8,12,22,.86)}
+  #shoppanel,#casinopanel{display:flex;flex-direction:column;align-items:center;gap:10px;width:min(460px,100%);max-height:100%;overflow:auto;box-sizing:border-box;padding:18px;background:#161b26;border:3px solid #5b6578}
+  #shoppanel h2,#casinopanel h2{margin:0;font-size:20px;letter-spacing:.14em;text-shadow:2px 2px 0 #000}
+  #shopcoins,#casinocoins{margin:0;font-size:14px;color:#ffe066;text-align:center;display:flex;align-items:center;justify-content:center;gap:6px}
   .shopcard{display:flex;flex-direction:column;gap:6px;padding:10px;background:#11151f;border:2px solid #3a4560;width:100%;box-sizing:border-box}
   .shopcard .btn{width:100%}
   .shopart{display:flex;justify-content:center;padding:4px 0}
@@ -225,6 +225,14 @@
   body.touch #fridgeslots{flex:1 1 auto;min-height:0;overflow-y:auto;grid-template-columns:repeat(2,1fr)}
   body.touch #invmsg{min-height:1em}
   body.touch #invbox .btn,body.touch #fridgebox .btn{width:100%;padding:11px}
+#mapbox{position:fixed;inset:0;z-index:30;display:flex;align-items:center;justify-content:center;background:rgba(5,8,14,.7);padding:12px;box-sizing:border-box}
+#mapbox[hidden]{display:none}
+#mappanel{display:flex;flex-direction:column;align-items:center;gap:8px;max-width:440px;width:100%;max-height:100%;overflow:auto;box-sizing:border-box;padding:14px;background:#161b26;border:3px solid #3a4560}
+#mappanel h2{margin:0;font-size:18px;letter-spacing:.14em}
+#mapcanvas{width:min(320px,80vw);height:min(320px,80vw);border:2px solid #3a4560;background:#0d111b}
+#mappanel .mapbtns{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+#mappanel .mapbtns .btn{width:auto;padding:8px 10px;font-size:12px}
+#mappanel .hint{margin:0;font-size:12px;text-align:center}
 </style>
 </head>
 <body>
@@ -255,6 +263,8 @@
   <div id="ttop">
     <button class="tbtn" id="tadmin" type="button" hidden>ADMIN</button>
     <button class="tbtn" id="tbag" type="button">BAG</button>
+    <button class="tbtn" id="tmap" type="button">MAP</button>
+    <button class="tbtn" id="tsmack" type="button" hidden>SMACK</button>
     <button class="tbtn" id="tchat" type="button" hidden>CHAT</button>
     <button class="tbtn" id="tmic" type="button" hidden>MIC</button>
     <button class="tbtn" id="tmenu" type="button">MENU</button>
@@ -303,7 +313,7 @@
     <div id="cashscreen" hidden>
       <h2>CASH</h2>
       <p class="hint" id="cashbal"></p>
-      <div id="cashtabs"><button class="tab on" type="button" data-cash="history">HISTORY</button><button class="tab" type="button" data-cash="send">SEND CASH</button><button class="tab" type="button" data-cash="plots">PLOTS &amp; OFFERS</button></div>
+      <div id="cashtabs"><button class="tab on" type="button" data-cash="history">HISTORY</button><button class="tab" type="button" data-cash="send">SEND CASH</button><button class="tab" type="button" data-cash="plots">PLOTS &amp; OFFERS</button><button class="tab" type="button" data-cash="mail">MAIL</button><button class="tab" type="button" data-cash="bounty">BOUNTY</button></div>
       <div class="pane cpane" data-cpane="history">
       <h3>RECENT TRANSACTIONS</h3>
       <div id="cashlist"></div>
@@ -314,6 +324,23 @@
       <input id="tradeamt" type="number" step="1" min="1" placeholder="Amount of cash" aria-label="Amount of cash to send">
       <button class="btn" id="tradesend" type="button">SEND CASH</button>
       <p id="trademsg" role="status"></p>
+      </div>
+      <div class="pane cpane" data-cpane="bounty" hidden>
+      <h3>PUT A BOUNTY ON A PLAYER</h3>
+      <select id="bountywho" aria-label="Player to put a bounty on"></select>
+      <input id="bountyamt" type="number" step="1" min="50" placeholder="Bounty in cash (50 to 100000)" aria-label="Bounty in cash" autocomplete="off">
+      <button class="btn" id="bountyset" type="button">PUT THE BOUNTY ON</button>
+      <h3>OPEN BOUNTIES</h3>
+      <div id="bountylist"></div>
+      <p class="hint">Smack a player with a bounty on them (aim at them and press F) to take it, then claim it at the shop.</p>
+      </div>
+      <div class="pane cpane" data-cpane="mail" hidden>
+      <h3>WRITE TO SOMEONE WHO IS OFFLINE</h3>
+      <input id="mailto" maxlength="16" placeholder="Their name" aria-label="Name of the player to write to" autocomplete="off">
+      <input id="mailtext" maxlength="120" placeholder="A short message" aria-label="Message" autocomplete="off">
+      <button class="btn" id="mailsend" type="button">SEND MESSAGE</button>
+      <h3>YOUR MAIL</h3>
+      <div id="maillist"></div>
       </div>
       <div class="pane cpane" data-cpane="plots" hidden>
       <h3>YOUR PLOTS: OFFER ONE FOR SALE</h3>
@@ -332,8 +359,8 @@
     <p class="help">Mouse: look &middot; WASD: move &middot; Space: jump &middot; Shift: run<br>
        Left click: break a block &middot; Right click: place the selected block<br>
        1-8 or mouse wheel: choose an inventory slot &middot; E: block catalog (add or remove blocks)<br>
-       Right click a door: open or close it &middot; Q at a door: set or open its password (multiplayer)<br>
-       Right click a bed at night: go to sleep &middot; Right click the shopkeeper: open the shop<br>
+       Right click a door: open or close it &middot; H at a door: set or open its password (multiplayer)<br>
+       N: map of the land near you &middot; Right click a bed at night: go to sleep &middot; Right click the shopkeeper: open the shop &middot; Right click a slot machine in the casino: play<br>
        <b>Cutting land:</b> hold the Land Surveyor. Right-click one corner block inside your plot, then right-click the opposite corner.<br>
        A yellow outline shows the part. Press CUT, name the new plot, and it becomes its own plot. Your other land stays yours.<br>
        M: sound effects on or off &middot; Esc: pause and save<br>
@@ -367,6 +394,21 @@
     <button class="btn buybig" id="cutgo" type="button">CUT</button>
     <button class="btn ghost" id="cutback" type="button">CANCEL</button>
     <p id="cutmsg" role="status"></p>
+  </div>
+</div>
+<div id="mapbox" hidden>
+  <div id="mappanel" role="dialog" aria-labelledby="maptitle">
+    <h2 id="maptitle">MAP</h2>
+    <canvas id="mapcanvas" width="320" height="320" aria-label="Map of the land around you"></canvas>
+    <p class="hint" id="mapinfo"></p>
+    <div class="mapbtns">
+      <button class="btn" id="mapme" type="button">CENTER ON ME</button>
+      <button class="btn" id="mapshop" type="button">CENTER ON SHOP</button>
+      <button class="btn" id="mapin" type="button">ZOOM IN</button>
+      <button class="btn" id="mapout" type="button">ZOOM OUT</button>
+    </div>
+    <p class="hint">Green: your land. Red: other players' land. Yellow: the shop. Press N or Esc to close.</p>
+    <button class="btn" id="mapclose" type="button">CLOSE (N)</button>
   </div>
 </div>
 <div id="codebox" hidden>
@@ -409,14 +451,38 @@
   </div>
 </div>
 
+<div id="casinobox" hidden>
+  <div id="casinopanel" role="dialog" aria-labelledby="casinotitle">
+    <h2 id="casinotitle">CASINO</h2>
+    <p class="hint" id="casinocoins"></p>
+    <div id="casinoslots">
+      <p class="hint">Three reels. Three SEVENs pays 60 times your bet, three of anything else pays 8 times, and two alike gets your bet back. Otherwise the bet is lost.</p>
+      <div id="slotreels" aria-live="polite"><span id="reel0">?</span><span id="reel1">?</span><span id="reel2">?</span></div>
+      <input id="slotbet" type="number" min="1" max="1000" step="1" value="10" aria-label="Bet" placeholder="Bet">
+      <button class="btn" id="slotspin" type="button">SPIN</button>
+      <p class="hint" id="slotmsg"></p>
+    </div>
+    <button class="btn" id="casinoclose" type="button">CLOSE (E)</button>
+  </div>
+</div>
 <div id="shopbox" hidden>
   <div id="shoppanel" role="dialog" aria-labelledby="shoptitle">
     <h2 id="shoptitle">SHOP</h2>
     <p class="hint" id="shopcoins"></p>
-    <div id="shoptabs"><button class="tab on" type="button" data-tab="items">ITEMS</button><button class="tab" type="button" data-tab="plots">MY PLOTS</button><button class="tab" type="button" data-tab="land">BUY LAND</button></div>
+    <div id="shoptabs"><button class="tab on" type="button" data-tab="items">ITEMS</button><button class="tab" type="button" data-tab="plots">MY PLOTS</button><button class="tab" type="button" data-tab="land">BUY LAND</button><button class="tab" type="button" data-tab="job">JOB</button><button class="tab" type="button" data-tab="bountyshop">BOUNTY</button></div>
     <div id="shopitems" class="pane"></div>
     <div id="shopplots" class="pane" hidden></div>
     <div id="shopland" class="pane" hidden></div>
+    <div id="shopjob" class="pane" hidden>
+      <p class="hint">Sweep the shop floor for the shopkeeper. He pays 10 cash a minute, up to 150 for a shift. A shift lasts 15 minutes at most, then there is a 5 minute break. You keep earning while you are in the game.</p>
+      <p class="hint" id="jobstate"></p>
+      <button class="btn" id="jobbtn" type="button">START SHIFT</button>
+    </div>
+    <div id="shopbounty" class="pane" hidden>
+      <p class="hint">A bounty is cash someone puts on a player. Smack that player (aim at them and press F) to take it: they stand still for 15 seconds. Then come back here to claim it.</p>
+      <p class="hint" id="bountyclaim"></p>
+      <button class="btn" id="bountyclaimbtn" type="button">CLAIM BOUNTY</button>
+    </div>
     <p id="shopmsg" role="status"></p>
     <div id="shopearn">
       <h3>HOW TO GET CASH</h3>
@@ -443,7 +509,7 @@
       <button class="btn" id="doorgo" type="button">UNLOCK</button>
     </div>
     <p id="doormsg" role="status"></p>
-    <button class="btn" id="doorclose" type="button">CLOSE (Q)</button>
+    <button class="btn" id="doorclose" type="button">CLOSE (H)</button>
   </div>
 </div>
 
@@ -1122,7 +1188,22 @@ function findShopSite(ax, az){
 }
 const SHOP = findShopSite(22, 14);                  // the first shop
 const SHOP_HOUSE_A = findShopSite(22, -18);         // ShopkeeperHouseA: a second shop, north of the first
-const SHOP_SITES = [SHOP, SHOP_HOUSE_A];
+const CASINO = findShopSite(-20, 14);               // the casino: the same kind of building, with a row of slot machines at the back
+CASINO.casino = true; CASINO.counterZ = -1;         // no counter in the casino
+const CASINO_SITES = [CASINO];
+const SHOP_SITES = [SHOP, SHOP_HOUSE_A, CASINO];
+// the slot machines: three in the back row of the casino, each two gold blocks high. More machines go in this list.
+const CASINO_MACHINE_XS = [2, 4, 6], CASINO_MACHINE_Z = SHOP_D - 2, MACHINE_ID = 18;
+// which slot machine (0, 1, 2...) the block at (wx,wy,wz) is part of, or -1
+function machineAt(wx, wy, wz){
+  for(const S of CASINO_SITES){
+    const lx = wx - S.x0, lz = wz - S.z0, hy = wy - S.floorY;
+    if(lz !== CASINO_MACHINE_Z || (hy !== 1 && hy !== 2)) continue;
+    const i = CASINO_MACHINE_XS.indexOf(lx);
+    if(i >= 0) return i;
+  }
+  return -1;
+}
 function insideShop(wx, wz){ return SHOP_SITES.some(S => wx >= S.x0 && wz >= S.z0 && wx < S.x0 + SHOP_W && wz < S.z0 + SHOP_D); }
 // does a rectangle of blocks (inclusive corners) touch either shop: plots cannot be bought there
 function rectTouchesShop(x0, z0, x1, z1){ return SHOP_SITES.some(S => x0 <= S.x0 + SHOP_W - 1 && x1 >= S.x0 && z0 <= S.z0 + SHOP_D - 1 && z1 >= S.z0); }
@@ -1138,6 +1219,7 @@ function shopBlockAtSite(S, wx, wy, wz, h){
   if(hy > SHOP_H + 1) return 0;
   const wall = lx === 0 || lz === 0 || lx === SHOP_W - 1 || lz === SHOP_D - 1;
   if(!wall){
+    if(S.casino && lz === CASINO_MACHINE_Z && (hy === 1 || hy === 2) && CASINO_MACHINE_XS.includes(lx)) return MACHINE_ID;   // a slot machine
     if(hy === 1 && lz === S.counterZ && lx >= 2 && lx <= SHOP_W - 3) return 7;   // the counter
     return 0;                                       // the room is empty
   }
@@ -2619,6 +2701,7 @@ function doBreak(){
   if(HOTBAR[sel]===HACK_TOOL_ID) return;   // the hacker tool breaks nothing
   if(HOTBAR[sel]===SURVEY_ID){ surveyClick(h); return; }   // the Land Surveyor: left-click sets a corner
   if(!h) return;
+  if(machineAt(h.x, h.y, h.z) >= 0){ flashHud('THE SLOT MACHINE IS BOLTED DOWN'); return; }
   const cells=[[h.x,h.y,h.z]];
   const p=partnerOf(h.x,h.y,h.z,h.id); if(p) cells.push(p);   // a door or bed comes down as a whole
   { const lb = mpMode ? cells.map(([x,y,z]) => landBlock(x,z)).find(Boolean) : null; if(lb){ flashHud(lb); return; } }
@@ -2757,6 +2840,7 @@ function tapVolume(){
 }
 function doPlace(){
   if(shopAim()){ openShop(); return; }   // right-click the shopkeeper: the shop opens
+  { const mh = raycast(6); if(mh && machineAt(mh.x, mh.y, mh.z) >= 0){ openCasino(); return; } }   // right-click a slot machine: the casino opens
   if(HOTBAR[sel]===HACK_TOOL_ID){ hackDoor(raycast(6)); return; }   // the hacker tool: right-click a locked door to decode it
   if(HOTBAR[sel]===SURVEY_ID){ surveyRight(raycast(6)); return; }   // the Land Surveyor: right-click on your land picks a part to cut out, elsewhere cancels
   const h=raycast(6);
@@ -2926,7 +3010,7 @@ function closeInv(){
 }
 $('invclose').addEventListener('click', closeInv);
 
-/* ---------- doors with passwords: whoever placed a door can give it a password (press Q at the door, or tap DOOR on a touch screen) ---------- */
+/* ---------- doors with passwords: whoever placed a door can give it a password (press H at the door, or tap DOOR on a touch screen) ---------- */
 // this browser's player id: random, kept on this device, and sent when joining, so the server knows whose blocks and doors are whose
 let myPid = null;
 function playerId(){
@@ -2987,11 +3071,11 @@ function askDoor(x, y, z){
   doorWait = doorKeyOf(x, y, z);
   mpSend({type:'doorinfo', x, y, z});
 }
-// Q (or the DOOR button): asks about the door you are looking at
+// H (or the DOOR button): asks about the door you are looking at
 function useDoorKey(){
   if(!playing) return;
   const h = raycast(6);
-  if(!h || !isDoorId(h.id)){ flashHud('LOOK AT A DOOR, THEN PRESS Q'); return; }
+  if(!h || !isDoorId(h.id)){ flashHud('LOOK AT A DOOR, THEN PRESS H'); return; }
   askDoor(h.x, lowerHalfY(h), h.z);
 }
 function onDoorInfo(m){
@@ -3151,6 +3235,19 @@ function setCashTab(name){
   for(const p of document.querySelectorAll('.cpane')) p.hidden = p.dataset.cpane !== name;
 }
 for(const b of document.querySelectorAll('#cashtabs .tab')) b.addEventListener('click', () => setCashTab(b.dataset.cash));
+/* ---------- mail: write to a player who is offline. It waits for them and they see it when they next join ---------- */
+let mailInbox = [];
+function renderMail(){
+  const list = $('maillist'); list.textContent = '';
+  if(!mailInbox.length){ const p = document.createElement('p'); p.className = 'hint'; p.textContent = 'No mail yet.'; list.appendChild(p); return; }
+  for(const m of mailInbox){ const row = document.createElement('p'); row.className = 'hint'; row.textContent = m.from + ': ' + m.text; list.appendChild(row); }
+}
+$('mailsend').addEventListener('click', () => {
+  if(!mpMode){ $('trademsg').textContent = 'MAIL NEEDS THE MULTIPLAYER SERVER'; return; }
+  mpSend({type:'mail', to: $('mailto').value.trim(), text: $('mailtext').value.trim()});
+  $('mailtext').value = '';
+});
+document.querySelector('#cashtabs [data-cash="mail"]').addEventListener('click', renderMail);
 function renderCash(){
   renderOffers();
   $('cashbal').textContent = mpMode ? 'Your cash: ' + fmtCash(myCoins) : 'Join a multiplayer world to have cash.';
@@ -3270,8 +3367,22 @@ function closeShop(){
   if(!shopOpen) return;
   shopOpen = false;
   $('shopbox').hidden = true;
+  $('casinobox').hidden = true; casinoMode = false;
   if(playing) lockPointer();
 }
+// the casino: the slot machines, in their own panel (the shop panel stays closed)
+let casinoMode = false;     // true while the open panel is the casino
+function openCasino(){
+  if(!playing || shopOpen || codeOpen || invOpen || fridgeOpen || doorShown || chatOpen || player.sleeping) return;
+  shopOpen = true; casinoMode = true;
+  for(const k in keys) keys[k] = false;
+  try{ document.exitPointerLock(); }catch(e){}
+  renderCasino();
+  $('casinobox').hidden = false;
+  $('casinoclose').focus();
+}
+function renderCasino(){ $('casinocoins').textContent = 'You have ' + fmtCash(myCoins) + ' to play with.'; }
+$('casinoclose').addEventListener('click', closeShop);
 function coinSpan(){ const s = document.createElement('span'); s.className = 'coinicon'; s.innerHTML = COIN_SVG; return s; }
 function shopNote(text){ $('shopmsg').textContent = text; }
 // a top-down picture of the measured plot: grass, the blocks already built on it, and a house for each building
@@ -3340,6 +3451,10 @@ function canMerge(a, b){
 function setShopTab(name){
   for(const b of document.querySelectorAll('#shoptabs .tab')) b.classList.toggle('on', b.dataset.tab === name);
   $('shopitems').hidden = name !== 'items'; $('shopplots').hidden = name !== 'plots'; $('shopland').hidden = name !== 'land';
+  $('shopjob').hidden = name !== 'job'; $('shopbounty').hidden = name !== 'bountyshop';
+  shopTab = name;
+  if(name === 'job') renderJob();
+  if(name === 'bountyshop') renderBountyShop();
 }
 for(const b of document.querySelectorAll('#shoptabs .tab')) b.addEventListener('click', () => setShopTab(b.dataset.tab));
 // the pause menu's leaderboard: the top players in each column (names are shown as text only)
@@ -3586,6 +3701,129 @@ $('shopclose').addEventListener('click', closeShop);
 
 /* ---------- private panel: press P in the game, enter the code, then toggle invisibility ---------- */
 // the code is checked in the browser only; it keeps casual visitors out of the panel, it is not a real lock
+/* ---------- the shop's job, the slot machine, claiming a bounty, and smacking ---------- */
+let shopTab = 'items';
+let shiftState = {on: false, paid: 0, endsAt: 0, breakUntil: 0};
+let bountyState = {list: [], claim: 0};
+let freezeUntil = 0;                                   // a smacked player stands still until this time (performance.now)
+function renderJob(){
+  const now = Date.now();
+  $('jobstate').textContent = !mpMode ? 'The job needs the multiplayer server.'
+    : shiftState.on ? 'On shift: ' + shiftState.paid + ' cash earned so far, ' + Math.max(0, Math.ceil((shiftState.endsAt - now) / 60000)) + ' minutes to go.'
+    : shiftState.breakUntil > now ? 'On a break: ' + Math.ceil((shiftState.breakUntil - now) / 60000) + ' minutes left.'
+    : 'You are not working right now.';
+  $('jobbtn').textContent = shiftState.on ? 'END SHIFT' : 'START SHIFT';
+  $('jobbtn').disabled = !mpMode;
+}
+$('jobbtn').addEventListener('click', () => mpSend({type:'job', action: shiftState.on ? 'stop' : 'start'}));
+function renderBountyShop(){
+  $('bountyclaim').textContent = bountyState.claim ? 'You have a bounty to claim: ' + bountyState.claim + ' cash.' : 'You have no bounty to claim right now.';
+  $('bountyclaimbtn').disabled = !bountyState.claim;
+}
+$('bountyclaimbtn').addEventListener('click', () => mpSend({type:'claim'}));
+$('slotspin').addEventListener('click', () => {
+  if(!mpMode){ $('slotmsg').textContent = 'The slot machine needs the multiplayer server.'; return; }
+  const bet = Math.trunc(Number($('slotbet').value));
+  if(!Number.isFinite(bet) || bet < 1 || bet > 1000){ $('slotmsg').textContent = 'Bet between 1 and 1000.'; return; }
+  $('slotspin').disabled = true; setTimeout(() => { $('slotspin').disabled = false; }, 1600);   // a spin takes a moment
+  $('slotmsg').textContent = 'Spinning...';
+  mpSend({type:'slots', bet});
+});
+function renderBountyList(){
+  const box = $('bountylist'); if(!box) return; box.textContent = '';
+  if(!bountyState.list.length){ const p = document.createElement('p'); p.className = 'hint'; p.textContent = 'No bounties right now.'; box.appendChild(p); return; }
+  for(const b of bountyState.list){ const row = document.createElement('p'); row.className = 'hint'; row.textContent = b.name + ': ' + b.amount + ' cash'; box.appendChild(row); }
+}
+function fillBountyWho(){
+  const sel = $('bountywho'), keep = sel.value; sel.textContent = '';
+  for(const o of [...mp.others.values()].sort((a, b) => a.name.localeCompare(b.name))){ const op = document.createElement('option'); op.value = o.id; op.textContent = o.name; sel.appendChild(op); }
+  if(keep) sel.value = keep;
+}
+$('bountyset').addEventListener('click', () => {
+  if(!mpMode) return;
+  const amount = Math.trunc(Number($('bountyamt').value));
+  mpSend({type:'bounty', action:'set', target: +$('bountywho').value, amount});
+  $('bountyamt').value = '';
+});
+document.querySelector('#cashtabs [data-cash="bounty"]').addEventListener('click', () => { fillBountyWho(); renderBountyList(); });
+setInterval(() => { if(shopOpen && shopTab === 'job') renderJob(); }, 1000);
+// the player you are aiming at, within smacking distance (or null)
+function smackTarget(){
+  if(!mpMode || !playing) return null;
+  let best = null, bestD = 4.5;
+  const cp = Math.cos(player.pitch), ex = player.x, ey = player.y + 1.6, ez = player.z;
+  const fx = -Math.sin(player.yaw) * cp, fy = Math.sin(player.pitch), fz = -Math.cos(player.yaw) * cp;
+  for(const o of mp.others.values()){
+    if(!o || o.hidden) continue;
+    const vx = o.x - ex, vy = (o.y + 0.9) - ey, vz = o.z - ez;
+    const d = Math.hypot(vx, vy, vz);
+    if(d < 0.01 || d > bestD) continue;
+    if((vx * fx + vy * fy + vz * fz) / d > 0.96){ best = o; bestD = d; }
+  }
+  return best;
+}
+function smack(){
+  if(!mpMode) return;
+  const o = smackTarget();
+  if(!o){ flashHud('AIM AT A PLAYER TO SMACK THEM'); return; }
+  mpSend({type:'smack', target: o.id});
+  sfx.click();
+}
+
+/* ---------- the map: the land near you, or near the shop (press N, or MAP on a touch screen). Green is your land, red is other players' ---------- */
+let mapOpen = false, mapRadius = 48, mapCenter = 'me';   // the radius in blocks; the map is centred on 'me' or 'shop'
+function mapView(){ return mapCenter === 'shop' ? {x: SHOP.x0 + SHOP_W / 2, z: SHOP.z0 + SHOP_D / 2} : {x: player.x, z: player.z}; }
+function openMap(){
+  if(!playing || mapOpen || codeOpen || invOpen || fridgeOpen || shopOpen || chatOpen || player.sleeping) return;
+  mapOpen = true;
+  for(const k in keys) keys[k] = false;
+  try{ document.exitPointerLock(); }catch(e){}
+  $('mapbox').hidden = false;
+  drawMap();
+  $('mapclose').focus();
+}
+function closeMap(){
+  if(!mapOpen) return;
+  mapOpen = false;
+  $('mapbox').hidden = true;
+  if(playing) lockPointer();
+}
+// draws the land within the radius of the view. The plots come from the world's list, so a far-off plot shows once you are near it
+function drawMap(){
+  const cv = $('mapcanvas'), g = cv.getContext('2d'), S = cv.width;
+  const c = mapView(), R = mapRadius, k = S / (2 * R);     // k: pixels per block
+  const X = x => (x - c.x + R) * k, Z = z => (z - c.z + R) * k;
+  g.fillStyle = '#0d111b'; g.fillRect(0, 0, S, S);
+  const step = R > 60 ? 32 : 16;                           // grid lines, every 16 (or 32) blocks
+  g.strokeStyle = 'rgba(255,255,255,.08)'; g.lineWidth = 1;
+  for(let gx = Math.ceil((c.x - R) / step) * step; gx <= c.x + R; gx += step){ g.beginPath(); g.moveTo(X(gx), 0); g.lineTo(X(gx), S); g.stroke(); }
+  for(let gz = Math.ceil((c.z - R) / step) * step; gz <= c.z + R; gz += step){ g.beginPath(); g.moveTo(0, Z(gz)); g.lineTo(S, Z(gz)); g.stroke(); }
+  let shown = 0, mine = 0;
+  for(const pl of plotList){
+    if(pl.x1 < c.x - R || pl.x0 > c.x + R || pl.z1 < c.z - R || pl.z0 > c.z + R) continue;
+    shown++; if(pl.mine) mine++;
+    const x = X(pl.x0), z = Z(pl.z0), w = (pl.x1 - pl.x0 + 1) * k, h = (pl.z1 - pl.z0 + 1) * k;
+    g.fillStyle = pl.mine ? 'rgba(88,194,90,.55)' : 'rgba(230,89,75,.5)';
+    g.fillRect(x, z, w, h);
+    g.strokeStyle = pl.mine ? '#7ee39a' : '#e6594b'; g.lineWidth = 2; g.strokeRect(x, z, w, h);
+  }
+  g.fillStyle = '#ffe066'; g.fillRect(X(SHOP.x0), Z(SHOP.z0), SHOP_W * k, SHOP_D * k);   // the shop
+  g.fillStyle = '#c58cff'; for(const S of CASINO_SITES) g.fillRect(X(S.x0), Z(S.z0), SHOP_W * k, SHOP_D * k);   // the casino
+  g.fillStyle = '#ffffff';
+  if(mpMode) for(const o of mp.others.values()){ if(!o || o.hidden) continue; g.beginPath(); g.arc(X(o.x), Z(o.z), 3, 0, Math.PI * 2); g.fill(); }
+  const px = X(player.x), pz = Z(player.z);                // you, with a line for the way you face
+  g.strokeStyle = '#4fd1ff'; g.lineWidth = 2; g.beginPath(); g.moveTo(px, pz); g.lineTo(px - Math.sin(player.yaw) * 14, pz - Math.cos(player.yaw) * 14); g.stroke();
+  g.fillStyle = '#4fd1ff'; g.beginPath(); g.arc(px, pz, 4, 0, Math.PI * 2); g.fill();
+  const dShop = Math.round(Math.hypot(player.x - (SHOP.x0 + SHOP_W / 2), player.z - (SHOP.z0 + SHOP_D / 2)));
+  $('mapinfo').textContent = shown + ' plot' + (shown === 1 ? '' : 's') + ' in view (' + mine + ' yours) · radius ' + R + ' blocks · the shop is ' + dShop + ' blocks from you';
+}
+$('mapclose').addEventListener('click', closeMap);
+$('mapme').addEventListener('click', () => { mapCenter = 'me'; drawMap(); });
+$('mapshop').addEventListener('click', () => { mapCenter = 'shop'; drawMap(); });
+$('mapin').addEventListener('click', () => { mapRadius = Math.max(12, Math.round(mapRadius * 0.6)); drawMap(); });
+$('mapout').addEventListener('click', () => { mapRadius = Math.min(400, Math.round(mapRadius * 1.6)); drawMap(); });
+setInterval(() => { if(mapOpen) drawMap(); }, 250);      // the map follows you and the other players while it is open
+
 let codeOpen = false;
 let adminRole = null;                      // 'designer' or 'creator' once the server has accepted the code
 const isAdmin = () => !!adminRole;
@@ -3769,7 +4007,8 @@ let flashT=0;
 function flashHud(text){ $('tm').textContent=text; flashT=2.0; }
 
 addEventListener('keydown',e=>{
-  if(chatOpen) return;                          // while typing in chat, keys belong to the chat box
+  if(chatOpen) return;
+  if(mapOpen){ if((e.code==='KeyN' || e.code==='Escape') && !e.repeat){ e.preventDefault(); closeMap(); } return; }   // the map is open: only N or Esc does anything                          // while typing in chat, keys belong to the chat box
   if(fridgeOpen){                               // the fridge shelves are open: only E or Esc do anything
     if((e.code==='KeyE' || e.code==='Escape') && !e.repeat){ e.preventDefault(); closeFridge(false); }
     return;
@@ -3779,7 +4018,7 @@ addEventListener('keydown',e=>{
     return;
   }
   if(doorShown){                                  // the door panel is open: only Q or Esc does anything (typing in its boxes is left alone)
-    if(((e.code==='KeyQ' && !(document.activeElement && document.activeElement.tagName==='INPUT')) || e.code==='Escape') && !e.repeat){ e.preventDefault(); closeDoor(); }
+    if(((e.code==='KeyH' && !(document.activeElement && document.activeElement.tagName==='INPUT')) || e.code==='Escape') && !e.repeat){ e.preventDefault(); closeDoor(); }
     return;
   }
   if(shopOpen){                                   // the shop is open: only E or Esc leaves it
@@ -3794,6 +4033,8 @@ addEventListener('keydown',e=>{
   }
   if(e.code==='KeyT' && playing && mpMode && !e.repeat){ e.preventDefault(); openChat(); return; }
   if(e.code==='KeyV' && playing && mpMode && !e.repeat){ e.preventDefault(); toggleMic(); return; }
+  if(e.code==='KeyN' && playing && !e.repeat){ e.preventDefault(); openMap(); return; }
+  if(e.code==='KeyF' && playing && !e.repeat){ e.preventDefault(); smack(); return; }
   if(!playing){ if(e.code==='Escape') pause(); return; }
   if(e.code==='Escape'){ pause(); return; }
   if(player.seat){                              // sitting: Z lies down on a bed; a move key or Space gets you up
@@ -3810,7 +4051,7 @@ addEventListener('keydown',e=>{
   }
   if(e.code==='KeyE' && !e.repeat){ e.preventDefault(); openInv(); return; }
   if(e.code==='KeyP' && !e.repeat){ e.preventDefault(); openCode(); return; }
-  if(e.code==='KeyQ' && !e.repeat){ e.preventDefault(); useDoorKey(); return; }
+  if(e.code==='KeyH' && !e.repeat){ e.preventDefault(); useDoorKey(); return; }
   if(e.code==='KeyG' && !e.repeat){ e.preventDefault(); openCashFromGame(); return; }
   if(e.code==='Space' && !e.repeat){
     // two quick taps of Space switch flying on or off
@@ -3854,7 +4095,7 @@ cv.addEventListener('mousedown',e=>{
 cv.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('pointerlockchange',()=>{
   if(document.pointerLockElement) lookFrom = performance.now() + 150;
-  if(!document.pointerLockElement && playing && !chatOpen && !invOpen && !codeOpen && !fridgeOpen && !doorShown && !shopOpen && !cutOpen) pause();   // releasing the mouse to type in chat or use the catalog is not a pause
+  if(!document.pointerLockElement && playing && !chatOpen && !invOpen && !codeOpen && !fridgeOpen && !doorShown && !shopOpen && !cutOpen && !mapOpen) pause();   // releasing the mouse to type in chat or use the catalog is not a pause
 });
 
 /* ---------- sound: every effect is synthesised with Web Audio, so there are no sound files to load ---------- */
@@ -4271,7 +4512,7 @@ function onServerMessage(m){
   else if(m.type==='doorresult'){ onDoorResult(m); }
   else if(m.type==='wallet'){
     cashSound(+m.cash || 0);
-    myCoins = +m.cash || 0; myTools = +m.tools || 0; syncTool(); syncCash(); if(shopOpen) renderShop();
+    myCoins = +m.cash || 0; myTools = +m.tools || 0; syncTool(); syncCash(); if(shopOpen) casinoMode ? renderCasino() : renderShop();
     if(cashVisible()){ renderCash(); mpSend({type:'cashlog'}); }
   }
   else if(m.type==='plots'){ plotList = m.list || []; if(shopOpen) renderShop(); }
@@ -4298,6 +4539,32 @@ function onServerMessage(m){
     editsDirty = true; lightDirty = true;
   }
   else if(m.type==='cashlog'){ cashEntries = m.entries || []; if(cashVisible()) renderCash(); }
+  else if(m.type==='shift'){
+    shiftState = {on: !!m.on, paid: m.paid || 0, endsAt: m.endsAt || 0, breakUntil: m.breakUntil || 0};
+    if(shopOpen && shopTab === 'job') renderJob();
+  }
+  else if(m.type==='bounties'){
+    bountyState = {list: m.list || [], claim: m.claim || 0};
+    if(shopOpen && shopTab === 'bountyshop') renderBountyShop();
+    if(cashVisible()) renderBountyList();
+  }
+  else if(m.type==='slotresult'){
+    [0, 1, 2].forEach(i => { $('reel' + i).textContent = m.reels[i]; });
+    $('slotmsg').textContent = m.win > m.bet ? 'You won ' + (m.win - m.bet) + ' cash!'
+      : m.win === m.bet ? 'A pair: your ' + m.bet + ' cash comes back'
+      : 'No win this time.';
+    if(m.win > 0) sfx.click();
+    if(casinoMode) renderCasino();
+  }
+  else if(m.type==='freeze'){
+    freezeUntil = performance.now() + m.seconds * 1000;
+    flashHud('SMACKED! YOU CANNOT MOVE FOR ' + m.seconds + ' SECONDS');
+  }
+  else if(m.type==='mail'){                       // messages written while you were away
+    mailInbox = mailInbox.concat(m.list || []); renderMail();
+    flashHud('YOU HAVE ' + (m.list || []).length + ' NEW MESSAGE' + ((m.list || []).length === 1 ? '' : 'S') + ': PAUSE MENU > CASH > MAIL');
+    sfx.click();
+  }
   else if(m.type==='notice'){
     const t = fmtNums(m.text || ''); if(/^NOT ENOUGH|^YOU DO NOT HAVE/.test(t)) sfx.error(); flashHud(t); if(shopOpen) shopNote(t); if(cashVisible()) $('trademsg').textContent = t;
     if(/^YOUR PLOT IS READY/.test(t)){ plotNameDraft = ''; survey = {a:null, b:null}; if(shopOpen) renderShop(); }
@@ -4535,6 +4802,8 @@ const tBtns = [
   {el:$('tshop'), down:() => openShop()},
   {el:$('ttrade'), down:() => openCashFromGame()},
   {el:$('tbag'), down:() => tapKey('KeyE', true)},
+  {el:$('tmap'), down:() => openMap()},
+  {el:$('tsmack'), down:() => smack()},
   {el:$('tchat'), down:() => tapKey('KeyT', true)},
   {el:$('tmic'), down:() => tapKey('KeyV', true)},
   {el:$('tmenu'), down:() => pause()},
@@ -4571,6 +4840,7 @@ function syncTouch(){
   $('tmic').hidden = !mpMode;
   $('tdoor').hidden = !(target && isDoorId(target.id));
   $('tshop').hidden = !shopAim();
+  $('tsmack').hidden = !smackTarget();
   $('ttrade').hidden = !mpMode;
 }
 
@@ -4624,7 +4894,7 @@ function pause(){
   if(invOpen){ invOpen=false; $('inv').hidden=true; }
   if(codeOpen){ codeOpen=false; $('codebox').hidden=true; }
   if(doorShown){ doorShown=false; $('doorbox').hidden=true; }
-  if(shopOpen){ shopOpen=false; $('shopbox').hidden=true; }
+  if(shopOpen){ shopOpen=false; casinoMode=false; $('shopbox').hidden=true; $('casinobox').hidden=true; }
   playing=false; for(const k in keys) keys[k]=false;
   musicStop();
   saveAll();
@@ -5198,6 +5468,7 @@ function cowUpdate(dt){
 
 /* ---------- main loop ---------- */
 function frame(now){
+  if(now < freezeUntil) for(const k in keys) keys[k] = false;   // smacked: no walking, jumping or flying until the freeze is over
   const dt=Math.min(0.05,(now-lastT)/1000); lastT=now;
   if(playing){
     worldTime+=dt;

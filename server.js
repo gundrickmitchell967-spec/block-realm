@@ -133,6 +133,47 @@ function logTxn(w, e) {
   if (w.log.length > 300) w.log.splice(0, w.log.length - 300);
   scheduleSave(w);
 }
+// ---- the shop's job, the bounties, and the slot machine ----
+const JOB_PAY = 10, JOB_EVERY = 60000, JOB_MAX = 150, JOB_SHIFT = 15 * 60000, JOB_BREAK = 5 * 60000;   // a shift pays 10 cash a minute, up to 150; then a 5 minute break
+const SMACK_FREEZE = 15;                                        // seconds a bountied player stands still after a smack
+const CLAIM_MS = 10 * 60000;                                    // a claim waits this long for the claimer to take it to the shop
+const SLOT_SYMBOLS = ['SEVEN', 'BAR', 'BELL', 'CHERRY', 'LEMON', 'PLUM'];
+// what a spin pays, as a multiple of the stake: 0 = the stake is lost, 1 = the stake comes back
+function slotPay(r) {
+  if (r[0] === r[1] && r[1] === r[2]) return r[0] === 0 ? 60 : 8;
+  return (r[0] === r[1] || r[1] === r[2] || r[0] === r[2]) ? 1 : 0;
+}
+function shiftMsg(p) { return { type: 'shift', on: !!p.shift, paid: p.shift ? p.shift.paid : 0, endsAt: p.shift ? p.shift.start + JOB_SHIFT : 0, breakUntil: p.shiftBreakUntil || 0 }; }
+function endShift(p, text) {
+  const paid = p.shift.paid;
+  p.shift = null; p.shiftBreakUntil = Date.now() + JOB_BREAK;
+  sendTo(p, shiftMsg(p));
+  sendTo(p, { type: 'notice', text: text + '. YOU EARNED ' + paid });
+}
+function sendBounties(w) {
+  const list = [...w.bounties.values()].map(b => ({ name: b.name, amount: b.amount }));
+  for (const q of players.values()) if (q.world === w && q.joined) {
+    const c = w.claims.get(q.pid);
+    sendTo(q, { type: 'bounties', list, claim: c && c.until > Date.now() ? c.amount : 0 });
+  }
+}
+// every few seconds: a player on a shift is paid each minute; a shift ends when its time is up or it has paid enough
+function jobTick() {
+  const now = Date.now();
+  for (const p of players.values()) {
+    if (!p.joined || !p.shift) continue;
+    const w = p.world, s = p.shift;
+    if (now - s.lastPay >= JOB_EVERY) {
+      s.lastPay = now; s.paid += JOB_PAY;
+      w.coins.set(p.pid, (w.coins.get(p.pid) || 0) + JOB_PAY);
+      logTxn(w, { kind: 'job', amount: JOB_PAY, to: p.pid, toName: p.name });
+      sendTo(p, walletMsg(w, p));
+      sendTo(p, shiftMsg(p));
+    }
+    if (p.shift && (p.shift.paid >= JOB_MAX || now - p.shift.start >= JOB_SHIFT)) endShift(p, 'YOUR SHIFT IS OVER');
+  }
+}
+setInterval(jobTick, 10000);
 // the transactions a player is part of, newest first, worded from that player's side
 function cashLogFor(w, p) {
   const out = [];
@@ -146,6 +187,13 @@ function cashLogFor(w, p) {
     else if (e.kind === 'buy' && e.from === p.pid) { dir = '-'; text = 'Bought ' + e.what + ' for ' + e.amount; }
     else if (e.kind === 'plot' && e.from === p.pid) { dir = '-'; text = 'Bought a plot of ' + e.what + ' for ' + e.amount; }
     else if (e.kind === 'plotsale' && e.to === p.pid) { dir = '+'; text = 'Sold a plot of ' + e.what + ' for ' + e.amount; }
+    else if (e.kind === 'job' && e.to === p.pid) { dir = '+'; text = 'Wages from your shift'; }
+    else if (e.kind === 'bountyset' && e.from === p.pid) { dir = '-'; text = 'Put a bounty on ' + e.what; }
+    else if (e.kind === 'bountypaid' && e.to === p.pid) { dir = '+'; text = 'Claimed the bounty on ' + e.what; }
+    else if (e.kind === 'slots' && e.from === p.pid) {
+      if (e.won > e.amount) { dir = '+'; text = 'Won ' + (e.won - e.amount) + ' at the slots'; }
+      else if (e.won < e.amount) { dir = '-'; text = 'Lost ' + (e.amount - e.won) + ' at the slots'; }
+    }
     if (dir) out.push({ t: e.t, dir, text, amount: e.amount });
   }
   return out.slice(-40).reverse();
@@ -181,6 +229,9 @@ for (const w of Object.values(WORLDS)) {
   w.locks = new Map();     // "x,y,z" of each half of a door with a password -> the lock (both halves share one lock)
   w.coins = new Map();     // hashed player id -> cash (the game creator gives it, players trade it and buy with it)
   w.tools = new Map();     // hashed player id -> hacker tools they own (each one can be used once)
+  w.mail = new Map();      // lowercase name -> the messages waiting for that player: [{ from, text, at }]
+  w.bounties = new Map();  // target's id -> { amount, name }: cash paid out to whoever smacks them
+  w.claims = new Map();    // claimer's id -> { amount, target, until }: a bounty smacked, to be claimed at the shop
   w.plots = [];            // plots of land: { x0, z0, x1, z1 (inclusive), owner (hashed id), ownerName, name, price }
   w.offers = new Map();    // offers to buy a plot, kept while the server runs: id -> offer
   w.log = [];              // the latest cash transactions in this world
@@ -193,7 +244,7 @@ for (const w of Object.values(WORLDS)) {
     const list = Array.isArray(data) ? data : data.edits;          // older saves were just the list of edits
     for (const [pid, n] of (Array.isArray(data) ? [] : (data.coins || []))) w.coins.set(pid, n);
     for (const [pid, n] of (Array.isArray(data) ? [] : (data.tools || []))) w.tools.set(pid, n);
-    if (!Array.isArray(data)) { w.plots = data.plots || []; w.log = data.log || []; }
+    if (!Array.isArray(data)) { w.plots = data.plots || []; w.log = data.log || []; for (const [to, list] of (data.mail || [])) w.mail.set(to, list); for (const [k, v] of (data.bounties || [])) w.bounties.set(k, v); for (const [k, v] of (data.claims || [])) w.claims.set(k, v); }
     for (const [k, v, o] of list) { if (v === 260 || v === 261) continue; w.edits.set(k, v); if (o !== undefined) w.owners.set(k, o); }   // the removed camera and screen blocks
     for (const L of Array.isArray(data) ? [] : (data.locks || [])) {
       const lo = L.lower.split(',').map(Number);
@@ -217,7 +268,7 @@ function saveWorld(w) {
   const locks = [...new Set(w.locks.values())].map(L => ({ lower: L.lower.join(','), owner: L.owner, salt: L.salt, digest: L.digest, allowed: [...L.allowed] }));
   const tmp = w.file + '.tmp';
   try {
-    fs.writeFileSync(tmp, JSON.stringify({ edits, locks, coins: [...w.coins], tools: [...w.tools], plots: w.plots, log: w.log }));
+    fs.writeFileSync(tmp, JSON.stringify({ edits, locks, coins: [...w.coins], tools: [...w.tools], plots: w.plots, log: w.log, mail: [...w.mail], bounties: [...w.bounties], claims: [...w.claims] }));
     fs.renameSync(tmp, w.file);
   } catch (e) {
     console.error(`${w.name}: could not save the world:`, e.message);
@@ -409,6 +460,10 @@ function hello(p, id, m) {
   // each block also says who it belongs to for this player: 1 = yours, 0 = another player's, null = nobody's (land or older saves)
   for (const [k, v] of w.edits) { const [x, y, z] = k.split(',').map(Number); const o = w.owners.get(k); all.push([x, y, z, v, o === undefined ? null : (o === p.pid ? 1 : 0)]); }
   sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, edits: all, players: list, time: worldTime(w), mob: w.mob, tvs: tvList(w), sources: tvSources(w), locks: lockList(w, p), coins: w.coins.get(p.pid) || 0, tools: w.tools.get(p.pid) || 0, plots: plotsMsg(w, p).list });
+  // mail that was waiting for this player's name is handed over once, after they have joined, and removed from the mailbox
+  const waiting = w.mail.get((p.name || '').toLowerCase());
+  if (waiting) { w.mail.delete((p.name || '').toLowerCase()); scheduleSave(w); sendTo(p, { type: 'mail', list: waiting }); }
+  sendBounties(w);
   broadcast(w, { type: 'join', id, name: p.name, color: p.color, x: p.x, y: p.y, z: p.z, yaw: p.yaw, role: p.role }, id);
   broadcast(w, { type: 'system', text: p.name + ' joined' }, id);
 }
@@ -688,6 +743,113 @@ wss.on('connection', (ws) => {
       sendTo(p, walletMsg(w, p));
       return sendTo(p, { type: 'doorresult', ok: true, msg: 'DOOR DECODED: OPEN FOR ' + Math.round(HACK_MS / 1000) + ' SECONDS' });
     }
+    if (m.type === 'job') {
+      // the shop's job: a shift pays a little each minute, for the time it lasts
+      const now = Date.now(), fail = text => sendTo(p, { type: 'notice', text });
+      if (!p.pid) return fail('YOU CANNOT WORK HERE YET');
+      if (m.action === 'start') {
+        if (p.shift) return fail('YOU ARE ALREADY ON A SHIFT');
+        if (p.shiftBreakUntil > now) return fail('ON A BREAK: ' + Math.ceil((p.shiftBreakUntil - now) / 60000) + ' MINUTES LEFT');
+        p.shift = { start: now, lastPay: now, paid: 0 };
+        sendTo(p, shiftMsg(p));
+        return fail('SHIFT STARTED: ' + JOB_PAY + ' CASH A MINUTE, UP TO ' + JOB_MAX);
+      }
+      if (m.action === 'stop') {
+        if (!p.shift) return fail('YOU ARE NOT ON A SHIFT');
+        return endShift(p, 'YOU LEFT YOUR SHIFT');
+      }
+      return;
+    }
+
+    if (m.type === 'bounty') {
+      // a bounty: cash is put on another player, and whoever smacks them takes it (to claim at the shop)
+      const fail = text => sendTo(p, { type: 'notice', text });
+      if (m.action !== 'set') return;
+      const q = players.get(m.target);
+      const amt = Number.isInteger(m.amount) ? m.amount : 0;
+      if (!q || !q.joined || q === p || q.world !== w || !q.pid || !p.pid) return fail('CHOOSE A PLAYER TO PUT A BOUNTY ON');
+      if (amt < 50 || amt > 100000) return fail('A BOUNTY IS BETWEEN 50 AND 100000 CASH');
+      const mine = w.coins.get(p.pid) || 0;
+      if (mine < amt) return fail('YOU DO NOT HAVE THAT MUCH CASH');
+      w.coins.set(p.pid, mine - amt);
+      const b = w.bounties.get(q.pid) || { amount: 0, name: q.name };
+      b.amount += amt; b.name = q.name;
+      w.bounties.set(q.pid, b);
+      logTxn(w, { kind: 'bountyset', amount: amt, from: p.pid, fromName: p.name, what: q.name });
+      sendTo(p, walletMsg(w, p));
+      broadcast(w, { type: 'system', text: p.name + ' put a bounty of ' + amt + ' on ' + q.name });
+      sendBounties(w);
+      return fail('BOUNTY PUT ON ' + q.name.toUpperCase());
+    }
+
+    if (m.type === 'smack') {
+      // smacking a player who has a bounty on them: they stand still for a while, and the smack is the claim (taken to the shop)
+      if (!p.pid) return;
+      const q = players.get(m.target);
+      if (!q || !q.joined || q === p || q.world !== w) return;
+      const dx = q.x - p.x, dy = q.y - p.y, dz = q.z - p.z;
+      if (dx * dx + dy * dy + dz * dz > 4.5 * 4.5) return sendTo(p, { type: 'notice', text: 'GET CLOSER TO SMACK THEM' });
+      const b = w.bounties.get(q.pid);
+      if (!b) return sendTo(p, { type: 'notice', text: 'THERE IS NO BOUNTY ON THEM' });
+      w.bounties.delete(q.pid);
+      w.claims.set(p.pid, { amount: b.amount, target: q.name, until: Date.now() + CLAIM_MS });
+      scheduleSave(w);
+      sendTo(q, { type: 'freeze', seconds: SMACK_FREEZE });
+      sendTo(p, { type: 'notice', text: 'YOU SMACKED ' + q.name.toUpperCase() + '. GO TO THE SHOP TO CLAIM ' + b.amount });
+      broadcast(w, { type: 'system', text: p.name + ' smacked ' + q.name + ' for a bounty of ' + b.amount });
+      sendBounties(w);
+      return;
+    }
+
+    if (m.type === 'claim') {
+      // at the shop: the bounty from a smack is paid out to the player who made it
+      const c = w.claims.get(p.pid), now = Date.now();
+      if (!c || c.until < now) { w.claims.delete(p.pid); return sendTo(p, { type: 'notice', text: 'NO BOUNTY TO CLAIM' }); }
+      w.claims.delete(p.pid);
+      w.coins.set(p.pid, (w.coins.get(p.pid) || 0) + c.amount);
+      logTxn(w, { kind: 'bountypaid', amount: c.amount, to: p.pid, toName: p.name, what: c.target });
+      sendTo(p, walletMsg(w, p));
+      sendBounties(w);
+      return sendTo(p, { type: 'notice', text: 'BOUNTY CLAIMED: ' + c.amount + ' CASH' });
+    }
+
+    if (m.type === 'slots') {
+      // the slot machine: the stake is taken, the reels are turned here, and the payout is worked out here too
+      const fail = text => sendTo(p, { type: 'notice', text }), now = Date.now();
+      const bet = Number.isInteger(m.bet) ? m.bet : 0;
+      if (!p.pid) return fail('YOU CANNOT PLAY YET');
+      if (bet < 1 || bet > 1000) return fail('BET BETWEEN 1 AND 1000');
+      if (p.spinAt && now - p.spinAt < 1500) return;      // one spin at a time
+      const mine = w.coins.get(p.pid) || 0;
+      if (mine < bet) return fail('YOU DO NOT HAVE THAT MUCH CASH');
+      p.spinAt = now;
+      const reels = [crypto.randomInt(6), crypto.randomInt(6), crypto.randomInt(6)];
+      const win = bet * slotPay(reels);
+      w.coins.set(p.pid, mine - bet + win);
+      logTxn(w, { kind: 'slots', amount: bet, won: win, from: p.pid, fromName: p.name });
+      sendTo(p, { type: 'slotresult', reels: reels.map(i => SLOT_SYMBOLS[i]), bet, win });
+      sendTo(p, walletMsg(w, p));
+      return;
+    }
+
+    if (m.type === 'mail') {
+      // a short message to a player who is not online: it waits for them, and they see it when they next join (players are matched by name)
+      const to = typeof m.to === 'string' ? cleanName(m.to).toLowerCase() : '';
+      const text = typeof m.text === 'string' ? m.text.replace(/[\u0000-\u001f]/g, '').trim().slice(0, 120) : '';
+      if (!to || !text) return sendTo(p, { type: 'notice', text: 'WRITE A NAME AND A MESSAGE' });
+      for (const q of players.values()) {
+        if (q.joined && q.world === w && q.name && q.name.toLowerCase() === to) return sendTo(p, { type: 'notice', text: to.toUpperCase() + ' IS ONLINE. SAY HELLO IN CHAT' });
+      }
+      if (p.mailAt && Date.now() - p.mailAt < 10000) return sendTo(p, { type: 'notice', text: 'WAIT A MOMENT BEFORE SENDING ANOTHER MESSAGE' });
+      const list = w.mail.get(to) || [];
+      if (list.length >= 20) return sendTo(p, { type: 'notice', text: 'THAT MAILBOX IS FULL' });
+      list.push({ from: p.name, text, at: Date.now() });
+      w.mail.set(to, list);
+      p.mailAt = Date.now();
+      scheduleSave(w);
+      return sendTo(p, { type: 'notice', text: 'MESSAGE SENT TO ' + to.toUpperCase() + '. IT WAITS FOR THEM' });
+    }
+
     if (m.type === 'plotbuy') {
       // the shopkeeper sells a plot: the measured corners are checked, the price is worked out here, and the buyer owns the land
       const fail = text => sendTo(p, { type: 'notice', text });
