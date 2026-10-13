@@ -100,6 +100,9 @@
   .btn.cashbtn:hover{background:linear-gradient(#4fc26a,#34914d)}
   #givebox .btn{width:auto;flex:0 0 auto;padding:8px 10px}
   #offerlist .btn{width:auto;flex:0 0 auto;padding:6px 8px;font-size:12px}
+  .splitform{display:flex;flex-wrap:wrap;gap:6px;width:100%;margin-top:4px;padding-top:8px;border-top:1px dashed #3a4560}
+  .splitform select,.splitform input{flex:1 1 110px;min-width:0;font:13px 'Courier New',monospace;padding:8px;background:#0d111b;color:#fff;border:2px solid #3a4560;box-sizing:border-box}
+  .splitform .btn{width:100%}
   #offerlist .txn{flex-wrap:wrap}
   .plotname{width:100%;box-sizing:border-box;font:bold 14px 'Courier New',monospace;padding:9px;background:#0d111b;color:#fff;border:2px solid #ffe066;text-align:center}
   #givebox{flex-wrap:wrap}
@@ -321,7 +324,7 @@
     </div>
     <div id="mpbox" hidden>
       <input id="mpname" maxlength="16" placeholder="Your name" aria-label="Your name">
-      <input id="mpurl" aria-label="Server address" placeholder="ws://localhost:8080/ws">
+      <input id="mpurl" aria-label="Server address" placeholder="ws://localhost:8080/ws" hidden>
       <p class="hint">Choose a world</p>
       <div class="worldpick">
         <button class="btn" id="worldpublic" type="button">PUBLIC WORLD</button>
@@ -3369,15 +3372,27 @@ function renderShop(){
       mpSend({type:'plotsell', x0: pl.x0, z0: pl.z0, x1: pl.x1, z1: pl.z1});
       shopNote('SELLING...');
     });
+    // cut a strip off this plot: pick the edge, how many blocks deep, and a name for the part
+    const form = document.createElement('div'); form.className = 'splitform';
+    const fl = document.createElement('p'); fl.className = 'hint'; fl.style.width = '100%';
+    fl.textContent = 'CUT OUT PART OF THIS PLOT. The part becomes its own plot, which you can sell or trade.';
+    const sideSel = document.createElement('select'); sideSel.setAttribute('aria-label', 'Edge to cut from');
+    for(const [v, lab] of [['n','FROM NORTH EDGE'], ['s','FROM SOUTH EDGE'], ['w','FROM WEST EDGE'], ['e','FROM EAST EDGE']]){ const o = document.createElement('option'); o.value = v; o.textContent = lab; sideSel.appendChild(o); }
+    const depthIn = document.createElement('input'); depthIn.type = 'number'; depthIn.min = '3'; depthIn.step = '1'; depthIn.placeholder = 'BLOCKS DEEP'; depthIn.setAttribute('aria-label', 'Blocks to cut');
+    const partName = document.createElement('input'); partName.maxLength = 24; partName.placeholder = 'NAME THE PART'; partName.setAttribute('aria-label', 'Name for the cut-out part');
+    for(const el of [depthIn, partName]) el.addEventListener('keydown', e => e.stopPropagation());
+    const cutBtn = document.createElement('button'); cutBtn.className = 'btn'; cutBtn.type = 'button'; cutBtn.textContent = 'CUT OUT PART'; cutBtn.disabled = !mpMode;
+    cutBtn.addEventListener('click', () => mpSend({type:'plotsplit', plot:[pl.x0, pl.z0, pl.x1, pl.z1], side: sideSel.value, depth: Math.trunc(Number(depthIn.value)), name: partName.value}));
+    form.appendChild(fl); form.appendChild(sideSel); form.appendChild(depthIn); form.appendChild(partName); form.appendChild(cutBtn);
     const mate = plotList.find(o => o.mine && o !== pl && canMerge(pl, o));
     if(mate){
       const mb = document.createElement('button'); mb.className = 'btn'; mb.type = 'button';
       mb.textContent = 'MERGE WITH ' + (mate.name || 'PLOT').toUpperCase();
       mb.disabled = !mpMode;
       mb.addEventListener('click', () => mpSend({type:'plotmerge', a:[pl.x0, pl.z0, pl.x1, pl.z1], b:[mate.x0, mate.z0, mate.x1, mate.z1]}));
-      row.appendChild(head); row.appendChild(txt); row.appendChild(mb); row.appendChild(sb); plotsPane.appendChild(row);
+      row.appendChild(head); row.appendChild(txt); row.appendChild(mb); row.appendChild(sb); row.appendChild(form); plotsPane.appendChild(row);
     } else {
-      row.appendChild(head); row.appendChild(txt); row.appendChild(sb); plotsPane.appendChild(row);
+      row.appendChild(head); row.appendChild(txt); row.appendChild(sb); row.appendChild(form); plotsPane.appendChild(row);
     }
   }
   // your security gear: how many you own, with SELL for a spare

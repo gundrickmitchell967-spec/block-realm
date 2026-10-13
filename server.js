@@ -847,6 +847,36 @@ wss.on('connection', (ws) => {
       sendTo(p, walletMsg(w, p));
       return fail('SOLD A ' + GEAR[k].name.toUpperCase() + ' FOR ' + refund + ' CASH');
     }
+    if (m.type === 'plotsplit') {
+      // cut a strip off one of your plots (a full side, so both parts stay rectangles): the strip becomes its own plot
+      // with its share of the price. The blocks stay where they are.
+      const fail = text => sendTo(p, { type: 'notice', text });
+      if (!Array.isArray(m.plot) || !m.plot.every(Number.isInteger)) return fail('CHOOSE A PLOT TO CUT');
+      const i = w.plots.findIndex(o => o.owner === p.pid && sameRect(o, m.plot));
+      if (i < 0) return fail('THAT IS NOT YOUR PLOT');
+      const pl = w.plots[i];
+      const depth = Number.isInteger(m.depth) ? m.depth : 0;
+      const W = pl.x1 - pl.x0 + 1, D = pl.z1 - pl.z0 + 1;
+      let cut, rest;
+      if (m.side === 'n') { cut = { x0: pl.x0, x1: pl.x1, z0: pl.z0, z1: pl.z0 + depth - 1 }; rest = { x0: pl.x0, x1: pl.x1, z0: pl.z0 + depth, z1: pl.z1 }; }
+      else if (m.side === 's') { cut = { x0: pl.x0, x1: pl.x1, z0: pl.z1 - depth + 1, z1: pl.z1 }; rest = { x0: pl.x0, x1: pl.x1, z0: pl.z0, z1: pl.z1 - depth }; }
+      else if (m.side === 'w') { cut = { x0: pl.x0, x1: pl.x0 + depth - 1, z0: pl.z0, z1: pl.z1 }; rest = { x0: pl.x0 + depth, x1: pl.x1, z0: pl.z0, z1: pl.z1 }; }
+      else if (m.side === 'e') { cut = { x0: pl.x1 - depth + 1, x1: pl.x1, z0: pl.z0, z1: pl.z1 }; rest = { x0: pl.x0, x1: pl.x1 - depth, z0: pl.z0, z1: pl.z1 }; }
+      else return fail('CHOOSE WHICH EDGE TO CUT FROM');
+      if (depth < PLOT_MIN || depth >= (m.side === 'n' || m.side === 's' ? D : W)) return fail('CUT AT LEAST ' + PLOT_MIN + ' BLOCKS, AND LEAVE SOME OF THE PLOT');
+      const cw = cut.x1 - cut.x0 + 1, cd = cut.z1 - cut.z0 + 1, rw = rest.x1 - rest.x0 + 1, rd = rest.z1 - rest.z0 + 1;
+      if (Math.min(cw, cd) < PLOT_MIN || Math.min(rw, rd) < PLOT_MIN) return fail('BOTH PARTS MUST BE AT LEAST ' + PLOT_MIN + ' BLOCKS ON EACH SIDE');
+      const total = pl.price || 0;
+      const cutPrice = Math.round(total * (cw * cd) / (W * D)), restPrice = total - cutPrice;
+      const cutName = cleanPlotName(m.name) || (pl.name || 'PLOT') + ' PART';
+      w.plots[i] = Object.assign({}, pl, rest, { price: restPrice });
+      w.plots.push(Object.assign({}, pl, cut, { name: cutName, price: cutPrice }));
+      for (const k of [...w.offers.keys()]) { if (sameRect(w.offers.get(k), m.plot)) w.offers.delete(k); }
+      scheduleSave(w);
+      announceOffers(w);
+      announcePlots(w);
+      return fail('CUT OUT ' + cutName + ': ' + cw + ' x ' + cd + ' BLOCKS');
+    }
     if (m.type === 'cashlog') return sendTo(p, { type: 'cashlog', entries: cashLogFor(w, p) });
     if (m.type === 'edit') {
       if (!isInt(m.x) || !isInt(m.y) || !isInt(m.z) || !isInt(m.id)) return;
