@@ -2940,10 +2940,19 @@ function playerId(){
 let cashShown = -1;
 let hackEnd = 0;           // when the door you decoded shuts again (performance.now time), 0 when none
 let hackShown = -1;
+// a change in your cash plays a sound: a purchase you just made plays the purchase notes, anything else plays in or out
+let walletSeen = false, buyPending = false;
+function cashSound(next){
+  if(walletSeen){
+    if(next > myCoins) sfx.cashIn();
+    else if(next < myCoins){ if(buyPending) sfx.buy(); else sfx.cashOut(); }
+  }
+  walletSeen = true; buyPending = false;
+}
 function syncCash(){
   const h = $('cashhud');
   if(h.hidden !== !playing) h.hidden = !playing;
-  if(playing && cashShown !== myCoins){ cashShown = myCoins; $('cashnum').textContent = String(myCoins); }
+  if(playing && cashShown !== myCoins){ cashShown = myCoins; $('cashnum').textContent = fmtAmt(myCoins); }
   // the countdown: whole seconds left, shown only while a door you decoded is still open
   const left = hackEnd - performance.now();
   const show = playing && left > 0;
@@ -3128,13 +3137,13 @@ function renderOffers(){
   };
   const btn = (label, fn, disabled) => { const b = document.createElement('button'); b.className = 'btn'; b.type = 'button'; b.textContent = label; b.disabled = !!disabled; b.addEventListener('click', fn); return b; };
   for(const o of offers.incoming){
-    line(o.fromName + ' offers ' + o.name + ' (' + o.size + ') for ' + o.price + ' cash.', [
+    line(o.fromName + ' offers ' + o.name + ' (' + o.size + ') for ' + fmtCash(o.price) + '.', [
       btn('ACCEPT', () => mpSend({type:'offeraccept', id: o.id}), myCoins < o.price),
       btn('DECLINE', () => mpSend({type:'offerdecline', id: o.id}))
     ]);
   }
   for(const o of offers.outgoing){
-    line('Your offer: ' + o.name + ' to ' + o.toName + ' for ' + o.price + ' cash.', [
+    line('Your offer: ' + o.name + ' to ' + o.toName + ' for ' + fmtCash(o.price) + '.', [
       btn('CANCEL', () => mpSend({type:'offerdecline', id: o.id}))
     ]);
   }
@@ -3146,7 +3155,7 @@ function setCashTab(name){
 for(const b of document.querySelectorAll('#cashtabs .tab')) b.addEventListener('click', () => setCashTab(b.dataset.cash));
 function renderCash(){
   renderOffers();
-  $('cashbal').textContent = mpMode ? 'Your cash: ' + myCoins : 'Join a multiplayer world to have cash.';
+  $('cashbal').textContent = mpMode ? 'Your cash: ' + fmtCash(myCoins) : 'Join a multiplayer world to have cash.';
   const who = $('tradewho'), keep = who.value; who.textContent = '';
   const rows = [...mp.others.values()].sort((x, y) => x.name.localeCompare(y.name));
   if(!rows.length){ const op = document.createElement('option'); op.value = ''; op.textContent = mpMode ? 'No other players are here' : 'Not connected'; who.appendChild(op); }
@@ -3159,9 +3168,9 @@ function renderCash(){
   else if(!cashEntries.length) note('No transactions yet.');
   for(const e of cashEntries){
     const row = document.createElement('div'); row.className = 'txn ' + (e.dir === '+' ? 'in' : 'out');
-    const amt = document.createElement('span'); amt.className = 'amt'; amt.textContent = (e.dir === '+' ? '+' : '-') + e.amount;
+    const amt = document.createElement('span'); amt.className = 'amt'; amt.textContent = (e.dir === '+' ? '+' : '-') + fmtAmt(e.amount);
     const when = document.createElement('span'); when.className = 'when'; when.textContent = new Date(e.t).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-    const what = document.createElement('span'); what.textContent = e.text;
+    const what = document.createElement('span'); what.textContent = fmtNums(e.text);
     row.appendChild(amt); row.appendChild(when); row.appendChild(what); list.appendChild(row);
   }
 }
@@ -3231,8 +3240,20 @@ const SHOP_ITEMS = [
   {id:'camera', name:'SECURITY CAMERA', price:2000, text:'Buy as many as you like. It goes into your inventory, and the number you have is shown on its slot. Place it on a wall, a ceiling, a floor or a corner. It looks out of the face it is on. Only you can watch your own cameras, and only with a View Screen.'},
   {id:'screen', name:'VIEW SCREEN', price:1500, text:'Buying a view screen unlocks your security cameras. Place it and right-click it to watch, or hold it in your inventory and right-click in the air to watch from anywhere. Tap the picture to change camera, move the mouse to look around, and right-click to leave.'}
 ];
+// money reads compactly: 850, 1.2K, 3M (with a $ in front where there is no bill icon)
+function fmtAmt(n){
+  n = Math.trunc(Number(n) || 0);
+  const a = Math.abs(n), sign = n < 0 ? '-' : '';
+  const short = x => (x >= 100 ? String(Math.floor(x)) : String(Math.floor(x * 10) / 10).replace(/\.0$/, ''));
+  if(a >= 1e6) return sign + short(a / 1e6) + 'M';
+  if(a >= 1e3) return sign + short(a / 1e3) + 'K';
+  return sign + String(a);
+}
+function fmtCash(n){ return '$' + fmtAmt(n); }
+// the numbers inside a server message (4 digits or more are cash) read the same way
+function fmtNums(s){ return String(s).replace(/\b\d{4,}\b/g, m => fmtAmt(Number(m))); }
 // the coin logo: a gold coin with a dollar sign
-const COIN_SVG = '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#f5c542" stroke="#8a5a00" stroke-width="1.5"/><circle cx="12" cy="12" r="8.2" fill="none" stroke="#c28a12" stroke-width="1"/><text x="12" y="16.6" text-anchor="middle" font-family="Arial,sans-serif" font-weight="bold" font-size="13" fill="#7a4d00">$</text></svg>';
+const COIN_SVG = '<svg width=\"26\" height=\"16\" viewBox=\"0 0 30 18\" aria-hidden=\"true\"><rect x=\"0.5\" y=\"0.5\" width=\"29\" height=\"17\" rx=\"1.5\" fill=\"#7fb77e\" stroke=\"#2d5a2b\"/><rect x=\"2.5\" y=\"2.5\" width=\"25\" height=\"13\" fill=\"none\" stroke=\"#2d5a2b\" stroke-width=\".7\"/><circle cx=\"15\" cy=\"9\" r=\"4.2\" fill=\"#a9d6a6\" stroke=\"#2d5a2b\" stroke-width=\".7\"/><text x=\"15\" y=\"11.6\" text-anchor=\"middle\" font-family=\"Georgia,serif\" font-size=\"7\" font-weight=\"bold\" fill=\"#2d5a2b\">$</text></svg>';
 $('givecoin').innerHTML = COIN_SVG;
 $('cashcoin').innerHTML = COIN_SVG;
 let myGear = {cam:0, camPlaced:0, scr:0, scrPlaced:0, licensed:false};   // your security cameras and view screens
@@ -3359,14 +3380,14 @@ function cycleFeed(){ if(!camList.length){ feedCam = null; return; } feedIdx = (
 function closeFeed(){ feedCam = null; }
 function renderShop(){
   const cl = $('shopcoins'); cl.textContent = '';
-  cl.appendChild(coinSpan()); cl.appendChild(document.createTextNode(' YOUR CASH: ' + myCoins + (mpMode ? '' : '   (cash comes from the multiplayer server)')));
+  cl.appendChild(coinSpan()); cl.appendChild(document.createTextNode(' YOUR CASH: ' + fmtAmt(myCoins) + (mpMode ? '' : '   (cash comes from the multiplayer server)')));
   const list = $('shopitems'); list.textContent = '';
   if(!SHOP_ITEMS.length){ const p = document.createElement('p'); p.className = 'hint'; p.textContent = 'The shopkeeper has nothing for sale yet.'; list.appendChild(p); return; }
   for(const it of SHOP_ITEMS){
     const card = document.createElement('div'); card.className = 'shopcard';
     const top = document.createElement('div'); top.className = 'shoprow';
     const nm = document.createElement('span'); nm.textContent = it.name;
-    const pr = document.createElement('span'); pr.appendChild(coinSpan()); pr.appendChild(document.createTextNode(' ' + it.price));
+    const pr = document.createElement('span'); pr.appendChild(coinSpan()); pr.appendChild(document.createTextNode(' ' + fmtAmt(it.price)));
     top.appendChild(nm); top.appendChild(pr); card.appendChild(top);
     if(it.art){ const pic = document.createElement('div'); pic.className = 'shopart'; pic.innerHTML = it.art; card.appendChild(pic); }
     const d = document.createElement('p'); d.className = 'hint'; d.textContent = it.text; card.appendChild(d);
@@ -3385,7 +3406,7 @@ function renderShop(){
   const s = surveyBox();
   const fits = !!(s && survey.b && surveyFits(s));
   if(!survey.b){ lnote.textContent = 'Measure land with the LAND SURVEYOR (Gadgets tab): click one corner, move, then click the other corner. Then bring the measurement here.'; }
-  else { lnote.textContent = 'The shopkeeper says: ' + s.w + ' x ' + s.d + ' blocks, ' + s.area + ' blocks in all. That will be ' + s.price + ' cash.' + (fits ? '' : ' That is too ' + (Math.min(s.w, s.d) < PLOT_MIN ? 'small' : 'big') + ' for a plot.'); }
+  else { lnote.textContent = 'The shopkeeper says: ' + s.w + ' x ' + s.d + ' blocks, ' + s.area + ' blocks in all. That will be ' + fmtCash(s.price) + '.' + (fits ? '' : ' That is too ' + (Math.min(s.w, s.d) < PLOT_MIN ? 'small' : 'big') + ' for a plot.'); }
   land.appendChild(lnote);
   if(s) land.appendChild(plotPreview(s));
   const nameIn = document.createElement('input'); nameIn.className = 'plotname'; nameIn.maxLength = 24; nameIn.placeholder = 'NAME YOUR PLOT';
@@ -3394,7 +3415,7 @@ function renderShop(){
   nameIn.addEventListener('keydown', e => e.stopPropagation());
   land.appendChild(nameIn);
   const bb = document.createElement('button'); bb.className = 'btn buybig'; bb.type = 'button';
-  bb.textContent = fits ? 'BUY THIS PLOT (' + s.price + ' CASH)' : 'BUY PLOT';
+  bb.textContent = fits ? 'BUY THIS PLOT (' + fmtCash(s.price) + ')' : 'BUY PLOT';
   bb.disabled = !mpMode || !fits;
   bb.addEventListener('click', buyPlot);
   land.appendChild(bb);
@@ -3409,12 +3430,12 @@ function renderShop(){
     const nmEl = document.createElement('span'); nmEl.textContent = (pl.name || 'PLOT').toUpperCase();
     const szEl = document.createElement('span'); szEl.textContent = pw + ' x ' + pd + ' = ' + (pw * pd) + ' BLOCKS';
     head.appendChild(nmEl); head.appendChild(szEl);
-    txt.textContent = 'Selling gives back ' + (pl.refund || 0) + ' cash and deletes every block on the plot. To keep the blocks, trade the plot instead (CASH > PLOTS & OFFERS).';
+    txt.textContent = 'Selling gives back ' + fmtCash(pl.refund || 0) + ' and deletes every block on the plot. To keep the blocks, trade the plot instead (CASH > PLOTS & OFFERS).';
     const sb = document.createElement('button'); sb.className = 'btn'; sb.type = 'button'; sb.textContent = 'SELL THIS PLOT';
     sb.disabled = !mpMode;
     let armed = false;
     sb.addEventListener('click', () => {
-      if(!armed){ armed = true; sb.textContent = 'CLICK AGAIN TO SELL FOR ' + (pl.refund || 0); sb.style.background = '#7a2a2a'; return; }
+      if(!armed){ armed = true; sb.textContent = 'CLICK AGAIN TO SELL FOR ' + fmtCash(pl.refund || 0); sb.style.background = '#7a2a2a'; return; }
       mpSend({type:'plotsell', x0: pl.x0, z0: pl.z0, x1: pl.x1, z1: pl.z1});
       shopNote('SELLING...');
     });
@@ -3439,7 +3460,7 @@ function renderShop(){
     const txt = document.createElement('span');
     txt.textContent = it.name + ': ' + (myGear[k] || 0) + ' spare, ' + (myGear[k + 'Placed'] || 0) + ' placed';
     const sb = document.createElement('button'); sb.className = 'btn'; sb.type = 'button';
-    sb.textContent = 'SELL SPARE (' + Math.floor(it.price / 2) + ')';
+    sb.textContent = 'SELL SPARE (' + fmtCash(Math.floor(it.price / 2)) + ')';
     sb.disabled = !mpMode || !((myGear[k] || 0) > 0);
     sb.addEventListener('click', () => mpSend({type:'gearsell', kind: k}));
     row.appendChild(txt); row.appendChild(sb); gearCard.appendChild(row);
@@ -3454,6 +3475,7 @@ function buyItem(id){
   if(!mpMode){ shopNote('BUYING NEEDS THE MULTIPLAYER SERVER'); return; }
   if(myCoins < it.price){ shopNote('NOT ENOUGH CASH'); return; }
   if(id === 'hacktool' && !HOTBAR.includes(HACK_TOOL_ID) && HOTBAR.indexOf(null) < 0){ shopNote('CLEAR AN INVENTORY SLOT FIRST'); return; }
+  buyPending = true;
   mpSend({type:'buy', item:id});
 }
 // the hacker tool in your inventory matches the tools you own: it leaves when used up, and comes back into an empty slot when bought
@@ -3582,7 +3604,8 @@ function buyPlot(){
   const s = surveyBox();
   if(!survey.b || !s){ shopNote('MEASURE THE LAND WITH THE LAND SURVEYOR FIRST'); return; }
   if(!surveyFits(s)){ shopNote('A PLOT IS ' + PLOT_MIN + ' TO ' + PLOT_MAX + ' BLOCKS ON EACH SIDE'); return; }
-  if(myCoins < s.price){ shopNote('NOT ENOUGH CASH. THE PLOT COSTS ' + s.price); return; }
+  if(myCoins < s.price){ shopNote('NOT ENOUGH CASH. THE PLOT COSTS ' + fmtCash(s.price)); return; }
+  buyPending = true;
   mpSend({type:'plotbuy', x0: survey.a.x, z0: survey.a.z, x1: survey.b.x, z1: survey.b.z, name: plotNameDraft});
 }
 // right-click a locked door with the hacker tool in hand: the server decodes it
@@ -3913,6 +3936,11 @@ const sfx = {
     else if(id===7 || id===16 || id===20){ this.noise(0.09,0.10,'highpass',3000); }                                       // sand, bed, snow
     else { this.noise(0.09,0.14,'lowpass',700); }                                                                          // grass, dirt, leaves
   },
+  // money: a rising chime when cash comes in, a register when it goes out, three notes for a purchase, a buzz for a refusal
+  cashIn(){ this.tone(660,990,0.12,'sine',0.16); this.tone(990,1320,0.16,'sine',0.14); },
+  cashOut(){ this.noise(0.04,0.22,'highpass',2600); this.tone(1100,700,0.09,'triangle',0.13); this.tone(1650,1650,0.10,'square',0.05); },
+  buy(){ this.tone(520,520,0.07,'square',0.09); this.tone(780,780,0.07,'square',0.09); this.tone(1040,1040,0.16,'square',0.09); },
+  error(){ this.tone(220,150,0.20,'sawtooth',0.08); },
   jump(){ this.tone(260,520,0.14,'sine',0.10); },
   land(){ this.tone(140,55,0.18,'sine',0.25); this.noise(0.12,0.16,'lowpass',500); },
   breakBlock(id,g=1){ this.noise(0.22,0.8,'bandpass',600+id*180,0.8,g); this.tone(240,90,0.12,'triangle',0.2,g); },
@@ -4226,7 +4254,7 @@ function connectMP(){
   ws.onclose = ()=>{
     clearTimeout(timer);
     mp.ws = null;
-    adminRole = null; spectate.id = null; adminBypass = false; doorLocks.clear(); myCoins = 0; myTools = 0; myGear = {cam:0, camPlaced:0, scr:0, scrPlaced:0, licensed:false}; camList = []; feedCam = null; feedBase = null; gearShown = {cam: 0, scr: 0}; plotList = [];
+    adminRole = null; spectate.id = null; adminBypass = false; doorLocks.clear(); myCoins = 0; myTools = 0; myGear = {cam:0, camPlaced:0, scr:0, scrPlaced:0, licensed:false}; camList = []; feedCam = null; feedBase = null; gearShown = {cam: 0, scr: 0}; plotList = []; walletSeen = false;
     if(mpMode){ mpDropped(); }
     else { mpStatus(denied || 'Could not connect. Check the address and that the server is running.'); }
   };
@@ -4274,6 +4302,7 @@ function onServerMessage(m){
   else if(m.type==='lock'){ onDoorLock(m); }
   else if(m.type==='doorresult'){ onDoorResult(m); }
   else if(m.type==='wallet'){
+    cashSound(+m.cash || 0);
     myCoins = +m.cash || 0; myTools = +m.tools || 0; myGear = m.gear || myGear; syncGearSlots(); syncTool(); syncCash(); if(shopOpen) renderShop();
     if(cashVisible()){ renderCash(); mpSend({type:'cashlog'}); }
   }
@@ -4282,7 +4311,7 @@ function onServerMessage(m){
   else if(m.type==='offers'){
     const before = new Set(offers.incoming.map(o => o.id));
     offers = {incoming: m.incoming || [], outgoing: m.outgoing || []};
-    for(const o of offers.incoming) if(!before.has(o.id)) flashHud(o.fromName.toUpperCase() + ' OFFERS YOU ' + o.name.toUpperCase() + ' FOR ' + o.price + ' CASH. OPEN PAUSE > CASH TO ACCEPT');
+    for(const o of offers.incoming) if(!before.has(o.id)) flashHud(o.fromName.toUpperCase() + ' OFFERS YOU ' + o.name.toUpperCase() + ' FOR ' + fmtCash(o.price) + '. OPEN PAUSE > CASH TO ACCEPT');
     const n = offers.incoming.length;
     setText('offerhud', n ? n + (n === 1 ? ' PLOT OFFER' : ' PLOT OFFERS') + ' WAITING: PAUSE > CASH' : '');
     if(cashVisible()) renderCash();
@@ -4302,7 +4331,7 @@ function onServerMessage(m){
   }
   else if(m.type==='cashlog'){ cashEntries = m.entries || []; if(cashVisible()) renderCash(); }
   else if(m.type==='notice'){
-    const t = String(m.text || ''); flashHud(t); if(shopOpen) shopNote(t); if(cashVisible()) $('trademsg').textContent = t;
+    const t = fmtNums(m.text || ''); if(/^NOT ENOUGH|^YOU DO NOT HAVE/.test(t)) sfx.error(); flashHud(t); if(shopOpen) shopNote(t); if(cashVisible()) $('trademsg').textContent = t;
     if(/^YOUR PLOT IS READY/.test(t)){ plotNameDraft = ''; survey = {a:null, b:null}; if(shopOpen) renderShop(); }
   }
   else if(m.type==='bypass'){ adminBypass = m.on === true; syncInvisBtn(); flashHud(adminBypass ? 'BREAK ANY BLOCK IS ON' : 'BREAK ANY BLOCK IS OFF'); }
