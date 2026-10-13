@@ -62,6 +62,10 @@
   #mpbox .worldpick{display:flex;gap:8px;width:100%}
   #mpbox .worldpick .btn{flex:1;width:auto;font-size:12px;padding:10px 4px}
   #mpbox .btn.sel{background:#ffe066;color:#1a1a1a;border-color:#ffe066}
+  #loading{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:#0b1020;color:#f4f1e4;font:bold 16px 'Courier New',monospace}
+  #loading[hidden]{display:none}
+  #loading .spin{width:44px;height:44px;border:5px solid #3a4358;border-top-color:#ffe066;border-radius:50%;animation:loadspin .9s linear infinite}
+  @keyframes loadspin{to{transform:rotate(360deg)}}
   #mpstatus{min-height:1.5em;color:#ffb3a7;font-size:13px;margin:0}
   .tag{position:fixed;left:0;top:0;transform:translate(-50%,-100%);font-size:12px;background:rgba(0,0,0,.55);padding:2px 6px;white-space:nowrap;pointer-events:none;text-shadow:1px 1px 0 #000}
   #chatlog{position:fixed;left:12px;bottom:96px;width:min(440px,70vw);max-height:260px;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;pointer-events:none;font-size:13px;line-height:1.35;text-shadow:1px 1px 0 #000;overflow:hidden}
@@ -137,6 +141,7 @@
 </style>
 </head>
 <body>
+<div id="loading"><div class="spin"></div><p id="loadmsg">LOADING...</p></div>
 <canvas id="c"></canvas>
 <div id="cross"></div>
 <div id="hud"><div id="fps"></div><div id="pos"></div><div id="tgt"></div><div id="tm"></div><div id="mp"></div></div>
@@ -598,7 +603,7 @@ const FURN_B = [
     B(0.15,1.03,0.6,0.85,1.27,0.62,68,68,68,0.9),   // monitor screen
     B(0.24,0.8,0.7,0.76,0.84,0.84,66),        // keyboard
   ]},
-  {name:'TV', icon:67, sw:'#1a1d24', fn: () => [
+  {name:'TV', icon:67, sw:'#1a1d24', use: h => tvUse(h), fn: () => [
     B(0.1,0,0.3,0.9,0.2,0.9,24),              // stand
     B(0.02,0.2,0.5,0.98,0.9,0.9,67),          // screen body
     B(0.04,0.24,0.9,0.96,0.86,0.92,68,68,68,0.9)   // lit screen
@@ -1200,6 +1205,131 @@ function furnOpenToggle(h){
 function furnUse(h){
   const ty = FURN[furnState(h.id).t];
   return !!(ty.use && ty.use(h));
+}
+/* ---------- the TV: right-click it to turn it on and play the video (media/tv.mp4) on its screen ---------- */
+// the video is one file the game loads; it is only played on the screen of the player who turned the TV on
+const TV_VIDEO_URL = 'media/tv.mp4';
+const tv = { on:false, x:0, y:0, z:0, el:null, node:null, gain:null, prog:null, vao:null, vbo:null, tex:null, loc:null };
+function tvVideo(){
+  if(tv.el) return tv.el;
+  const v = document.createElement('video');
+  v.src = TV_VIDEO_URL; v.preload = 'auto'; v.playsInline = true;
+  v.style.display = 'none';
+  v.addEventListener('ended', tvOff);
+  v.addEventListener('error', () => { tvOff(); flashHud('NO VIDEO: PUT THE FILE AT media/tv.mp4'); });
+  document.body.appendChild(v);
+  tv.el = v;
+  return v;
+}
+// right-clicking the TV turns it on and plays the video from the start; it goes off again when the video ends
+function tvUse(h){
+  if(!isFurn(h.id) || FURN[furnState(h.id).t].name !== 'TV') return false;
+  sfx.init();
+  const v = tvVideo();
+  if(sfx.ctx && !tv.node){
+    try{ tv.node = sfx.ctx.createMediaElementSource(v); tv.gain = sfx.ctx.createGain(); tv.node.connect(tv.gain); tv.gain.connect(sfx.master); }
+    catch(e){ tv.node = null; tv.gain = null; }
+  }
+  Object.assign(tv, {on:true, x:h.x, y:h.y, z:h.z});
+  if(v.currentTime > 0) v.currentTime = 0;
+  const p = v.play();
+  if(p && p.catch) p.catch(() => { tvOff(); flashHud('THE TV WOULD NOT PLAY'); });
+  sfx.click();
+  flashHud('TV ON');
+  return true;
+}
+function tvOff(){ tv.on = false; if(tv.el) tv.el.pause(); }
+// is there still a TV at the spot (an unloaded spot counts as still there)
+function tvStillThere(){
+  const b = getBlock(tv.x, tv.y, tv.z);
+  if(b < 0) return true;
+  return isFurn(b) && FURN[furnState(b).t].name === 'TV';
+}
+// the sound fades with distance: full within 3 blocks, silent from 22 blocks away. It pauses while the menu is open
+function tvUpdate(){
+  if(!tv.on || !tv.el) return;
+  if(!tvStillThere()){ tvOff(); return; }
+  if(!playing){ if(!tv.el.paused) tv.el.pause(); return; }
+  if(tv.el.paused && !tv.el.ended) tv.el.play().catch(() => {});
+  const d = Math.hypot(player.x - (tv.x + 0.5), player.y - (tv.y + 0.5), player.z - (tv.z + 0.5));
+  const t = Math.min(1, Math.max(0, (d - 3) / 19)), g = (1 - t) * (1 - t);
+  if(tv.gain && sfx.ctx) tv.gain.gain.setTargetAtTime(g, sfx.ctx.currentTime, 0.08);
+  else tv.el.volume = g;
+}
+// where the TV's picture goes: the four corners of its screen in the world, bottom-left first, and the screen's size
+function tvScreen(x, y, z, id){
+  const v = furnState(id), f = furnFacing(id);
+  const p = v.parts.find(q => q[6] === 68);          // the lit screen
+  if(!p) return null;
+  const r = rotBoxAt([p[0], p[1], p[2]], [p[3], p[4], p[5]], f, 0.5);
+  const lo = [x + r.lo[0], y + r.lo[1], z + r.lo[2]], hi = [x + r.hi[0], y + r.hi[1], z + r.hi[2]];
+  // the screen is the thin side of its box, and it faces away from the middle of the TV
+  const thin = (hi[0] - lo[0]) < (hi[2] - lo[2]) ? 0 : 2, wide = thin === 0 ? 2 : 0;
+  const mid = [x + 0.5, y + 0.5, z + 0.5];
+  const n = [0, 0, 0];
+  n[thin] = (lo[thin] + hi[thin]) / 2 > mid[thin] ? 1 : -1;
+  const P = [0, 0, 0];
+  P[thin] = (n[thin] > 0 ? hi[thin] : lo[thin]) + n[thin] * 0.004;   // just in front of the glass
+  P[wide] = (lo[wide] + hi[wide]) / 2; P[1] = (lo[1] + hi[1]) / 2;
+  // seen from the front the picture's right-hand direction is up crossed with the facing direction
+  const right = [n[2], 0, -n[0]];
+  const W = hi[wide] - lo[wide], H = hi[1] - lo[1];
+  const corners = [[0,0],[1,0],[1,1],[0,1]].map(([u, w]) => [
+    P[0] + (u - 0.5) * W * right[0], P[1] + (w - 0.5) * H, P[2] + (u - 0.5) * W * right[2]]);
+  return { corners, W, H };
+}
+// draws the video onto the TV's screen, scaled to fit inside it without stretching (black bars where the shape differs)
+let tvVideoUpdated = -1;
+function drawTvScreen(VP){
+  const b = getBlock(tv.x, tv.y, tv.z);
+  const s = isFurn(b) ? tvScreen(tv.x, tv.y, tv.z, b) : null;
+  if(!s) return;
+  const v = tv.el;
+  if(!tv.prog){
+    tv.prog = program(`#version 300 es
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec2 aUV;
+uniform mat4 uVP; out vec2 vUV;
+void main(){ gl_Position = uVP * vec4(aPos, 1.0); vUV = aUV; }`, `#version 300 es
+precision highp float;
+in vec2 vUV; uniform sampler2D uVideo; uniform vec2 uScale; out vec4 o;
+void main(){
+  vec2 uv = (vUV - 0.5) * uScale + 0.5;
+  if(uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0){ o = vec4(0.0, 0.0, 0.0, 1.0); return; }   // the frame around the picture
+  o = vec4(texture(uVideo, uv).rgb, 1.0);
+}`);
+    tv.loc = {uVP: gl.getUniformLocation(tv.prog, 'uVP'), uScale: gl.getUniformLocation(tv.prog, 'uScale'), uVideo: gl.getUniformLocation(tv.prog, 'uVideo')};
+    tv.vao = gl.createVertexArray(); tv.vbo = gl.createBuffer();
+    gl.bindVertexArray(tv.vao); gl.bindBuffer(gl.ARRAY_BUFFER, tv.vbo);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 20, 0);
+    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 20, 12);
+    gl.bindVertexArray(null);
+    tv.tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tv.tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  }
+  const av = v.videoWidth / v.videoHeight, as = s.W / s.H;
+  const scale = av > as ? [1, av / as] : [as / av, 1];
+  const data = new Float32Array(20);
+  s.corners.forEach((c, i) => { const uv = [[0,0],[1,0],[1,1],[0,1]][i]; data.set([c[0], c[1], c[2], uv[0], uv[1]], i * 5); });
+  gl.useProgram(tv.prog);
+  gl.uniformMatrix4fv(tv.loc.uVP, false, new Float32Array(VP));
+  gl.uniform2f(tv.loc.uScale, scale[0], scale[1]);
+  gl.uniform1i(tv.loc.uVideo, 1);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, tv.tex);
+  if(v.currentTime !== tvVideoUpdated){                  // a new frame of the video
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, v);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    tvVideoUpdated = v.currentTime;
+  }
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindVertexArray(tv.vao); gl.bindBuffer(gl.ARRAY_BUFFER, tv.vbo);
+  gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+  gl.disable(gl.CULL_FACE);
+  gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+  gl.enable(gl.CULL_FACE);
+  gl.bindVertexArray(null);
 }
 // the ceiling lights a switch reaches: a search through the open air around it, out to 12 blocks across and 4 up or down.
 // Walls, closed doors and furniture stop the search, so a room's lights are the ones it reaches
@@ -2843,6 +2973,7 @@ function connectMP(){
 }
 function enterWorld(m){
   mpMode = true; mp.id = m.id;
+  showLoading('JOINING ' + (m.worldName || 'THE WORLD') + '...'); loadWaiting = true; loadUntil = performance.now() + 15000;
   if(m.worldName) flashHud('JOINED ' + m.worldName);
   if(m.mob) cowReceive(m.mob);
   if(typeof m.time==='number') worldTime = m.time;   // start at the server's time of day
@@ -2920,6 +3051,7 @@ function mpDropped(){
 }
 function leaveServer(){
   mp.dropped = true;
+  showLoading('LEAVING THE SERVER...');
   try{ if(mp.ws) mp.ws.close(); }catch(e){}
   location.reload();
 }
@@ -3152,6 +3284,20 @@ document.addEventListener('fullscreenchange', fsSync);
 document.addEventListener('webkitfullscreenchange', fsSync);
 fsSync();
 
+/* ---------- the loading screen: up on start-up, while joining a server, and while leaving one ---------- */
+let loadWaiting = false, loadUntil = 0;
+function showLoading(text){ $('loadmsg').textContent = text; $('loading').hidden = false; }
+function hideLoading(){ loadWaiting = false; $('loading').hidden = true; }
+// joining: the screen stays up until the ground around the player is built, or until 15 seconds have passed
+function groundReady(){
+  const pcx = Math.floor(player.x / CS), pcz = Math.floor(player.z / CS);
+  for(let dz = -1; dz <= 1; dz++) for(let dx = -1; dx <= 1; dx++){
+    const ch = chunks.get(chunkKey(pcx + dx, pcz + dz));
+    if(!ch || ch.dirty) return false;
+  }
+  return true;
+}
+window.addEventListener('error', () => { if(!$('loading').hidden) $('loadmsg').textContent = 'THE GAME COULD NOT START. RELOAD THE PAGE.'; });
 function start(){
   sfx.init();
   musicStart();
@@ -3365,6 +3511,8 @@ function render(){
     }
     gl.enable(gl.CULL_FACE);
   }
+  // the TV's picture, on its screen, once the video has a frame to show
+  if(tv.on && tv.el && tv.el.readyState >= 2 && playing) drawTvScreen(VP);
   // the item in your hand, drawn over the world: a bare hand when the slot is empty
   if(playing && !player.sleeping && !player.seat && !invOpen && !codeOpen && !fridgeOpen && spectate.id==null){
     gl.clear(gl.DEPTH_BUFFER_BIT);
@@ -3676,6 +3824,7 @@ function frame(now){
     if(!player.sleeping && !player.seat && spectate.id==null) physics(dt);      // asleep or sitting, the player stays where they are
     target=raycast(6);
     cowUpdate(dt);
+    tvUpdate();
   } else target=null;
   if(playing && sfx.ctx){ waterT -= dt; if(waterT <= 0){ waterT = 0.2; sfx.water(tapVolume()); } }
   if(playing && mpMode){
@@ -3696,6 +3845,7 @@ function frame(now){
   ensureChunks();
   if(lightDirty) relightLamps();
   remesh();
+  if(loadWaiting && (groundReady() || performance.now() > loadUntil)) hideLoading();
   render();
   hud(dt);
   syncTouch();
@@ -3730,6 +3880,7 @@ try{
     mpStatus('The connection to the server was lost. Connect again to rejoin.');
   }
 }catch(e){}
+hideLoading();                                    // the game is ready: the start-up screen goes
 requestAnimationFrame(frame);
 
 // for testing from the outside

@@ -100,9 +100,22 @@ process.on('SIGTERM', flushAndExit);
 // with TLS_CERT and TLS_KEY (paths to the PEM files), or put it behind a host that provides https.
 const TLS_CERT = process.env.TLS_CERT, TLS_KEY = process.env.TLS_KEY;
 const useTls = !!(TLS_CERT && TLS_KEY);
+// media the game loads, such as the TV's video: only files inside public/media are served
+const MEDIA_TYPES = { '.mp4': 'video/mp4', '.webm': 'video/webm', '.m4a': 'audio/mp4', '.mp3': 'audio/mpeg' };
 const requestHandler = (req, res) => {
   const url = req.url.split('?')[0];
   if (url === '/favicon.ico') { res.writeHead(204); return res.end(); }
+  if (url.startsWith('/media/')) {
+    let rel = '';
+    try { rel = decodeURIComponent(url).slice(1); } catch (e) { rel = ''; }
+    const type = MEDIA_TYPES[path.extname(rel).toLowerCase()];
+    if (!type || !rel.startsWith('media/') || rel.includes('..')) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('not found'); }
+    return fs.readFile(path.join(__dirname, 'public', rel), (err, data) => {
+      if (err) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('not found'); }
+      res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'max-age=3600' });
+      res.end(data);
+    });
+  }
   if (url === '/' || url === '/index.html') {
     fs.readFile(PAGE, (err, data) => {
       if (err) { res.writeHead(500, { 'Content-Type': 'text/plain' }); return res.end('game page missing'); }
