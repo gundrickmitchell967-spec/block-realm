@@ -19,7 +19,7 @@ const MAX_PLAYERS = Number(process.env.MAX_PLAYERS) || 16;     // across both wo
 const PAGE = path.join(__dirname, 'public', 'index.html');
 const CH = 64;                  // world height in blocks
 const REACH = 12;               // a block change must be this close to the player's last reported position
-const MAX_BLOCK_ID = 301;       // highest block id a player may place (see BLOCKS in index.html: MAX_ID there must match)
+const MAX_BLOCK_ID = 999;       // highest block id a player may place (see BLOCKS in index.html: MAX_ID there must match)
 const COLORS = ['#e6594b', '#4b9be6', '#58c25a', '#e6c44b', '#b35ae6', '#4be6d6', '#e6894b', '#e64b9b'];
 const DAY_LEN = 480;            // seconds for one full day (the same as in index.html)
 const PLOT_RATE = 20, PLOT_MIN = 3, PLOT_MAX = 32;   // a plot costs this much cash per block; its sides are between these lengths
@@ -140,8 +140,17 @@ const JOBS = [
   { name: 'Stock clerk',       perMin: 14, shiftMin: 15, desc: 'Count and shelve the stock behind the counter.' },
   { name: 'Delivery runner',   perMin: 16, shiftMin: 12, desc: 'Run parcels between the shops and the plots.' },
   { name: "Surveyor's helper", perMin: 18, shiftMin: 10, desc: 'Hold the measuring pole for the Land Surveyor.' },
+  { name: "Builder's mate",    perMin: 24, shiftMin: 10, desc: 'Carry and place blocks for the builders.' },
+  { name: 'Site foreman',      perMin: 30, shiftMin: 10, desc: 'Keep the building site moving.' },
+  { name: 'Master builder',    perMin: 40, shiftMin: 8,  desc: 'Build the finest work in town.' },
 ];
 const JOB_EVERY = 60000, JOB_BREAK = 5 * 60000;   // a shift pays once a minute; then a 5 minute break
+// passive income: an investment pays while you are away. At most INVEST_MAX_HOURS of it waits to be collected.
+const INVESTMENTS = [
+  { name: 'Lemonade stand',   cost: 1000, perHour: 10, desc: 'A stand on the shop street. It sells lemonade while you are away.' },
+  { name: 'Vending machines', cost: 5000, perHour: 60, desc: 'Machines in the shop lobbies. They fill up and pay out while you are away.' },
+];
+const INVEST_MAX_HOURS = 12;
 // rewards: a daily sign-in (day 1 pays 50, each day in a row adds 15, up to day 7 at 140; a missed day starts again)
 // and playtime (every 10 minutes of play banks 20 cash, up to 3 waiting; only time spent moving around counts)
 const DAILY_BASE = 50, DAILY_STEP = 15, DAILY_CAP_DAY = 7;
@@ -179,9 +188,15 @@ function jobTick() {
     if (!p.joined || !p.shift) continue;
     const w = p.world, s = p.shift, job = JOBS[s.job];
     if (now - s.lastPay >= JOB_EVERY) {
-      s.lastPay = now; s.paid += job.perMin;
-      w.coins.set(p.pid, (w.coins.get(p.pid) || 0) + job.perMin);
-      logTxn(w, { kind: 'job', amount: job.perMin, to: p.pid, toName: p.name });
+      s.lastPay = now;
+      // the work rule: moving around earns half of each minute's pay, building or breaking blocks the other half. Standing still earns nothing.
+      const moved = now - (p.movedAt || 0) < 60000, worked = now - (p.workedAt || 0) < 60000;
+      const pay = Math.round(job.perMin * ((moved ? 0.5 : 0) + (worked ? 0.5 : 0)));
+      if (pay > 0) {
+        s.paid += pay;
+        w.coins.set(p.pid, (w.coins.get(p.pid) || 0) + pay);
+        logTxn(w, { kind: 'job', amount: pay, to: p.pid, toName: p.name });
+      } else sendTo(p, { type: 'notice', text: 'NO WORK THIS MINUTE: MOVE AROUND AND BUILD OR BREAK BLOCKS' });
       sendTo(p, walletMsg(w, p));
       sendTo(p, shiftMsg(p));
     }
@@ -202,11 +217,17 @@ function rewardTick() {
 setInterval(rewardTick, 10000);
 function rewardsOf(w, pid) {
   let r = w.rewards.get(pid);
-  if (!r) { r = { day: '', streak: 0, play: 0, banked: 0 }; w.rewards.set(pid, r); }
+  if (!r) { r = { day: '', streak: 0, play: 0, banked: 0, invest: {} }; w.rewards.set(pid, r); }
+  r.invest = r.invest || {};
   return r;
 }
 function dayKey(t) { return new Date(t).toISOString().slice(0, 10); }
 function dailyPay(streak) { return DAILY_BASE + DAILY_STEP * (Math.min(Math.max(streak, 1), DAILY_CAP_DAY) - 1); }
+// what an investment has earned and not yet been collected
+function stakePending(r, k, now) {
+  const hours = Math.min(INVEST_MAX_HOURS, (now - r.invest[k]) / 3600000);
+  return Math.floor(hours * INVESTMENTS[k].perHour);
+}
 function rewardState(w, p) {
   const now = Date.now(), r = rewardsOf(w, p.pid);
   const claimed = r.day === dayKey(now);
@@ -216,6 +237,8 @@ function rewardState(w, p) {
     type: 'rewardstate',
     daily: { claimed, streak, day: ((next - 1) % DAILY_CAP_DAY) + 1, pay: dailyPay(next) },
     play: { banked: r.banked, pay: r.banked * PLAY_REWARD, nextIn: Math.ceil((PLAY_BLOCK - r.play) / 60000), max: PLAY_BANK_MAX },
+    stakes: INVESTMENTS.map((it, k) => ({ k, name: it.name, desc: it.desc, cost: it.cost, perHour: it.perHour,
+      owned: r.invest[k] !== undefined, pending: r.invest[k] !== undefined ? stakePending(r, k, Date.now()) : 0 })),
   };
 }
 // the transactions a player is part of, newest first, worded from that player's side
@@ -244,6 +267,8 @@ function cashLogFor(w, p) {
     }
     else if (e.kind === 'daily' && e.to === p.pid) { dir = '+'; text = 'Daily sign-in reward'; }
     else if (e.kind === 'playtime' && e.to === p.pid) { dir = '+'; text = 'Playtime reward'; }
+    else if (e.kind === 'invest' && e.from === p.pid) { dir = '-'; text = 'Bought ' + e.what; }
+    else if (e.kind === 'stake' && e.to === p.pid) { dir = '+'; text = 'Investment income'; }
     if (dir) out.push({ t: e.t, dir, text, amount: e.amount });
   }
   return out.slice(-40).reverse();
@@ -671,8 +696,8 @@ wss.on('connection', (ws) => {
       p.x = Math.max(-1e6, Math.min(1e6, m.x));
       p.y = Math.max(-10, Math.min(200, m.y));
       p.z = Math.max(-1e6, Math.min(1e6, m.z));
-      p.yaw = m.yaw; p.pitch = m.pitch; p.movedAt = Date.now();
-      if (!p.hidden) broadcast(w, { type: 'move', id, x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch }, id);
+      p.yaw = m.yaw; p.pitch = m.pitch; p.movedAt = Date.now(); p.sit = !!m.sit;
+      if (!p.hidden) broadcast(w, { type: 'move', id, x: p.x, y: p.y, z: p.z, yaw: p.yaw, pitch: p.pitch, sit: p.sit }, id);
       return;
     }
 
@@ -843,6 +868,31 @@ wss.on('connection', (ws) => {
         scheduleSave(w);
         return sendTo(p, rewardState(w, p));
       }
+      if (m.action === 'invest') {
+        const it = INVESTMENTS[m.k];
+        if (!Number.isInteger(m.k) || !it) return fail('NOT FOR SALE');
+        if (r.invest[m.k] !== undefined) return fail('YOU ALREADY OWN THIS');
+        const mine = w.coins.get(p.pid) || 0;
+        if (mine < it.cost) return fail('YOU DO NOT HAVE THAT MUCH CASH');
+        w.coins.set(p.pid, mine - it.cost);
+        r.invest[m.k] = now;
+        logTxn(w, { kind: 'invest', amount: it.cost, from: p.pid, fromName: p.name, what: it.name });
+        sendTo(p, walletMsg(w, p));
+        sendTo(p, { type: 'notice', text: 'BOUGHT: ' + it.name.toUpperCase() + '. IT PAYS WHILE YOU ARE AWAY' });
+        scheduleSave(w);
+        return sendTo(p, rewardState(w, p));
+      }
+      if (m.action === 'collect') {
+        let pay = 0;
+        INVESTMENTS.forEach((it, k) => { if (r.invest[k] !== undefined) { pay += stakePending(r, k, now); r.invest[k] = now; } });
+        if (pay < 1) return fail('NOTHING TO COLLECT YET');
+        w.coins.set(p.pid, (w.coins.get(p.pid) || 0) + pay);
+        logTxn(w, { kind: 'stake', amount: pay, to: p.pid, toName: p.name });
+        sendTo(p, walletMsg(w, p));
+        sendTo(p, { type: 'notice', text: 'INVESTMENT INCOME: ' + pay + ' CASH' });
+        scheduleSave(w);
+        return sendTo(p, rewardState(w, p));
+      }
       return;
     }
 
@@ -927,6 +977,7 @@ wss.on('connection', (ws) => {
       if (mine < bet) return fail('YOU DO NOT HAVE THAT MUCH CASH');
       p.spinAt = now;
       const reels = [crypto.randomInt(6), crypto.randomInt(6), crypto.randomInt(6)];
+      if (slotPay(reels) === 0 && crypto.randomInt(100) < 46) reels[2] = reels[0];   // help: 46% of the losing spins come up a pair instead, so about 70% of spins win something
       const win = bet * slotPay(reels);
       w.coins.set(p.pid, mine - bet + win);
       logTxn(w, { kind: 'slots', amount: bet, won: win, from: p.pid, fromName: p.name });
@@ -1176,6 +1227,7 @@ wss.on('connection', (ws) => {
         if (owner === undefined && (cur === null || cur === 0)) w.owners.set(key, p.pid);   // a new block is the placer's
       }
       w.edits.set(key, m.id);
+      p.workedAt = Date.now();
       scheduleSave(w);
       broadcast(w, { type: 'edit', x: m.x, y: m.y, z: m.z, id: m.id, by: id }, id);
       sendTo(p, { type: 'edit', x: m.x, y: m.y, z: m.z, id: m.id, by: id });

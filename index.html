@@ -510,12 +510,12 @@
   <div id="shoppanel" role="dialog" aria-labelledby="shoptitle">
     <h2 id="shoptitle">SHOP</h2>
     <p class="hint" id="shopcoins"></p>
-    <div id="shoptabs"><button class="tab on" type="button" data-tab="items">ITEMS</button><button class="tab" type="button" data-tab="plots">MY PLOTS</button><button class="tab" type="button" data-tab="land">BUY LAND</button><button class="tab" type="button" data-tab="job">JOB</button><button class="tab" type="button" data-tab="rewards">REWARDS</button><button class="tab" type="button" data-tab="bountyshop">BOUNTY</button></div>
+    <div id="shoptabs"><button class="tab on" type="button" data-kind="purchase" data-tab="items">ITEMS</button><button class="tab" type="button" data-kind="purchase" data-tab="plots">MY PLOTS</button><button class="tab" type="button" data-kind="purchase" data-tab="land">BUY LAND</button><button class="tab" type="button" data-kind="purchase" data-tab="bountyshop">BOUNTY</button><button class="tab" type="button" data-kind="career" data-tab="job">JOB</button><button class="tab" type="button" data-kind="career" data-tab="passive">PASSIVE INCOME</button><button class="tab" type="button" data-kind="career" data-tab="rewards">REWARDS</button></div>
     <div id="shopitems" class="pane"></div>
     <div id="shopplots" class="pane" hidden></div>
     <div id="shopland" class="pane" hidden></div>
     <div id="shopjob" class="pane" hidden>
-      <p class="hint">Pick a job and start a shift. A job pays once a minute while the shift lasts, then there is a 5 minute break. You keep earning while you are in the game.</p>
+      <p class="hint">Pick a job and start a shift. Each minute pays part of the job's cash: half for moving around, half for building or breaking blocks. Standing still earns nothing. A shift is followed by a 5 minute break.</p>
       <select id="jobpick" aria-label="Job"></select>
       <p class="hint" id="jobdesc"></p>
       <p class="hint" id="jobstate"></p>
@@ -529,6 +529,12 @@
       <p class="hint">Playtime: every 10 minutes you play (moving around, not standing idle) banks 20 cash. Up to 3 rewards can wait for you.</p>
       <p class="hint" id="playstate"></p>
       <button class="btn" id="playbtn" type="button">CLAIM PLAYTIME</button>
+    </div>
+    <div id="shoppassive" class="pane" hidden>
+      <p class="hint">Buy an investment once. It earns cash while you are away from the game, up to 12 hours of income waiting to be collected.</p>
+      <div id="passivelist"></div>
+      <p class="hint" id="passivecollect"></p>
+      <button class="btn" id="collectbtn" type="button">COLLECT INCOME</button>
     </div>
     <div id="shopbounty" class="pane" hidden>
       <p class="hint">A bounty is cash someone puts on a player. Smack that player (aim at them and press F) to take it: they stand still for 15 seconds. Then come back here to claim it.</p>
@@ -906,15 +912,18 @@ const FURN_B = [
     B(0.18,0,0.72,0.24,0.44,0.8,24),
     B(0.76,0,0.72,0.82,0.44,0.8,24)
   ]},
-  {name:'Sofa', icon:69, sw:'#3a5fb4', seat:{u:0.5,v:0.55,h:0.5}, fn: () => [
-    B(0.02,0.1,0.1,0.98,0.42,0.98,69),        // base
-    B(0.02,0.42,0.02,0.98,0.9,0.22,69),       // back
-    B(0.02,0.42,0.22,0.16,0.7,0.98,69),       // left arm
-    B(0.84,0.42,0.22,0.98,0.7,0.98,69),       // right arm
-    B(0.16,0.42,0.22,0.84,0.5,0.98,70),       // seat cushion
-    B(0.04,0,0.04,0.1,0.1,0.1,24),            // legs
-    B(0.9,0,0.04,0.96,0.1,0.1,24)
-  ]},
+  {name:'Sofa', icon:69, sw:'#3a5fb4', seat:{u:0.5,v:0.55,h:0.5}, joins:true, fn: (f, j = {}) => {
+    // a side with another sofa beside it runs flat to the edge, and has no arm: two sofas make one big sofa
+    const a = j.l ? 0 : 0.02, b = j.r ? 1 : 0.98;
+    return [
+    B(a,0.1,0.1,b,0.42,0.98,69),              // base
+    B(a,0.42,0.02,b,0.9,0.22,69),             // back
+    ...(j.l ? [] : [B(0.02,0.42,0.22,0.16,0.7,0.98,69)]),   // left arm
+    ...(j.r ? [] : [B(0.84,0.42,0.22,0.98,0.7,0.98,69)]),   // right arm
+    B(j.l ? 0 : 0.16,0.42,0.22,j.r ? 1 : 0.84,0.5,0.98,70),  // seat cushion
+    ...(j.l ? [] : [B(0.04,0,0.04,0.1,0.1,0.1,24)]),         // legs
+    ...(j.r ? [] : [B(0.9,0,0.04,0.96,0.1,0.1,24)])
+  ]}},
   {name:'Computer Desk', icon:25, sw:'#b08450', fn: () => [
     B(0,0.74,0,1,0.8,1,25),                   // desk top
     B(0.04,0,0.04,0.12,0.74,0.12,24),         // legs
@@ -923,8 +932,8 @@ const FURN_B = [
     B(0.88,0,0.88,0.96,0.74,0.96,24),
     B(0.44,0.8,0.36,0.56,1.0,0.44,66),        // monitor stand, tall
     B(0.3,0.8,0.28,0.7,0.84,0.5,66),          // monitor foot
-    B(0.12,1.0,0.4,0.88,1.3,0.6,67),          // monitor frame: a big screen
-    B(0.15,1.03,0.6,0.85,1.27,0.62,68,68,68,0.9),   // monitor screen
+    B(0.12,1.0,0.4,0.88,1.5,0.6,67),          // monitor frame: a big screen, taller
+    B(0.15,1.03,0.6,0.85,1.47,0.62,68,68,68,0.9),   // monitor screen
     B(0.24,0.8,0.7,0.76,0.84,0.84,66),        // keyboard
   ]},
   {name:'TV', icon:67, sw:'#1a1d24', use: h => tvUse(h), fn: () => [
@@ -962,8 +971,8 @@ const FURN_B = [
     B(0.22,0.5,0.22,0.78,0.56,0.78,66),       // lid
     B(0.45,0.56,0.45,0.55,0.6,0.55,17)        // handle
   ]},
-  {name:'Rug', icon:72, sw:'#d6c49a', fn: () => [
-    B(0.02,0,0.02,0.98,0.04,0.98,72)          // flat rug
+  {name:'Rug', icon:72, sw:'#d6c49a', rug:true, fn: () => [
+    B(0.01,0,0.01,0.99,0.015,0.99,72)         // a thin rug, lying flat on the floor
   ]},
   {name:'Fireplace', icon:10, sw:'#a04a30', fn: () => [
     B(0,0,0,1,1,0.5,10),                      // back wall
@@ -1040,9 +1049,16 @@ const FURN_C = [
     B(0.28,0,0.28,0.72,0.14,0.72,90), B(0.36,0.14,0.36,0.64,0.27,0.64,90), B(0.44,0.27,0.44,0.56,0.37,0.56,90)
   ]}
 ];
+// the rugs: thin mats that lie flat on the floor. You walk over them, and they are in the Rugs tab of the catalog
+const FURN_RUGS = [
+  {name:'Persian Rug', icon:96, sw:'#7a2a2a', rug:true, fn: () => [B(0,0,0,1,0.015,1,96)]},
+  {name:'Striped Rug', icon:97, sw:'#8aa070', rug:true, fn: () => [B(0,0,0,1,0.015,1,97)]},
+  {name:'Checker Rug', icon:98, sw:'#303034', rug:true, fn: () => [B(0,0,0,1,0.015,1,98)]},
+  {name:'Shag Rug',    icon:99, sw:'#6a7a94', rug:true, fn: () => [B(0,0,0,1,0.015,1,99)]},
+];
 // every piece, in order. A piece's states are listed in states (the first is its normal one). Each state is one
 // block number per facing, so the normal state of a piece is its number and its other states follow it.
-const FURN = [...FURN_A, ...FURN_B, ...FURN_C];
+const FURN = [...FURN_A, ...FURN_B, ...FURN_C, ...FURN_RUGS];
 FURN.forEach(ty => { ty.states = ty.states || [{}]; ty.wide = !!ty.wide; ty.tall = !!ty.tall; });
 const FURN_BASE = 58;                       // the first furniture block number
 const FURN_VAR = [];                        // every state of every piece: { t: piece, f: its flags, key, name, parts }
@@ -1077,6 +1093,7 @@ const FACE_OF = new Int8Array(FURN_MAX + 1);               // block number -> th
 FURN_VAR.forEach((_, vi) => { for(let f = 0; f < 4; f++){ VAR_OF[idOfVar(vi, f)] = vi; FACE_OF[idOfVar(vi, f)] = f; } });
 const FURN_NORMAL = new Set(FURN.map((ty, t) => FVI[t][flagKey(withCell(ty, ty.states[0], 0))]));   // the normal state of each piece
 const FURN_BASES = FURN.map((ty, t) => idOfVar(FVI[t][flagKey(withCell(ty, ty.states[0], 0))], 0));   // the block a player carries, facing front
+const RUG_T = new Set(FURN.map((_, t) => t).filter(t => !!FURN[t].rug));   // the rug pieces: walkable, and in the Rugs tab
 const furnVar = (t, f, facing) => idOfVar(FVI[t][flagKey(f)], facing);   // NaN if the piece has no such state
 for(let vi = 0; vi < FURN_VAR.length; vi++) for(let f = 0; f < 4; f++){
   const v = FURN_VAR[vi];
@@ -1092,7 +1109,7 @@ const isLampOn = b => b===LAMP_ID || b===LAMP_TOP_ID;
 const isLampTopId = b => b===LAMP_TOP_ID || b===LAMP_OFF_TOP_ID;
 const isLampBottomId = b => b===LAMP_ID || b===LAMP_OFF_ID;
 const lampId = (top, on) => top ? (on ? LAMP_TOP_ID : LAMP_OFF_TOP_ID) : (on ? LAMP_ID : LAMP_OFF_ID);
-const SLOT_BOTTOM_ID = 300, SLOT_TOP_ID = 301;      // the casino's slot machine, two blocks high; not in the catalog, the casino places them
+const SLOT_BOTTOM_ID = FURN_MAX + 1, SLOT_TOP_ID = FURN_MAX + 2;      // the casino's slot machine, two blocks high; not in the catalog, the casino places them
 BLOCKS[SLOT_BOTTOM_ID] = {name:'Slot Machine', top:94, side:92, bot:95, sw:'#b5242e'};
 BLOCKS[SLOT_TOP_ID]    = {name:'Slot Machine', top:94, side:93, bot:95, sw:'#b5242e'};
 const MAX_ID = Math.max(LAMP_OFF_TOP_ID, FURN_MAX, SLOT_TOP_ID);   // highest block id (matches the server)
@@ -1108,6 +1125,7 @@ const isDoorId = b => b >= 12 && b <= 15;
 const isOpenDoor = b => b === DOOR_OPEN_ID || b === DOOR_TOP_OPEN_ID;
 // blocks that do not stop the player: lamps and open doors
 const NONSOLID = new Set([LAMP_ID, LAMP_TOP_ID, LAMP_OFF_ID, LAMP_OFF_TOP_ID, DOOR_OPEN_ID, DOOR_TOP_OPEN_ID]);
+FURN_VAR.forEach((v, vi) => { if(RUG_T.has(v.t)) for(let f = 0; f < 4; f++) NONSOLID.add(idOfVar(vi, f)); });
 // solid blocks stop the player (-1 means a chunk that is not loaded yet, which counts as solid)
 // light switches are walkable: you pass straight through them (you can still right-click them)
 const SWITCH_IDS = new Set();
@@ -1153,7 +1171,8 @@ const CATS = [
   {name:'Colors',       ids:[25,41,42,43,44,45,46]},
   {name:'Ores & Metal', ids:[24,48,49,50,21,22,51,52]},
   {name:'Light & Glass',ids:[10,11,47]},
-  {name:'Furniture',    ids:[12,16,...FURN_BASES.filter((_, t) => !DECOR_T.has(t))]},
+  {name:'Furniture',    ids:[12,16,...FURN_BASES.filter((_, t) => !DECOR_T.has(t) && !RUG_T.has(t))]},
+  {name:'Rugs',         ids:FURN_BASES.filter((_, t) => RUG_T.has(t))},
   {name:'Food',         ids:ITEM_IDS},
   {name:'Gadgets',      ids:[REMOTE_ID, SURVEY_ID]}
 ];
@@ -1508,9 +1527,16 @@ function rotBoxAt(lo, hi, f, cx){
 }
 // adds one piece of furniture to the mesh: each of its boxes, turned to the piece's facing. A wide piece draws
 // only the part of its boxes that lies in its own block
-function emitFurn(V, I, nv, x, y, z, b){
+// which sides of a piece have another of the same piece, facing the same way, right beside it: {l, r}
+function furnJoins(wx,y,wz,b){
+  const v = furnState(b), f = furnFacing(b), [u,w] = furnDir(f);
+  const same = (x,z) => { const o = getBlock(x,y,z); return isFurn(o) && furnState(o).t === v.t && furnFacing(o) === f; };
+  return {l: same(wx-u, wz-w), r: same(wx+u, wz+w)};
+}
+function emitFurn(V, I, nv, x, y, z, b, wx, wz){
   const v = furnState(b), f = furnFacing(b), ty = FURN[v.t], c = v.f.c || 0;
-  for(const p of v.parts){
+  const parts = ty.joins ? ty.fn(v.f, furnJoins(wx,y,wz,b)) : v.parts;
+  for(const p of parts){
     let x0 = p[0], x1 = p[3];
     if(ty.wide){ x0 = Math.max(x0, c); x1 = Math.min(x1, c+1); if(x1 <= x0) continue; }
     const r = rotBoxAt([x0,p[1],p[2]], [x1,p[4],p[5]], f, ty.wide ? c+0.5 : 0.5);
@@ -1552,7 +1578,7 @@ function furnPartner(x,y,z,b){
 }
 // the point the player is looking at (from the last raycast)
 function hitPoint(h){
-  const o = [player.x, player.y+eyeNow(), player.z], d = camDir();
+  const o = [player.x, eyeY(), player.z], d = camDir();
   return [o[0]+d[0]*h.t, o[1]+d[1]*h.t, o[2]+d[2]*h.t];
 }
 // the same point in the piece's own coordinates: 0 to 1 across a block, and 0 to 2 across a wide piece
@@ -1949,7 +1975,9 @@ const LIE_KEY = 'KeyZ';
 // puts the player on a seat: x, y (the feet), z, and the way they face; cell is the bed they sit on, if any
 function seatPlayer(x, y, z, yaw, cell, front){
   for(const k in keys) keys[k] = false;
+  const vy0 = visY();
   Object.assign(player, {x, y, z, yaw, vx:0, vy:0, vz:0});
+  player.visOff = vy0 - y;
   player.seat = {cell, front, x, y, z};
   flashHud(cell ? 'SITTING ON THE BED: press Z to lie down' : 'SITTING: press Space or a move key to stand up');
 }
@@ -1972,7 +2000,7 @@ function standUp(){
   if(s.front){
     for(const d of [1.0, 0.7, 0.4]){
       const x = s.x + s.front[0]*d, z = s.z + s.front[1]*d;
-      for(const dy of [0, 0.6, 1.2]) if(!collides(x, s.y + dy, z)){ player.x = x; player.y = s.y + dy; player.z = z; player.vy = 0; if(s.toilet) leaveToilet(s.toilet); return; }
+      for(const dy of [0, 0.6, 1.2]) if(!collides(x, s.y + dy, z)){ const vy0 = visY(); player.x = x; player.y = s.y + dy; player.z = z; player.vy = 0; player.visOff = vy0 - player.y; if(s.toilet) leaveToilet(s.toilet); return; }
     }
   }
   if(s.toilet) leaveToilet(s.toilet);
@@ -2132,6 +2160,10 @@ function emitBed(V,I,nv,x,y,z,wx,wz,isHead,gl){
   const k = isHead ? 1 : 0;                                  // the half of the bed this cell is
   const ia = dx ? 0 : 2, ic = dx ? 2 : 0;                    // index along the bed, and across it
   const s = dx ? dx : dz;
+  // another bed of the same half, lined up beside this one (across the bed), makes the two a queen: no seam between them
+  const ax = dx ? 0 : 1, az = dx ? 1 : 0;
+  const sameBed = (cx,cz) => { const id = isHead ? BED_HEAD_ID : BED_FOOT_ID; if(getBlock(cx,y,cz)!==id) return false; const [ex,ez] = bedDir(cx,y,cz,id); return ex===dx && ez===dz; };
+  const jm = sameBed(wx-ax, wz-az), jp = sameBed(wx+ax, wz+az);
   const base = dx ? (dx>0 ? footX : footX+1) : (dz>0 ? footZ : footZ+1);
   const origin = [x,y,z];
   let n = nv;
@@ -2146,8 +2178,8 @@ function emitBed(V,I,nv,x,y,z,wx,wz,isHead,gl){
   };
   const WOOD = {top:8,side:8,bot:8}, SHEET = {top:22,side:23,bot:8}, WHITE = {top:21,side:21,bot:21};
   part(0,2,     0,1,     0,0.25,   WOOD);    // frame
-  part(0.02,1.92,0.04,0.96,0.25,0.5, SHEET); // mattress with a red blanket
-  part(0,0.08,  0.02,0.98,0.25,0.56, WOOD);  // footboard at the foot end
+  part(0.02,1.92,jm?0:0.04,jp?1:0.96,0.25,0.5, SHEET); // mattress with a red blanket, running on to the next bed
+  part(0,0.08,  jm?0:0.02,jp?1:0.98,0.25,0.56, WOOD);  // footboard at the foot end
   part(1.92,2,  0,1,     0.25,0.95, WOOD);   // headboard at the head end
   part(1.42,1.9,0.14,0.86,0.5,0.66, WHITE);  // pillow, tucked in against the headboard
   // another bed right above this one makes a bunk bed: four posts hold the top bed up
@@ -2197,7 +2229,7 @@ function buildMesh(ch){
       continue;
     }
     if(isFurn(t)){
-      nv=emitFurn(V,I,nv,x,y,z,t);
+      nv=emitFurn(V,I,nv,x,y,z,t,wx,wz);
       if(isFridge(t) && furnState(t).f.open && !furnState(t).f.top) nv=emitFridgeFood(V,I,nv,x,y,z,t,wx,wz);
       continue;
     }
@@ -2385,6 +2417,109 @@ const cubeBuf = gl.createBuffer();
 }
 gl.bindVertexArray(null);
 
+/* ---------- the characters: Minecraft-style skins. Each part of a player is a box with its own piece of a 64x64 skin ---------- */
+// the faces of a box as seen from outside: the normal, then the corners top-left, top-right, bottom-right, bottom-left
+const SKIN_FACES = [
+  {f:'front',  n:[0,0,-1], c:[[1,1,-1],[-1,1,-1],[-1,-1,-1],[1,-1,-1]]},
+  {f:'back',   n:[0,0,1],  c:[[-1,1,1],[1,1,1],[1,-1,1],[-1,-1,1]]},
+  {f:'left',   n:[-1,0,0], c:[[-1,1,-1],[-1,1,1],[-1,-1,1],[-1,-1,-1]]},
+  {f:'right',  n:[1,0,0],  c:[[1,1,1],[1,1,-1],[1,-1,-1],[1,-1,1]]},
+  {f:'top',    n:[0,1,0],  c:[[-1,1,1],[1,1,1],[1,1,-1],[-1,1,-1]]},
+  {f:'bottom', n:[0,-1,0], c:[[-1,-1,-1],[1,-1,-1],[1,-1,1],[-1,-1,1]]},
+];
+// where a face of a box whose skin origin is (u0,v0), with size w x h x d skin pixels, sits on the skin: [u1,v1,u2,v2]
+function skinRect(u0,v0,w,h,d,f){
+  switch(f){
+    case 'top': return [u0+d, v0, u0+d+w, v0+d];
+    case 'bottom': return [u0+d+w, v0, u0+d+2*w, v0+d];
+    case 'right': return [u0, v0+d, u0+d, v0+d+h];
+    case 'front': return [u0+d, v0+d, u0+d+w, v0+d+h];
+    case 'left': return [u0+d+w, v0+d, u0+2*d+w, v0+d+h];
+    default: return [u0+2*d+w, v0+d, u0+2*d+2*w, v0+d+h];   // back
+  }
+}
+// a unit cube with the skin laid on each face (positions, normals and skin coordinates)
+function skinVAO(u0,v0,w,h,d){
+  const v = [];
+  for(const F of SKIN_FACES){
+    const R = skinRect(u0,v0,w,h,d,F.f);
+    const uv = [[R[0],R[1]],[R[2],R[1]],[R[2],R[3]],[R[0],R[3]]];
+    for(const k of [0,1,2,0,2,3]){
+      const p = F.c[k];
+      v.push(p[0]*0.5, p[1]*0.5, p[2]*0.5, F.n[0], F.n[1], F.n[2], uv[k][0]/64, uv[k][1]/64);
+    }
+  }
+  const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+  const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(v), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,3,gl.FLOAT,false,32,0);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1,3,gl.FLOAT,false,32,12);
+  gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2,2,gl.FLOAT,false,32,24);
+  gl.bindVertexArray(null);
+  return vao;
+}
+const skinProg = program(`#version 300 es
+layout(location=0) in vec3 aPos; layout(location=1) in vec3 aNor; layout(location=2) in vec2 aUv;
+uniform mat4 uVP; uniform mat4 uModel;
+out vec3 vNor; out vec2 vUv;
+void main(){
+  vNor = mat3(uModel) * aNor; vUv = aUv;
+  gl_Position = uVP * uModel * vec4(aPos, 1.0);
+}`, `#version 300 es
+precision highp float;
+in vec3 vNor; in vec2 vUv;
+uniform sampler2D uSkin; uniform vec3 uTint; uniform float uLight;
+out vec4 o;
+void main(){
+  vec4 t = texture(uSkin, vUv);
+  if(t.a < 0.5) discard;                                   // unpainted part of the skin
+  vec3 c = t.a > 0.9 ? t.rgb * uTint : t.rgb;              // full alpha: the player's colour; otherwise the skin's own colour
+  float s = 0.55 + 0.45 * max(dot(normalize(vNor), normalize(vec3(0.4, 1.0, 0.3))), 0.0);
+  o = vec4(c * s * uLight, 1.0);
+}`);
+const SK = {uVP:gl.getUniformLocation(skinProg,'uVP'), uModel:gl.getUniformLocation(skinProg,'uModel'), uTint:gl.getUniformLocation(skinProg,'uTint'), uLight:gl.getUniformLocation(skinProg,'uLight'), uSkin:gl.getUniformLocation(skinProg,'uSkin')};
+const skinParts = {
+  head: skinVAO(0,0,8,8,8), body: skinVAO(16,16,8,12,4),
+  rarm: skinVAO(40,16,4,12,4), larm: skinVAO(32,48,4,12,4),
+  rleg: skinVAO(0,16,4,12,4), lleg: skinVAO(16,48,4,12,4),
+};
+// the skin is painted once, here: the face, the hair and the hands keep their colours, the shirt and trousers are tinted by the player's colour
+function skinNoise(x,y,s){ let h = (x*374761393 + y*668265263 + s*1274126177) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) & 255) / 255 - 0.5; }
+function makeSkinPixels(){
+  const d = new Uint8Array(64*64*4);
+  const put = (x,y,c) => { const i = (y*64+x)*4; d[i]=c[0]; d[i+1]=c[1]; d[i+2]=c[2]; d[i+3]=c[3]; };
+  const paint = (r, fn) => { for(let y=r[1]; y<r[3]; y++) for(let x=r[0]; x<r[2]; x++) put(x, y, fn(x-r[0], y-r[1])); };
+  const RAW = c => [c[0], c[1], c[2], 200];                // keeps its own colour
+  const TINT = g => [g, g, g, 255];                        // takes the player's colour
+  const SKIN = [232,188,150], HAIR = [62,42,28], EYE = [240,240,240], PUPIL = [35,22,18], MOUTH = [150,64,58];
+  const parts = (u0,v0,w,h,dd,fn) => { for(const f of ['top','bottom','right','front','left','back']){ const r = skinRect(u0,v0,w,h,dd,f); paint(r, (x,y) => fn(f,x,y)); } };
+  parts(0,0,8,8,8,(f,x,y) => {                              // the head: hair on top, a face on the front
+    if(f==='top') return RAW(HAIR);
+    if(f==='bottom') return RAW(SKIN);
+    if(y<2) return RAW(HAIR);
+    if(f==='front'){
+      if((y===3||y===4) && (x===1||x===2||x===5||x===6)) return RAW(x===2||x===5 ? PUPIL : EYE);
+      if(y===6 && x>=2 && x<=5) return RAW(MOUTH);
+    }
+    return RAW(SKIN);
+  });
+  parts(16,16,8,12,4,(f,x,y) => {                           // the shirt
+    let g = 222 + skinNoise(x,y,1) * 14;
+    if(y===0) g -= 30;
+    if(f==='front' && y===8) g = 150;                       // the belt
+    return TINT(g);
+  });
+  for(const [u0,v0] of [[40,16],[32,48]]) parts(u0,v0,4,12,4,(f,x,y) => y >= 10 ? RAW(SKIN) : TINT(214 + skinNoise(x,y,2) * 14));   // sleeves, with the hands
+  for(const [u0,v0] of [[0,16],[16,48]]) parts(u0,v0,4,12,4,(f,x,y) => y >= 9 ? TINT(70 + skinNoise(x,y,3) * 10) : TINT(200 + skinNoise(x,y,4) * 12));   // trousers, with the shoes
+  return d;
+}
+const skinTex = gl.createTexture();
+gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, skinTex);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 64, 64, 0, gl.RGBA, gl.UNSIGNED_BYTE, makeSkinPixels());
+gl.activeTexture(gl.TEXTURE0);
+
 // the block atlas, drawn procedurally: 8x4 tiles of 32 pixels on a 256x128 canvas
 function makeAtlasCanvas(){
   // each pattern is written at 16x16 and scaled up 2x, then fine grain is added so the texture reads as detailed
@@ -2444,27 +2579,59 @@ function makeAtlasCanvas(){
                     if((px===3||px===12)&&(py===3||py===12)) return [120,122,128];
                     return [g(n,190,18)+band,g(n,192,18)+band,g(n,198,18)+band]; });
   tile(18,(px,py)=>{ const n=rnd2(px,py,54); if(n>0.93) return [255,250,170]; return [g(n,236,18),g(n,192,18),g(n,58,18)]; }); // gold
-  // the slot machine: a red cabinet with a window of three reels (92 the front, 93 the marquee, 94 the roof, 95 the base)
+  // the rugs (96 Persian, 97 striped, 98 checkered, 99 shag)
+  tile(96,(px,py)=>{
+    if(px<=1 || px>=14 || py<=1 || py>=14) return [200,160,60];                       // gold border
+    if(px===2 || px===13 || py===2 || py===13) return [120,30,30];                    // a red band inside it
+    if(Math.hypot(px-7.5, py-7.5) < 2.6) return [170,40,40];                          // the medallion
+    const diag = (px+py)%6 === 0 || (px-py+16)%6 === 0;
+    return diag ? [220,180,80] : [30,50,120];
+  });
+  tile(97,(px,py)=>{
+    const n = rnd2(px,py,131);
+    if(px===0 || px===15) return [120,96,70];
+    return (py%4 < 2) ? [g(n,214,10),g(n,196,10),g(n,150,10)] : [g(n,70,10),g(n,110,10),g(n,70,10)];
+  });
+  tile(98,(px,py)=>{
+    const n = rnd2(px,py,132), dark = ((px>>2)+(py>>2)) % 2 === 0;
+    return dark ? [g(n,28,8),g(n,28,8),g(n,30,8)] : [g(n,236,8),g(n,234,8),g(n,226,8)];
+  });
+  tile(99,(px,py)=>{ const n = rnd2(px,py,133); return [g(n,96,34),g(n,112,34),g(n,140,34)]; });   // shag: soft fibres
+  // the slot machine (92 the front with its reels, 93 the marquee, 94 the roof, 95 the base)
+  const SEVEN_PAT = ['111','001','010','010','010'];
+  const reelSymbol = (px,py) => {                                       // the reels: three columns of a seven
+    const x0 = [2,6,10].find(x => px >= x && px <= x + 2);
+    if(x0 === undefined || py < 4 || py > 8) return null;
+    return SEVEN_PAT[py-4][px-x0] === '1' ? [215,30,30] : null;
+  };
   tile(92,(px,py)=>{
-    if(px===0||px===15||py===0||py===15) return [230,190,60];                       // gold trim
-    if(py>=3&&py<=9&&px>=3&&px<=12){                                                  // the reel window
-      if(px===6||px===9) return [90,90,100];                                          // the gaps between the reels
-      const lit = py>=5&&py<=7;
-      if(px<6)  return lit ? [220,40,40]  : [25,25,35];                               // a red seven on the first reel
-      if(px<9)  return lit ? [240,190,40] : [25,25,35];                               // a gold bar on the second
-      return lit ? [40,160,220] : [25,25,35];                                         // a blue bell on the third
+    const n = (rnd2(px,py,90) - 0.5) * 10;
+    if(px===0 || px===15 || py===15) return [236,196,72];               // gold frame
+    if(py===0) return [124+n, 14, 22];
+    if(px>=1 && px<=14 && py>=2 && py<=9){                               // the window of reels
+      if(px===1 || px===14 || py===2 || py===9) return [240,200,80];    // its gold edge
+      if(px===5 || px===9) return [30,30,34];                            // the gaps between the reels
+      const sym = reelSymbol(px,py); if(sym) return sym;
+      if(py===6) return [255,70,70];                                     // the payline
+      return [246,241,226];                                              // the cream of the reels
     }
-    if(py>=12&&py<=14&&px>=4&&px<=11) return [226,184,64];                           // the coin tray
-    return [170,30,30];                                                               // the red cabinet
+    if(py>=11 && py<=13 && px>=3 && px<=12) return (px+py)%3===0 ? [250,215,80] : [96,62,22];   // the coin tray
+    if(py===14) return [90,20,26];
+    return [168+n, 24+n*0.5, 30+n*0.5];                                  // the red cabinet
   });
   tile(93,(px,py)=>{
-    if(px===0||px===15||py===0||py===15) return ((px+py)%2===0) ? [255,240,150] : [120,90,30];   // bulbs around the sign
-    const x = 11 - Math.floor((py-5)*0.7);
-    const seven = (py===4&&px>=4&&px<=11) || (py>=5&&py<=12&&(px===x||px===x-1));
-    return seven ? [255,215,70] : [110,12,22];                                        // a gold seven on the sign
+    if(px===0 || px===15 || py===0 || py===15) return (px+py)%2===0 ? [255,240,150] : [150,110,30];   // the bulbs
+    const G = ['11111','00001','00010','00100','00100','00100','00100'];   // a big gold seven
+    const gx = px-5, gy = py-4;
+    if(gx>=0 && gx<5 && gy>=0 && gy<7 && G[gy][gx]==='1') return [255,215,70];
+    return [110,12,22];
   });
-  tile(94,(px,py)=>{ const edge = px<=1||px>=14||py<=1||py>=14; return edge ? [230,190,60] : [150,22,34]; });   // the roof
-  tile(95,(px,py)=>[70,70,80]);                                                         // the base
+  tile(94,(px,py)=>{
+    const edge = px<=1 || px>=14 || py<=1 || py>=14;
+    if(edge) return (px+py)%2===0 ? [255,240,150] : [230,190,60];
+    return (px+py)%4===0 ? [255,240,150] : [150,22,34];
+  });
+  tile(95,(px,py)=> py>=14 ? [40,40,48] : [70,70,80]);
   tile(19,(px,py)=>{ const frame = px<=1||px>=14||py<=1||py>=14||py===5||py===10||py===15;                         // bookshelf
                     if(frame) return [146,102,58];
                     const pal=[[170,44,40],[44,90,170],[70,140,70],[210,170,60],[120,70,150]];
@@ -2651,7 +2818,11 @@ const player = {x:8.5, y:40, z:8.5, vx:0, vy:0, vz:0, yaw:0, pitch:0, onGround:f
 let playing=false, sel=0, target=null, worldTime=DAY_LEN*0.3;
 const keys = {};
 // how high the eyes are: lying down, sitting, or standing
-function eyeNow(){ return player.sleeping ? 0.42 : player.seat ? 1.0 : EYE; }
+const SEATED_EYE = 0.9;      // the eyes above the seat when sitting down
+function eyeNow(){ return player.sleeping ? 0.42 : EYE + (SEATED_EYE - EYE)*(player.sitAmt || 0); }
+// where the body is drawn: the feet, plus the small drop that eases in after a jump onto a seat or off one
+function visY(){ return player.y + (player.visOff || 0); }
+function eyeY(){ return visY() + eyeNow(); }
 function camDir(){
   const cp=Math.cos(player.pitch);
   return [-Math.sin(player.yaw)*cp, Math.sin(player.pitch), -Math.cos(player.yaw)*cp];
@@ -2730,7 +2901,7 @@ function physics(dt){
   }
 }
 function raycast(maxD){
-  const o=[player.x, player.y+eyeNow(), player.z], d=camDir();
+  const o=[player.x, eyeY(), player.z], d=camDir();
   let x=Math.floor(o[0]), y=Math.floor(o[1]), z=Math.floor(o[2]);
   const sx=d[0]>0?1:-1, sy=d[1]>0?1:-1, sz=d[2]>0?1:-1;
   const tdx=Math.abs(1/(d[0]||1e-9)), tdy=Math.abs(1/(d[1]||1e-9)), tdz=Math.abs(1/(d[2]||1e-9));
@@ -2915,7 +3086,8 @@ function tapVolume(){
   return best;
 }
 function doPlace(){
-  if(shopAim()){ openShop(); return; }   // right-click the shopkeeper: the shop opens
+  const shopK = shopAimKind();
+  if(shopK){ openShop(shopK); return; }   // right-click the shopkeeper: that shop opens
   { const mh = raycast(6); if(mh && machineAt(mh.x, mh.y, mh.z) >= 0){ openCasino(); return; } }   // right-click a slot machine: the casino opens
   if(HOTBAR[sel]===HACK_TOOL_ID){ hackDoor(raycast(6)); return; }   // the hacker tool: right-click a locked door to decode it
   if(HOTBAR[sel]===SURVEY_ID){ surveyRight(raycast(6)); return; }   // the Land Surveyor: right-click on your land picks a part to cut out, elsewhere cancels
@@ -3385,7 +3557,7 @@ const shopTag = document.createElement('div'); shopTag.className = 'tag'; shopTa
 $('tags').appendChild(shopTag);
 // the distance along the view to the shopkeeper's body, or -1 when the view does not reach it
 function shopkeeperDistOf(K){
-  const o = [player.x, player.y + eyeNow(), player.z], d = camDir();
+  const o = [player.x, eyeY(), player.z], d = camDir();
   const b0 = [K.x - 0.36, K.y, K.z - 0.36], b1 = [K.x + 0.36, K.y + 1.85, K.z + 0.36];
   let tmin = 0, tmax = 1e9;
   for(let i = 0; i < 3; i++){
@@ -3399,13 +3571,18 @@ function shopkeeperDistOf(K){
 }
 function shopkeeperDist(){ const a = shopkeeperDistOf(SHOPKEEPER), b = shopkeeperDistOf(SHOPKEEPER2); return a < 0 ? b : b < 0 ? a : Math.min(a, b); }
 // true when the shopkeeper is what you are looking at, within reach (a block in front of him hides him)
-function shopAim(){
-  if(!playing) return false;
-  const t = shopkeeperDist();
-  if(t < 0 || t > 6) return false;
+// the shop you are looking at: 'purchase' (the shopkeeper at the main shop) or 'career' (the career centre), or null
+function shopAimKind(){
+  if(!playing) return null;
+  const a = shopkeeperDistOf(SHOPKEEPER), b = shopkeeperDistOf(SHOPKEEPER2);
+  let kind = null, t = -1;
+  if(a >= 0 && (b < 0 || a <= b)){ kind = 'purchase'; t = a; }
+  else if(b >= 0){ kind = 'career'; t = b; }
+  if(!kind || t > 6) return null;
   const h = raycast(6);
-  return !h || t <= h.t;
+  return !h || t <= h.t ? kind : null;
 }
+function shopAim(){ return !!shopAimKind(); }
 // the items for sale (the server has the same prices)
 const SHOP_ITEMS = [
   {id:'hacktool', name:'HACKER TOOL', price:10000, art:'<svg width="220" height="150" viewBox="0 0 240 170" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="hf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f9a64"/><stop offset="1" stop-color="#1f5235"/></linearGradient><linearGradient id="ht" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#2f7d50"/><stop offset="1" stop-color="#6bc68c"/></linearGradient><linearGradient id="hs" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#173f28"/><stop offset="1" stop-color="#0e2a1a"/></linearGradient><linearGradient id="scr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0b2315"/><stop offset="1" stop-color="#06140c"/></linearGradient><radialGradient id="sh" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#000" stop-opacity="0.45"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient></defs><ellipse cx="122" cy="150" rx="92" ry="11" fill="url(#sh)"/><polygon points="172.0,86.0 206.0,60.0 206.0,110.0 172.0,136.0" fill="url(#hs)" stroke="#0a2014" stroke-width="1.5"/><polygon points="60.0,86.0 172.0,86.0 206.0,60.0 94.0,60.0" fill="url(#ht)" stroke="#0a2014" stroke-width="1.5"/><polygon points="60.0,86.0 172.0,86.0 172.0,136.0 60.0,136.0" fill="url(#hf)" stroke="#0a2014" stroke-width="1.5"/><line x1="60" y1="87" x2="172" y2="87" stroke="#9be8b5" stroke-opacity="0.6" stroke-width="1.5"/><polygon points="80.9,80.3 163.8,80.3 183.5,65.2 100.6,65.2" fill="url(#scr)" stroke="#7dffa8" stroke-width="1" stroke-opacity="0.8"/><line x1="90.4" y1="78.2" x2="139.6" y2="78.2" stroke="#7dffa8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.95"/><line x1="93.8" y1="75.6" x2="161.0" y2="75.6" stroke="#7dffa8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.95"/><line x1="97.2" y1="73.0" x2="133.0" y2="73.0" stroke="#7dffa8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.95"/><line x1="100.6" y1="70.4" x2="158.8" y2="70.4" stroke="#7dffa8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.95"/><line x1="104.0" y1="67.8" x2="146.5" y2="67.8" stroke="#7dffa8" stroke-width="2.2" stroke-linecap="round" stroke-opacity="0.95"/><rect x="151.6" y="74.2" width="4" height="7" fill="#e8ff9a"/><circle cx="84.6" cy="112.0" r="7" fill="#e04b3c" stroke="#0a2014" stroke-width="1.2"/><circle cx="82.6" cy="109.5" r="2.2" fill="#ffffff" fill-opacity="0.55"/><circle cx="111.5" cy="112.0" r="7" fill="#f2c33c" stroke="#0a2014" stroke-width="1.2"/><circle cx="109.5" cy="109.5" r="2.2" fill="#ffffff" fill-opacity="0.55"/><circle cx="138.4" cy="112.0" r="7" fill="#4bd6e6" stroke="#0a2014" stroke-width="1.2"/><circle cx="136.4" cy="109.5" r="2.2" fill="#ffffff" fill-opacity="0.55"/><line x1="80.2" y1="126.0" x2="80.2" y2="132.0" stroke="#0a2014" stroke-width="2" stroke-linecap="round" stroke-opacity="0.7"/><line x1="88.0" y1="126.0" x2="88.0" y2="132.0" stroke="#0a2014" stroke-width="2" stroke-linecap="round" stroke-opacity="0.7"/><line x1="95.8" y1="126.0" x2="95.8" y2="132.0" stroke="#0a2014" stroke-width="2" stroke-linecap="round" stroke-opacity="0.7"/><line x1="103.7" y1="126.0" x2="103.7" y2="132.0" stroke="#0a2014" stroke-width="2" stroke-linecap="round" stroke-opacity="0.7"/><line x1="187.6" y1="62.1" x2="193.6" y2="16.1" stroke="#2b2f36" stroke-width="3" stroke-linecap="round"/><circle cx="193.6" cy="14.1" r="4.5" fill="#f2c33c" stroke="#0a2014" stroke-width="1"/></svg>',
@@ -3430,12 +3607,17 @@ $('cashcoin').innerHTML = COIN_SVG;
 let myCoins = 0;            // your cash in this world (the multiplayer server keeps it)
 let myTools = 0;           // how many hacker tools you own
 let shopOpen = false;
-function openShop(){
+let shopKind = 'purchase';  // 'purchase' (items, plots, land, bounty) or 'career' (jobs, passive income, rewards)
+function openShop(kind){
   if(!playing || shopOpen || codeOpen || invOpen || fridgeOpen || doorShown || chatOpen || player.sleeping) return;
+  shopKind = kind === 'career' ? 'career' : 'purchase';
   shopOpen = true;
   for(const k in keys) keys[k] = false;
   try{ document.exitPointerLock(); }catch(e){}
+  $('shoptitle').textContent = shopKind === 'career' ? 'CAREER CENTRE' : 'PURCHASE SHOP';
+  for(const b of document.querySelectorAll('#shoptabs .tab')) b.hidden = b.dataset.kind !== shopKind;
   renderShop();
+  setShopTab(shopKind === 'career' ? 'job' : 'items');
   $('shopbox').hidden = false;
   $('shopclose').focus();
 }
@@ -3578,10 +3760,12 @@ function setShopTab(name){
   for(const b of document.querySelectorAll('#shoptabs .tab')) b.classList.toggle('on', b.dataset.tab === name);
   $('shopitems').hidden = name !== 'items'; $('shopplots').hidden = name !== 'plots'; $('shopland').hidden = name !== 'land';
   $('shopjob').hidden = name !== 'job'; $('shoprewards').hidden = name !== 'rewards'; $('shopbounty').hidden = name !== 'bountyshop';
+  $('shoppassive').hidden = name !== 'passive';
   shopTab = name;
   if(name === 'job') renderJob();
   if(name === 'bountyshop') renderBountyShop();
   if(name === 'rewards') askRewards();
+  if(name === 'passive'){ askRewards(); renderPassive(); }
 }
 for(const b of document.querySelectorAll('#shoptabs .tab')) b.addEventListener('click', () => setShopTab(b.dataset.tab));
 // the pause menu's leaderboard: the top players in each column (names are shown as text only)
@@ -3793,7 +3977,14 @@ function buildPlotLines(){
   plotBuiltFor = plotList;
   if(!plotLineMine){ plotLineMine = makeLineVAO(); plotLineOther = makeLineVAO(); }
   const mine = [], other = [];
-  const seg = (out, ax, az, bx, bz, sx, sz) => { const y = heightAt(sx, sz) + 0.06; out.push(ax, y, az, bx, y, bz); };
+  // each edge is a strip of ground (0.3 blocks wide, lifted a little), so the border reads from a distance; GL lines are only one pixel wide
+  const HW = 0.15;
+  const seg = (out, ax, az, bx, bz, sx, sz) => {
+    const y = heightAt(sx, sz) + 0.08, horiz = az === bz;
+    const x0 = horiz ? ax : ax - HW, x1 = horiz ? bx : ax + HW;
+    const z0 = horiz ? az - HW : az, z1 = horiz ? az + HW : bz;
+    out.push(x0,y,z0, x1,y,z0, x1,y,z1, x0,y,z0, x1,y,z1, x0,y,z1);
+  };
   for(const p of plotList){
     const out = p.mine ? mine : other;
     for(let x = p.x0; x <= p.x1; x++){
@@ -3835,7 +4026,7 @@ let bountyState = {list: [], claim: 0};
 let freezeUntil = 0;                                   // a smacked player stands still until this time (performance.now)
 function renderJob(){
   const now = Date.now(), on = shiftState.on, job = JOBS[on ? shiftState.job : jobPick] || JOBS[0];
-  $('jobdesc').textContent = job.desc + ' Pays ' + job.perMin + ' cash a minute, up to ' + job.perMin * job.shiftMin + ' a shift.';
+  $('jobdesc').textContent = job.desc + ' Pays up to ' + job.perMin + ' cash a minute (' + job.perMin * job.shiftMin + ' a shift): half for moving around, half for building or breaking blocks.';
   $('jobstate').textContent = !mpMode ? 'The job needs the multiplayer server.'
     : on ? 'On shift as ' + job.name + ': ' + shiftState.paid + ' cash earned so far, ' + Math.max(0, Math.ceil((shiftState.endsAt - now) / 60000)) + ' minutes to go.'
     : shiftState.breakUntil > now ? 'On a break: ' + Math.ceil((shiftState.breakUntil - now) / 60000) + ' minutes left.'
@@ -3850,6 +4041,9 @@ const JOBS = [
   {name:'Stock clerk', perMin:14, shiftMin:15, desc:'Count and shelve the stock behind the counter.'},
   {name:'Delivery runner', perMin:16, shiftMin:12, desc:'Run parcels between the shops and the plots.'},
   {name:"Surveyor's helper", perMin:18, shiftMin:10, desc:'Hold the measuring pole for the Land Surveyor.'},
+  {name:"Builder's mate", perMin:24, shiftMin:10, desc:'Carry and place blocks for the builders.'},
+  {name:'Site foreman', perMin:30, shiftMin:10, desc:'Keep the building site moving.'},
+  {name:'Master builder', perMin:40, shiftMin:8, desc:'Build the finest work in town.'},
 ];
 let jobPick = 0;
 JOBS.forEach((j, i) => { const o = document.createElement('option'); o.value = i; o.textContent = j.name + ' (' + j.perMin + ' a minute)'; $('jobpick').appendChild(o); });
@@ -3858,7 +4052,33 @@ $('jobbtn').addEventListener('click', () => mpSend({type:'job', action: shiftSta
 // the rewards: the daily sign-in, and the playtime rewards waiting to be claimed (the page asks again every few seconds while open)
 let rewardState = null;
 function askRewards(){ mpSend({type:'reward', action:'get'}); }
-setInterval(() => { if(shopOpen && shopTab === 'rewards') askRewards(); }, 5000);
+setInterval(() => { if(shopOpen && (shopTab === 'rewards' || shopTab === 'passive')) askRewards(); }, 5000);
+// the passive income: buy an investment once, collect what it has earned
+function renderPassive(){
+  const r = rewardState; if(!r || !r.stakes) return;
+  const box = $('passivelist'); box.textContent = '';
+  let waiting = 0;
+  for(const s of r.stakes){
+    const card = document.createElement('div'); card.className = 'shopcard';
+    const top = document.createElement('div'); top.className = 'shoprow';
+    const nm = document.createElement('span'); nm.textContent = s.name;
+    const pr = document.createElement('span'); pr.textContent = s.owned ? 'OWNED' : fmtCash(s.cost);
+    top.appendChild(nm); top.appendChild(pr); card.appendChild(top);
+    const d = document.createElement('p'); d.className = 'hint';
+    d.textContent = s.desc + ' Earns ' + s.perHour + ' cash an hour.' + (s.owned ? ' Waiting: ' + fmtCash(s.pending) + '.' : '');
+    card.appendChild(d);
+    if(!s.owned){
+      const b = document.createElement('button'); b.className = 'btn'; b.type = 'button'; b.textContent = 'BUY FOR ' + fmtCash(s.cost);
+      b.disabled = !mpMode || myCoins < s.cost;
+      b.addEventListener('click', () => mpSend({type:'reward', action:'invest', k: s.k}));
+      card.appendChild(b);
+    } else waiting += s.pending;
+    box.appendChild(card);
+  }
+  $('passivecollect').textContent = 'Waiting to collect: ' + fmtCash(waiting) + '. Income builds up for at most 12 hours.';
+  $('collectbtn').disabled = !mpMode || waiting < 1;
+}
+$('collectbtn').addEventListener('click', () => mpSend({type:'reward', action:'collect'}));
 function renderRewards(){
   const r = rewardState; if(!r) return;
   const box = $('streakdays'); box.textContent = '';
@@ -4531,34 +4751,40 @@ const Sc = s => [s[0],0,0,0, 0,s[1],0,0, 0,0,s[2],0, 0,0,0,1];
 // one box, centred at c inside the frame M, with size s
 const boxIn = (M, c, s) => mul(mul(M, Tr(c[0],c[1],c[2])), Sc(s));
 const WHITE_RGB = [0.97,0.97,0.95], PUPIL_RGB = [0.08,0.06,0.05], SHOE_RGB = [0.1,0.09,0.1];
-// a player as [matrix, colour] for every box. o.phase (the stride) and o.amt (0 standing, 1 full walk) come from its movement
-function avatarBoxes(o){
-  const root = mul(Tr(o.x, o.y, o.z), Ry(o.yaw));
-  const sw = Math.sin(o.phase) * o.amt;                           // -1..1 through a stride
-  const body = mul(root, Tr(0, o.amt * 0.06 * Math.abs(Math.sin(o.phase)), 0));   // the body dips at each step
+// a player as its parts: each part has its skin piece and the colour it takes. o.phase (the stride) and o.amt (0 standing, 1 full walk) come from its movement
+function avatarParts(o){
+  const s = o.sitAmt || 0;                                         // 0 standing, 1 sitting down: the hips go down to the seat and the legs bend forward
+  const root = mul(Tr(o.x, o.y - 0.75*s, o.z), Ry(o.yaw));
+  const sw = Math.sin(o.phase) * o.amt * (1 - s);                 // -1..1 through a stride; no stride while sitting
+  const dip = o.amt * 0.04 * Math.abs(Math.sin(o.phase)) * (1 - s);   // the body dips at each step
+  const body = mul(root, Tr(0, -dip, 0));
   const out = [];
-  const add = (M, c, s, rgb) => out.push([boxIn(M, c, s), rgb]);
-  for(const side of [-1, 1]){                                     // legs swing from the hip, each against the other
-    const leg = mul(mul(root, Tr(side*0.14, 0.86, 0)), Rx(side < 0 ? 0.75*sw : -0.75*sw));
-    add(leg, [0,-0.43,0], [0.26,0.86,0.28], LEGS_RGB);
-    add(leg, [0,-0.8,-0.05], [0.28,0.12,0.36], SHOE_RGB);
+  for(const side of [-1, 1]){
+    const leg = mul(mul(root, Tr(side*0.125, 0.75, 0)), Rx((side < 0 ? 0.75*sw : -0.75*sw) + s*1.5708));   // legs swing from the hips, and fold forward when sitting
+    out.push({part: side < 0 ? 'rleg' : 'lleg', M: boxIn(leg, [0,-0.375,0], [0.25,0.75,0.25]), tint: LEGS_RGB});
   }
-  add(body, [0,1.1,0], [0.5,0.7,0.3], o.rgb);                     // torso
-  for(const side of [-1, 1]){                                     // arms hang from the shoulders and swing against the legs
-    const sh = mul(body, Tr(side*0.33, 1.4, 0));
-    add(sh, [0,0,0], [0.22,0.22,0.22], o.rgb);                    // shoulder joint: it joins the arm to the body
-    const arm = mul(sh, Rx(side < 0 ? -0.6*sw : 0.6*sw));
-    add(arm, [0,-0.33,0], [0.18,0.66,0.2], o.rgb);
-    add(arm, [0,-0.7,0], [0.17,0.15,0.19], SKIN_RGB);             // hand
+  out.push({part:'body', M: boxIn(body, [0,1.125,0], [0.5,0.75,0.25]), tint: o.rgb});
+  for(const side of [-1, 1]){
+    const sh = mul(body, Tr(side*0.375, 1.5, 0));                 // the shoulder
+    const arm = mul(sh, Rx((side < 0 ? -0.6*sw : 0.6*sw) + s*1.1));   // arms swing against the legs, and rest forward when sitting
+    out.push({part: side < 0 ? 'rarm' : 'larm', M: boxIn(arm, [0,-0.375,0], [0.25,0.75,0.25]), tint: o.rgb});
   }
-  const head = mul(body, Tr(0, 1.6, 0));
-  add(head, [0,0,0], [0.5,0.5,0.5], SKIN_RGB);
-  for(const side of [-1, 1]){                                     // eyes: white with a dark pupil, on the front of the head
-    add(head, [side*0.12, 0.05, -0.256], [0.15,0.13,0.02], WHITE_RGB);
-    add(head, [side*0.12, 0.04, -0.27], [0.07,0.07,0.02], PUPIL_RGB);
-  }
-  add(head, [0,-0.13,-0.258], [0.22,0.05,0.02], FACE_RGB);        // mouth
+  out.push({part:'head', M: boxIn(body, [0,1.75,0], [0.5,0.5,0.5]), tint: [1,1,1]});
   return out;
+}
+// draws one player (or shopkeeper) with its skin
+function drawAvatar(o, VP, dl){
+  gl.useProgram(skinProg);
+  gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, skinTex); gl.uniform1i(SK.uSkin, 6);
+  gl.uniformMatrix4fv(SK.uVP, false, new Float32Array(VP));
+  gl.uniform1f(SK.uLight, 0.25 + 0.75*dl);
+  for(const P of avatarParts(o)){
+    gl.uniform3f(SK.uTint, P.tint[0], P.tint[1], P.tint[2]);
+    gl.uniformMatrix4fv(SK.uModel, false, new Float32Array(P.M));
+    gl.bindVertexArray(skinParts[P.part]);
+    gl.drawArrays(gl.TRIANGLES, 0, 36);
+  }
+  gl.bindVertexArray(null);
 }
 function hexRGB(h){ const n=parseInt(h.slice(1),16); return [(n>>16&255)/255,(n>>8&255)/255,(n&255)/255]; }
 function partMatrix(px,py,pz,yaw,c,s){
@@ -4734,7 +4960,7 @@ function onServerMessage(m){
     editsDirty = true; lightDirty = true;
   }
   else if(m.type==='cashlog'){ cashEntries = m.entries || []; if(cashVisible()) renderCash(); }
-  else if(m.type==='rewardstate'){ rewardState = m; if(shopOpen && shopTab === 'rewards') renderRewards(); }
+  else if(m.type==='rewardstate'){ rewardState = m; if(shopOpen && shopTab === 'rewards') renderRewards(); if(shopOpen && shopTab === 'passive') renderPassive(); }
   else if(m.type==='shift'){
     shiftState = {on: !!m.on, job: m.job, paid: m.paid || 0, endsAt: m.endsAt || 0, breakUntil: m.breakUntil || 0};
     if(shopOpen && shopTab === 'job') renderJob();
@@ -4766,7 +4992,7 @@ function onServerMessage(m){
   else if(m.type==='system'){ addChatLine('', String(m.text||''), 'system'); }
   else if(m.type==='move'){
     const o=mp.others.get(m.id); if(!o) return;
-    o.tx=m.x; o.ty=m.y; o.tz=m.z; o.tyaw=m.yaw;
+    o.tx=m.x; o.ty=m.y; o.tz=m.z; o.tyaw=m.yaw; o.tsit = m.sit ? 1 : 0;
   }
   else if(m.type==='sleep'){
     const o=mp.others.get(m.id); if(o){ o.sleeping=!!m.on; tagText(o); }
@@ -4989,7 +5215,7 @@ const tBtns = [
   {el:$('tdown'), down:() => { keys.ShiftLeft = true; }, up:() => { keys.ShiftLeft = false; }},   // holds descent while flying
   {el:$('tlie'), down:() => tapKey('KeyZ', true)},
   {el:$('tdoor'), down:() => useDoorKey()},
-  {el:$('tshop'), down:() => openShop()},
+  {el:$('tshop'), down:() => { const k = shopAimKind(); if(k) openShop(k); }},
   {el:$('ttrade'), down:() => openCashFromGame()},
   {el:$('tbag'), down:() => tapKey('KeyE', true)},
   {el:$('tmap'), down:() => openMap()},
@@ -5208,7 +5434,7 @@ function render(){
   gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   gl.enable(gl.DEPTH_TEST); gl.enable(gl.CULL_FACE); gl.cullFace(gl.BACK);
   // asleep, the camera sits low, as if lying on the mattress
-  const eye=[player.x, player.y+eyeNow()+viewBob(), player.z];
+  const eye=[player.x, eyeY()+viewBob(), player.z];
   const d=camDir();
   const V=lookAt(eye,[eye[0]+d[0],eye[1]+d[1],eye[2]+d[2]],[0,1,0]);
   const Pm=perspective(70*Math.PI/180, cv.width/cv.height, 0.05, 600);
@@ -5260,9 +5486,9 @@ function render(){
     gl.uniformMatrix4fv(LU.uVP,false,new Float32Array(VP));
     gl.uniform3f(LU.uOff,0,0,0);
     gl.uniform4f(LU.uCol,1,1,1,1);
-    gl.bindVertexArray(plotLineMine.vao); gl.drawArrays(gl.LINES,0,plotLineMine.n);
+    gl.bindVertexArray(plotLineMine.vao); gl.drawArrays(gl.TRIANGLES,0,plotLineMine.n);
     gl.uniform4f(LU.uCol,1,0.15,0.15,1);
-    gl.bindVertexArray(plotLineOther.vao); gl.drawArrays(gl.LINES,0,plotLineOther.n);
+    gl.bindVertexArray(plotLineOther.vao); gl.drawArrays(gl.TRIANGLES,0,plotLineOther.n);
     gl.bindVertexArray(null);
     gl.enable(gl.CULL_FACE);
   }
@@ -5304,14 +5530,7 @@ function render(){
     gl.uniformMatrix4fv(SU.uVP,false,new Float32Array(VP));
     gl.uniform1f(SU.uLight,0.25+0.75*dl);
     gl.bindVertexArray(cubeVAO);
-    for(const o of mp.others.values()){
-      if(o.hidden) continue;
-      for(const [M, rgb] of avatarBoxes(o)){
-        gl.uniform3f(SU.uCol, rgb[0], rgb[1], rgb[2]);
-        gl.uniformMatrix4fv(SU.uModel,false,new Float32Array(M));
-        gl.drawArrays(gl.TRIANGLES,0,36);
-      }
-    }
+    for(const o of mp.others.values()){ if(!o.hidden) drawAvatar(o, VP, dl); }
     gl.enable(gl.CULL_FACE);
     if(wallHacks) gl.enable(gl.DEPTH_TEST);
     // name tags sit above each head
@@ -5327,16 +5546,12 @@ function render(){
   gl.uniformMatrix4fv(SU.uVP,false,new Float32Array(VP));
   gl.uniform1f(SU.uLight,0.25+0.75*dl);
   gl.bindVertexArray(cubeVAO);
-  for(const K of [SHOPKEEPER, SHOPKEEPER2]) for(const [M, rgb] of avatarBoxes(K)){
-    gl.uniform3f(SU.uCol, rgb[0], rgb[1], rgb[2]);
-    gl.uniformMatrix4fv(SU.uModel,false,new Float32Array(M));
-    gl.drawArrays(gl.TRIANGLES,0,36);
-  }
+  for(const K of [SHOPKEEPER, SHOPKEEPER2]) drawAvatar(K, VP, dl);
   gl.enable(gl.CULL_FACE);
   const nearK = Math.hypot(SHOPKEEPER2.x - player.x, SHOPKEEPER2.z - player.z) < Math.hypot(SHOPKEEPER.x - player.x, SHOPKEEPER.z - player.z) ? SHOPKEEPER2 : SHOPKEEPER;
   const npNear = playing && Math.hypot(nearK.x - player.x, nearK.z - player.z) < 40;
   const np = npNear ? projectPoint(VP, nearK.x, nearK.y + 2.05, nearK.z) : null;
-  const tagText = nearK === SHOPKEEPER ? 'SHOPKEEPER' : 'SHOPKEEPER: HOUSE A';
+  const tagText = nearK === SHOPKEEPER ? 'SHOPKEEPER: PURCHASES' : 'SHOPKEEPER: CAREERS';
   if(shopTag.textContent !== tagText) shopTag.textContent = tagText;
   if(np){ shopTag.hidden = false; shopTag.style.left = np[0] + 'px'; shopTag.style.top = np[1] + 'px'; }
   else shopTag.hidden = true;
@@ -5665,6 +5880,8 @@ function frame(now){
     if(music.on && !music.timer) musicStart();   // the tune keeps going while you play
     if(spectate.id!=null) followSpectate();
     if(spectate.id==null && !cutOpen) applyLook(dt);
+    player.sitAmt = (player.sitAmt || 0) + ((player.seat ? 1 : 0) - (player.sitAmt || 0))*(1 - Math.exp(-dt*6));
+    player.visOff = (player.visOff || 0)*Math.exp(-dt*7);
     if(!player.sleeping && !player.seat && spectate.id==null && !cutOpen) physics(dt);      // asleep or sitting, the player stays where they are
     target=raycast(6);
     cowUpdate(dt);
@@ -5674,7 +5891,7 @@ function frame(now){
   if(playing && mpMode){
     mp.sendT -= dt;
     voiceT -= dt; if(voiceT <= 0){ voiceT = 0.25; updateVoice(); }
-    if(mp.sendT <= 0){ mp.sendT = 0.1; mpSend({type:'move', x:player.x, y:player.y, z:player.z, yaw:player.yaw, pitch:player.pitch}); }
+    if(mp.sendT <= 0){ mp.sendT = 0.1; mpSend({type:'move', x:player.x, y:player.y, z:player.z, yaw:player.yaw, pitch:player.pitch, sit:!!player.seat}); }
   }
   for(const o of mp.others.values()){            // ease other players toward their last reported position
     const k = 1 - Math.exp(-dt*12);
@@ -5685,6 +5902,7 @@ function frame(now){
     const spd = mv / Math.max(dt, 1e-3);
     o.phase = (o.phase || 0) + mv * 1.6;
     o.amt = (o.amt || 0) + ((spd > 0.3 ? Math.min(1, spd / 4) : 0) - (o.amt || 0)) * (1 - Math.exp(-dt*10));
+    o.sitAmt = (o.sitAmt || 0) + ((o.tsit ? 1 : 0) - (o.sitAmt || 0)) * (1 - Math.exp(-dt*6));
   }
   ensureChunks();
   if(lightDirty) relightLamps();
