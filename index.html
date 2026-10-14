@@ -120,6 +120,7 @@
   #shopitems{width:100%;display:flex;flex-direction:column;gap:6px}
   .shoprow{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;background:#11151f;border:2px solid #3a4560;font-size:13px}
   #tshop{right:calc(184px + env(safe-area-inset-right));bottom:calc(106px + env(safe-area-inset-bottom));width:66px;height:66px;font-size:11px;background:rgba(40,90,120,.6)}
+  #tflush{right:calc(184px + env(safe-area-inset-right));bottom:calc(188px + env(safe-area-inset-bottom));width:66px;height:66px;font-size:11px;background:rgba(60,90,120,.7)}
   #tdoor{right:calc(184px + env(safe-area-inset-right));bottom:calc(24px + env(safe-area-inset-bottom));width:66px;height:66px;font-size:11px;background:rgba(120,90,40,.6)}
   .btn:focus-visible,.slot:focus-visible{outline:3px solid #ffe066;outline-offset:2px}
   #mpbox{display:flex;flex-direction:column;align-items:center;gap:8px;width:260px;max-width:80vw}
@@ -257,6 +258,17 @@
   .streakday.done{background:#2f7d4f;color:#fff;border-color:#7ee39a}
   .streakday.today{border-color:#ffe066;color:#ffe066;box-shadow:0 0 8px #ffe066}
   #jobpick{font:inherit;padding:6px;background:#0d1119;color:#ffe066;border:2px solid #5b6578;max-width:100%}
+  #terms{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:14px;box-sizing:border-box;background:rgba(8,12,22,.94)}
+  #terms[hidden]{display:none}
+  #termsbox{width:100%;max-width:520px;max-height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;box-sizing:border-box;padding:18px;background:#161b26;border:3px solid #3a3f4c;display:flex;flex-direction:column;gap:12px}
+  #termsbox h2{margin:0;text-align:center;font-size:18px}
+  .termstext{font-size:14px;line-height:1.5}
+  .termstext p{margin:0 0 8px}
+  .termstext ul{margin:0 0 4px;padding-left:20px}
+  .termstext li{margin-bottom:6px}
+  .termscheck{display:flex;align-items:flex-start;gap:8px;font-size:14px;line-height:1.4}
+  .termscheck input{margin-top:3px;width:18px;height:18px;flex:0 0 auto}
+  #termsgo{width:100%}
 </style>
 </head>
 <body>
@@ -274,6 +286,22 @@
 <input id="chatin" maxlength="120" hidden aria-label="Chat message" placeholder="Type a message, Enter to send, Esc to cancel">
 <div id="selname"></div>
 <div id="pmpop" hidden role="alert"><b id="pmfrom"></b><span id="pmmsg"></span><small>TAP TO CLOSE</small></div>
+<div id="terms" role="dialog" aria-labelledby="termsh" hidden>
+  <div id="termsbox">
+    <h2 id="termsh">SERVER RULES</h2>
+    <div class="termstext">
+      <p>Hey! You are on this server. Please:</p>
+      <ul>
+        <li>Be nice to everyone you meet here.</li>
+        <li>Do not exploit or cheat. No using bugs or tricks to get cash, land or items you should not have.</li>
+        <li>Do not grief. Do not wreck, take over or steal other players' blocks, plots, cash or things.</li>
+      </ul>
+    </div>
+    <label class="termscheck"><input type="checkbox" id="termscheck" disabled> I have read these rules and I agree to them</label>
+    <p class="hint" id="termscount">Please read the rules. You can tick the box in 5 seconds.</p>
+    <button class="btn" id="termsgo" type="button" disabled>CONTINUE</button>
+  </div>
+</div>
 <div id="touchlook"></div>
 <div id="touch" hidden>
   <div id="stick" role="presentation"><div id="knob"></div></div>
@@ -282,6 +310,7 @@
   <button class="tbtn" id="tlie" type="button" hidden>LIE DOWN</button>
     <button class="tbtn" id="tdoor" type="button" hidden>DOOR</button>
     <button class="tbtn" id="tshop" type="button" hidden>SHOP</button>
+    <button class="tbtn" id="tflush" type="button" hidden>FLUSH</button>
     <button class="tbtn" id="ttrade" type="button" hidden>TRADE</button>
   <button class="tbtn" id="tdown" type="button" hidden>DOWN</button>
   <div id="ttop">
@@ -390,7 +419,7 @@
        M: sound effects on or off &middot; Esc: pause and save<br>
        Double-tap Space: fly (Space up, Shift down) &middot; T: chat with other players (multiplayer)<br>
        V: talk to players close to you (voice chat, multiplayer)</p>
-      <p class="help touchhelp" hidden>Touch: drag the circle on the left to walk, drag anywhere else to look.<br>Tap anywhere to place the selected block there. Hold still on a block to break it. BREAK breaks the block in the middle of the screen. JUMP jumps. BAG opens the block catalog. DOOR (shown when you look at a door) sets or opens its password. MENU pauses.</p>
+      <p class="help touchhelp" hidden>Touch: drag the circle on the left to walk (double tap it while flying to go fast), drag anywhere else to look.<br>Tap anywhere to place the selected block there. Hold still on a block to break it. BREAK breaks the block in the middle of the screen. JUMP jumps. BAG opens the block catalog. DOOR (shown when you look at a door) sets or opens its password. MENU pauses.</p>
       <button class="btn ghost" id="howback" type="button">BACK</button>
     </div>
     <div id="mpbox" hidden>
@@ -707,15 +736,28 @@ const CARCASS = (open, t=25) => open
   : [B(0.02,0.08,0.02,0.98,0.86,0.94,t), B(0.04,0,0.04,0.96,0.08,0.88,66)];
 // the quartz top of a base unit: every counter top sits at the same height (0.9), so they line up
 const QTOP = [B(0,0.86,0,1,0.9,1,54)];
-const FURN_A = [
-  {name:'Toilet', icon:64, sw:'#f2f2ee', seat:{u:0.5,v:0.45,h:0.46}, acts:[{box:[0.15,0.9,0.0,0.85,1.01,0.3], flush:true}], fn: () => [
-    B(0.22,0,0.18,0.78,0.42,0.8,64),          // bowl
-    B(0.2,0.42,0.2,0.8,0.46,0.82,64),         // rim
-    B(0.3,0.44,0.48,0.7,0.47,0.74,66),        // dark water
+// the toilet: a tank at the back, and a bowl with real depth (walls round a cavity, with water in it).
+// with mess, a small pile sits in the water, inside the bowl
+function toiletParts(mess){
+  const parts = [
     B(0.2,0.42,0.02,0.8,0.98,0.2,64),         // tank at the back
     B(0.18,0.98,0.0,0.82,1.0,0.22,64),        // tank lid
-    B(0.42,0.7,0.2,0.58,0.76,0.22,65)         // flush button
-  ]},
+    B(0.42,0.7,0.2,0.58,0.76,0.22,65),        // flush button
+    B(0.2,0,0.18,0.3,0.46,0.82,64),           // bowl: left wall
+    B(0.7,0,0.18,0.8,0.46,0.82,64),           // bowl: right wall
+    B(0.3,0,0.18,0.7,0.46,0.26,64),           // bowl: back wall
+    B(0.3,0,0.72,0.7,0.46,0.82,64),           // bowl: front wall
+    B(0.3,0,0.26,0.7,0.2,0.72,64),            // bowl: bottom of the cavity
+    B(0.3,0.36,0.26,0.7,0.4,0.72,66)          // dark water inside the bowl
+  ];
+  if(mess) parts.push(
+    B(0.42,0.36,0.44,0.58,0.42,0.58,90),      // a small pile in the water
+    B(0.45,0.42,0.47,0.55,0.46,0.55,90)
+  );
+  return parts;
+}
+const FURN_A = [
+  {name:'Toilet', icon:64, sw:'#f2f2ee', seat:{u:0.5,v:0.45,h:0.46}, acts:[{box:[0.15,0.9,0.0,0.85,1.01,0.3], flush:true}], fn: () => toiletParts(false)},
   // the tap is on the top of the sink: aim at it from above and right-click to turn the water on or off
   {name:'Bathroom Sink', icon:64, sw:'#f2f2ee', states:[{},{water:1}],
    acts:[{box:[0.35,0.6,0,0.65,1.01,0.4], flag:'water', on:'WATER ON', off:'WATER OFF'}],
@@ -1058,7 +1100,12 @@ const FURN_RUGS = [
 ];
 // every piece, in order. A piece's states are listed in states (the first is its normal one). Each state is one
 // block number per facing, so the normal state of a piece is its number and its other states follow it.
-const FURN = [...FURN_A, ...FURN_B, ...FURN_C, ...FURN_RUGS];
+// the toilet with a mess in it: the game swaps to it when you get up, and back to the clean one on flush.
+// it is not in the catalog, and it is added last so every other piece keeps its number
+const FURN_HIDDEN = [
+  {name:'Messy Toilet', icon:64, sw:'#f2f2ee', hidden:true, seat:{u:0.5,v:0.45,h:0.46}, acts:[{box:[0,0,0,1,1.01,1], flush:true}], fn: () => toiletParts(true)}
+];
+const FURN = [...FURN_A, ...FURN_B, ...FURN_C, ...FURN_RUGS, ...FURN_HIDDEN];
 FURN.forEach(ty => { ty.states = ty.states || [{}]; ty.wide = !!ty.wide; ty.tall = !!ty.tall; });
 const FURN_BASE = 58;                       // the first furniture block number
 const FURN_VAR = [];                        // every state of every piece: { t: piece, f: its flags, key, name, parts }
@@ -1085,12 +1132,17 @@ for(let t = FURN_OLD; t < FURN.length; t++){ addNormal(t); addOther(t); }
 // the first 50 variants keep the numbers they always had (58 to 257). The newer ones are numbered from NEW_BASE on,
 // so the dark lamps (258 and 259) keep their numbers in saved worlds
 const FURN_OLD_VARS = 50, NEW_BASE = 260;
-const idOfVar = (vi, f) => vi < FURN_OLD_VARS ? FURN_BASE + vi*4 + f : NEW_BASE + (vi - FURN_OLD_VARS)*4 + f;
+const MESSY_VI = FURN_VAR.findIndex(v => FURN[v.t].hidden === true);   // the hidden messy toilet's variants come last
+const idOfVar = (vi, f) => vi < FURN_OLD_VARS ? FURN_BASE + vi*4 + f : (MESSY_VI >= 0 && vi >= MESSY_VI) ? MESSY_BASE + (vi - MESSY_VI)*4 + f : NEW_BASE + (vi - FURN_OLD_VARS)*4 + f;
 if(FURN_VAR.length < FURN_OLD_VARS) console.error('furniture numbering: expected at least ' + FURN_OLD_VARS + ' variants');
-const FURN_MAX = Math.max(...FURN_VAR.map((_, vi) => idOfVar(vi, 3)));
-const VAR_OF = new Int32Array(FURN_MAX + 1).fill(-1);      // block number -> its variant (-1 when it is not furniture)
-const FACE_OF = new Int8Array(FURN_MAX + 1);               // block number -> the facing it turns to
+const FURN_MAX = Math.max(...FURN_VAR.map((_, vi) => vi < (MESSY_VI < 0 ? Infinity : MESSY_VI) ? idOfVar(vi, 3) : -1));   // the last number before the messy toilet
+const MESSY_BASE = FURN_MAX + 3;                             // after the two slot machine blocks (FURN_MAX + 1 and + 2)
+const ALL_MAX = Math.max(...FURN_VAR.map((_, vi) => idOfVar(vi, 3)));
+const VAR_OF = new Int32Array(ALL_MAX + 1).fill(-1);       // block number -> its variant (-1 when it is not furniture)
+const FACE_OF = new Int8Array(ALL_MAX + 1);                // block number -> the facing it turns to
 FURN_VAR.forEach((_, vi) => { for(let f = 0; f < 4; f++){ VAR_OF[idOfVar(vi, f)] = vi; FACE_OF[idOfVar(vi, f)] = f; } });
+const MESSY_T = FURN.findIndex(p => p.hidden === true);
+const isMessyToilet = b => isFurn(b) && furnState(b).t === MESSY_T;
 const FURN_NORMAL = new Set(FURN.map((ty, t) => FVI[t][flagKey(withCell(ty, ty.states[0], 0))]));   // the normal state of each piece
 const FURN_BASES = FURN.map((ty, t) => idOfVar(FVI[t][flagKey(withCell(ty, ty.states[0], 0))], 0));   // the block a player carries, facing front
 const RUG_T = new Set(FURN.map((_, t) => t).filter(t => !!FURN[t].rug));   // the rug pieces: walkable, and in the Rugs tab
@@ -1112,7 +1164,7 @@ const lampId = (top, on) => top ? (on ? LAMP_TOP_ID : LAMP_OFF_TOP_ID) : (on ? L
 const SLOT_BOTTOM_ID = FURN_MAX + 1, SLOT_TOP_ID = FURN_MAX + 2;      // the casino's slot machine, two blocks high; not in the catalog, the casino places them
 BLOCKS[SLOT_BOTTOM_ID] = {name:'Slot Machine', top:94, side:92, bot:95, sw:'#b5242e'};
 BLOCKS[SLOT_TOP_ID]    = {name:'Slot Machine', top:94, side:93, bot:95, sw:'#b5242e'};
-const MAX_ID = Math.max(LAMP_OFF_TOP_ID, FURN_MAX, SLOT_TOP_ID);   // highest block id (matches the server)
+const MAX_ID = Math.max(LAMP_OFF_TOP_ID, ALL_MAX, SLOT_TOP_ID);   // highest block id (matches the server)
 BLOCKS[LAMP_OFF_ID]     = {name:'Lamp (off)', top:76, side:76, bot:76, sw:'#8a8680'};
 BLOCKS[LAMP_OFF_TOP_ID] = {name:'Lamp (off)', top:76, side:76, bot:76, sw:'#8a8680'};
 const GLOWSTONE_ID = 47;                // a full block that gives light by itself
@@ -1171,7 +1223,7 @@ const CATS = [
   {name:'Colors',       ids:[25,41,42,43,44,45,46]},
   {name:'Ores & Metal', ids:[24,48,49,50,21,22,51,52]},
   {name:'Light & Glass',ids:[10,11,47]},
-  {name:'Furniture',    ids:[12,16,...FURN_BASES.filter((_, t) => !DECOR_T.has(t) && !RUG_T.has(t))]},
+  {name:'Furniture',    ids:[12,16,...FURN_BASES.filter((_, t) => !DECOR_T.has(t) && !RUG_T.has(t) && !FURN[t].hidden)]},
   {name:'Rugs',         ids:FURN_BASES.filter((_, t) => RUG_T.has(t))},
   {name:'Food',         ids:ITEM_IDS},
   {name:'Gadgets',      ids:[REMOTE_ID, SURVEY_ID]}
@@ -2003,22 +2055,25 @@ function standUp(){
       for(const dy of [0, 0.6, 1.2]) if(!collides(x, s.y + dy, z)){ const vy0 = visY(); player.x = x; player.y = s.y + dy; player.z = z; player.vy = 0; player.visOff = vy0 - player.y; if(s.toilet) leaveToilet(s.toilet); return; }
     }
   }
+  if(s.cell){
+    const spot = openSpotNear(s.cell.x, s.cell.y, s.cell.z);
+    if(spot){ const vy0 = visY(); player.x=spot[0]; player.y=spot[1]; player.z=spot[2]; player.vy=0; player.visOff = vy0 - player.y; }
+  }
   if(s.toilet) leaveToilet(s.toilet);
 }
 // getting up off the toilet leaves a mess on the floor beside it, on a cell the player is not standing in
 function leaveToilet(t){
-  const [fx, fz] = t.front;
-  for(const [dx, dz] of [[fx,fz], [-fx,-fz], [fz,-fx], [-fz,fx]]){
-    const x = t.x + dx, z = t.z + dz, y = t.y;
-    if(getBlock(x, y, z) !== 0 || !isSolidId(getBlock(x, y-1, z)) || overlapsPlayer(x, y, z)) continue;
-    placeCell(x, y, z, POOP_ID);
-    sfx.poop();
-    flashHud('YOU LEFT A MESS: right-click the flush button on the toilet');
-    return;
-  }
+  const cur = getBlock(t.x, t.y, t.z);
+  if(!isFurn(cur) || FURN[furnState(cur).t].name !== 'Toilet') return;   // only the clean toilet gets messy
+  placeCell(t.x, t.y, t.z, furnVar(MESSY_T, FURN[MESSY_T].states[0], furnFacing(cur)));
+  sfx.poop();
+  flashHud('YOU LEFT A MESS: right-click the toilet to flush it (or tap FLUSH)');
 }
 // the flush button: whatever was left on the floor near the toilet goes down with the water
 function flushToilet(h){
+  if(isMessyToilet(h.id)){
+    placeCell(h.x, h.y, h.z, furnVar(FURN.findIndex(p => p.name === 'Toilet'), {}, furnFacing(h.id)));
+  }
   let gone = false;
   for(let dx = -2; dx <= 2; dx++) for(let dz = -2; dz <= 2; dz++){
     if(getBlock(h.x+dx, h.y, h.z+dz) === POOP_ID){ placeCell(h.x+dx, h.y, h.z+dz, 0); gone = true; }
@@ -2864,7 +2919,7 @@ function physics(dt){
   let fw=(keys.KeyW?1:0)-(keys.KeyS?1:0), rt=(keys.KeyD?1:0)-(keys.KeyA?1:0);
   // flying: no gravity, Space rises, Shift descends, and you move faster; blocks still stop you
   // sprint is its own key (Sprint on the stick), so Shift is only for going down while flying
-  const sp = P.fly ? 9.0 : ((keys.ShiftLeft||keys.ShiftRight||keys.Sprint) ? 6.0 : 4.3);
+  const sp = P.fly ? (P.boost ? 17.0 : 9.0) : ((keys.ShiftLeft||keys.ShiftRight||keys.Sprint) ? 6.0 : 4.3);
   let tx=0, tz=0;
   if(fw||rt){
     const len=Math.hypot(fw,rt); fw/=len; rt/=len;
@@ -2879,7 +2934,7 @@ function physics(dt){
   P.phase = (P.phase || 0) + hs*dt*1.6;
   P.amt = (P.amt || 0) + (Math.min(1, hs/4) - (P.amt || 0))*(1 - Math.exp(-dt*10));
   if(P.fly || wallHacks){                // flying, or wall hacks (which also turn gravity off)
-    P.vy =((keys.Space?1:0) - ((keys.ShiftLeft||keys.ShiftRight)?1:0)) * 8;
+    P.vy =((keys.Space?1:0) - ((keys.ShiftLeft||keys.ShiftRight)?1:0)) * (P.boost ? 13 : 8);
   } else {
     P.vy-=26*dt; if(P.vy<-40) P.vy=-40;
     if(keys.Space && P.onGround){ P.vy=8.6; sfx.jump(); }
@@ -3024,16 +3079,29 @@ function skipNight(){
   flashHud('GOOD MORNING');
 }
 // gets out of bed: stands up beside the bed on the floor if there is room, otherwise on top of it
+// the nearest open spot to stand on, around a block at (bx,by,bz): free air at the feet and head, solid ground below.
+// the ground beside the block comes first, and the top of the block last, so you are not put back on top of it
+function openSpotNear(bx, by, bz){
+  for(let r = 1; r <= 6; r++) for(const corner of [false, true]) for(let dx = -r; dx <= r; dx++) for(let dz = -r; dz <= r; dz++){
+    if(Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+    if((dx !== 0 && dz !== 0) !== corner) continue;          // the sides of the block first, then the corners
+    for(const dy of [0, -1, 1, -2]){
+      const cx = bx+dx, cy = by+dy, cz = bz+dz;
+      if(isSolidId(getBlock(cx,cy,cz)) || isSolidId(getBlock(cx,cy+1,cz))) continue;
+      if(!isSolidId(getBlock(cx,cy-1,cz))) continue;
+      return [cx+0.5, cy, cz+0.5];
+    }
+  }
+  return null;
+}
 function leaveBed(){
   const b = player.bed; player.bed = null; player.sleeping = false;
   if(!b) return;
-  const spots = [[b.x+1.5,b.z+0.5],[b.x-0.5,b.z+0.5],[b.x+0.5,b.z+1.5],[b.x+0.5,b.z-0.5]];
-  let spot = null;
-  outer: for(const [sx,sz] of spots) for(const sy of [b.y+0.01, b.y+1.02]){
-    if(!collides(sx,sy,sz) && collides(sx,sy-0.05,sz)){ spot=[sx,sy,sz]; break outer; }
-  }
+  const vy0 = visY();
+  const spot = openSpotNear(b.x, b.y, b.z);
   if(spot){ player.x=spot[0]; player.y=spot[1]; player.z=spot[2]; }
-  else player.y = b.y + 1.02;
+  else { player.x = b.x+1.5; player.z = b.z+0.5; player.y = b.y; }
+  player.visOff = vy0 - player.y;
   player.vx = player.vy = player.vz = 0;
 }
 // lies down in the bed that was clicked (on a server, the player is moved onto it; alone, the night just passes)
@@ -4472,15 +4540,28 @@ addEventListener('keydown',e=>{
     // two quick taps of Space switch flying on or off
     const now=performance.now();
     if(now - player.lastSpace < 350){
-      player.fly = !player.fly; player.vy = 0;
-      flashHud(player.fly ? 'FLYING ON  (Space up, Shift down)' : 'FLYING OFF');
+      player.fly = !player.fly; player.vy = 0; player.boost = false;
+      flashHud(player.fly ? 'FLYING ON  (Space up, Shift down). Double tap a move key to go fast' : 'FLYING OFF');
     }
     player.lastSpace = now;
+  }
+  // two quick taps of a move key (W, A, S or D) while flying: fast flying on, or off again
+  if(['KeyW','KeyA','KeyS','KeyD'].includes(e.code) && !e.repeat){
+    const now = performance.now();
+    if(now - (moveTapAt[e.code] || 0) < 350){ toggleBoost(); moveTapAt[e.code] = 0; }   // a double tap; the next tap starts afresh
+    else moveTapAt[e.code] = now;
   }
   keys[e.code]=true;
   if(e.code in KEYMAP){ selectSlot(KEYMAP[e.code]); }
 });
 addEventListener('keyup',e=>{ keys[e.code]=false; });
+// fast flying: the double tap of a move key (or of the joystick, on a touch screen) turns it on and off
+const moveTapAt = {};
+function toggleBoost(){
+  if(!player.fly){ flashHud('DOUBLE TAP WHILE FLYING TO GO FAST'); return; }
+  player.boost = !player.boost;
+  flashHud(player.boost ? 'FAST FLYING ON (double tap again to slow down)' : 'FAST FLYING OFF');
+}
 addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; });
 addEventListener('wheel',e=>{
   if(!playing || invOpen || player.sleeping) return;
@@ -5108,6 +5189,28 @@ function menuState(){
   $('leave').hidden = !mpMode;
   syncSettings();
 }
+/* ---------- the server rules: shown first; the checkbox unlocks after 5 seconds; remembered in this browser once agreed ---------- */
+(function termsGate(){
+  const box = $('terms'), tick = $('termscheck'), go = $('termsgo'), count = $('termscount');
+  let agreed = false;
+  try{ agreed = localStorage.getItem('blockrealm_terms_v1') === '1'; }catch(e){}
+  if(agreed) return;
+  box.hidden = false;
+  let left = 5;
+  const timer = setInterval(() => {
+    left--;
+    if(left > 0){ count.textContent = 'Please read the rules. You can tick the box in ' + left + (left === 1 ? ' second.' : ' seconds.'); return; }
+    clearInterval(timer);
+    tick.disabled = false;
+    count.textContent = 'Tick the box to agree, then continue.';
+  }, 1000);
+  tick.addEventListener('change', () => { go.disabled = !tick.checked; });
+  go.addEventListener('click', () => {
+    try{ localStorage.setItem('blockrealm_terms_v1', '1'); }catch(e){}
+    box.hidden = true;
+  });
+})();
+
 /* ---------- touch screens: a joystick to walk, drag to look, and round buttons for the actions ---------- */
 // the buttons and the joystick drive the same keys and actions as the keyboard and mouse do
 const isTouch = matchMedia('(pointer: coarse)').matches || /[?&]touch=1/.test(location.search);
@@ -5159,9 +5262,13 @@ const tTouch = new Map();                          // touch id -> what that fing
 const touchesOf = e => [...e.changedTouches];
 function touchPlay(){ return isTouch && playing && !invOpen && !fridgeOpen && !codeOpen && !chatOpen && !shopOpen; }
 // the joystick
+let stickTapAt = 0;
 stick.addEventListener('touchstart', e => {
   if(!touchPlay()) return;
   e.preventDefault();
+  const tapNow = performance.now();
+  if(tapNow - stickTapAt < 350){ toggleBoost(); stickTapAt = 0; }   // a double tap on the joystick: fast flying
+  else stickTapAt = tapNow;
   const r = stick.getBoundingClientRect(); stickOrigin = {x: r.left + r.width/2, y: r.top + r.height/2};
   for(const t of touchesOf(e)){ tTouch.set(t.identifier, {kind:'stick'}); stickMove(t); }
 }, {passive:false});
@@ -5216,6 +5323,7 @@ const tBtns = [
   {el:$('tlie'), down:() => tapKey('KeyZ', true)},
   {el:$('tdoor'), down:() => useDoorKey()},
   {el:$('tshop'), down:() => { const k = shopAimKind(); if(k) openShop(k); }},
+  {el:$('tflush'), down:() => { if(target && isMessyToilet(target.id)) flushToilet(target); }},
   {el:$('ttrade'), down:() => openCashFromGame()},
   {el:$('tbag'), down:() => tapKey('KeyE', true)},
   {el:$('tmap'), down:() => openMap()},
@@ -5256,6 +5364,7 @@ function syncTouch(){
   $('tmic').hidden = !mpMode;
   $('tdoor').hidden = !(target && isDoorId(target.id));
   $('tshop').hidden = !shopAim();
+  $('tflush').hidden = !(target && isMessyToilet(target.id));
   $('tsmack').hidden = !smackTarget();
   $('ttrade').hidden = !mpMode;
 }
