@@ -4106,40 +4106,35 @@ function updateSaleSigns(VP){
   }
   for(const [k, el] of saleSigns) if(!want.has(k)){ el.remove(); saleSigns.delete(k); }
 }
-// the top of the ground at a column: the highest solid block near the terrain (trees do not count, so the border is not lifted onto them)
+// the top of the ground at a tile: the highest solid block within a couple of blocks of the terrain, so the border lifts
+// for blocks put down on the ground, but never climbs into the sky (trees, roofs and walls up high do not count)
 const TREE_IDS = new Set();
-BLOCKS.forEach((b, i) => { if(b && (b.name === 'Log' || b.name === 'Leaves')) TREE_IDS.add(i); });
+BLOCKS.forEach((b, i) => { if(b && /Leaves|Log|Wood|Trunk|Tree/i.test(b.name)) TREE_IDS.add(i); });
 function surfaceAt(x, z){
   const h = heightAt(x, z);
-  for(let y = Math.min(CH - 1, h + 4); y >= Math.max(0, h - 8); y--){
+  for(let y = Math.min(CH - 1, h + 2); y >= Math.max(0, h - 6); y--){
     const b = getBlock(x, y, z);
     if(b && isSolidId(b) && !TREE_IDS.has(b)) return y + 1;
   }
   return h;
 }
-// the outline of every plot: one red line per block along its edge, sitting on the top of the ground there
+// the border: a line of ground just OUTSIDE each plot's outline, one strip per outside tile, so it never sits on your own blocks
 function buildPlotLines(){
   plotBuiltFor = plotList; plotBuiltAt = performance.now();
   if(!plotLineMine){ plotLineMine = makeLineVAO(); plotLineOther = makeLineVAO(); }
   const mine = [], other = [];
-  // each edge is a strip of ground (0.3 blocks wide, lifted a little), so the border reads from a distance; GL lines are only one pixel wide
-  const HW = 0.15;
-  const seg = (out, ax, az, bx, bz, sx, sz) => {
-    const y = surfaceAt(sx, sz) + 0.08, horiz = az === bz;
-    const x0 = horiz ? ax : ax - HW, x1 = horiz ? bx : ax + HW;
-    const z0 = horiz ? az - HW : az, z1 = horiz ? az + HW : bz;
+  const HW = 0.15;                                         // half the width of the strip, in blocks
+  // the strip covers the outside tile (tx, tz): horizontal runs along x, vertical runs along z
+  const strip = (out, tx, tz, horiz) => {
+    const y = surfaceAt(tx, tz) + 0.08;
+    const x0 = horiz ? tx : tx + 0.5 - HW, x1 = horiz ? tx + 1 : tx + 0.5 + HW;
+    const z0 = horiz ? tz + 0.5 - HW : tz, z1 = horiz ? tz + 0.5 + HW : tz + 1;
     out.push(x0,y,z0, x1,y,z0, x1,y,z1, x0,y,z0, x1,y,z1, x0,y,z1);
   };
   for(const p of plotList){
     const out = p.mine ? mine : other;
-    for(let x = p.x0; x <= p.x1; x++){
-      seg(out, x, p.z0, x + 1, p.z0, x, p.z0);            // north edge
-      seg(out, x, p.z1 + 1, x + 1, p.z1 + 1, x, p.z1);    // south edge
-    }
-    for(let z = p.z0; z <= p.z1; z++){
-      seg(out, p.x0, z, p.x0, z + 1, p.x0, z);            // west edge
-      seg(out, p.x1 + 1, z, p.x1 + 1, z + 1, p.x1, z);    // east edge
-    }
+    for(let x = p.x0 - 1; x <= p.x1 + 1; x++){ strip(out, x, p.z0 - 1, true); strip(out, x, p.z1 + 1, true); }
+    for(let z = p.z0; z <= p.z1; z++){ strip(out, p.x0 - 1, z, false); strip(out, p.x1 + 1, z, false); }
   }
   uploadLines(plotLineMine, mine); uploadLines(plotLineOther, other);
 }
