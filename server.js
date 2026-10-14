@@ -111,7 +111,7 @@ function shutDecodedDoor(w, lo, lock) {
 // the plot a block position is in, if any (plots never overlap)
 function plotAt(w, x, z) { return w.plots.find(pl => x >= pl.x0 && x <= pl.x1 && z >= pl.z0 && z <= pl.z1) || null; }
 function plotsOverlap(a, b) { return a.x0 <= b.x1 && b.x0 <= a.x1 && a.z0 <= b.z1 && b.z0 <= a.z1; }
-function plotsMsg(w, q) { return { type: 'plots', list: w.plots.map(pl => ({ x0: pl.x0, z0: pl.z0, x1: pl.x1, z1: pl.z1, mine: pl.owner === q.pid, name: pl.name || 'PLOT', who: pl.ownerName || 'SOMEONE', refund: pl.owner === q.pid ? Math.floor((pl.price || 0) / 2) : 0 })) }; }
+function plotsMsg(w, q) { return { type: 'plots', list: w.plots.map(pl => ({ x0: pl.x0, z0: pl.z0, x1: pl.x1, z1: pl.z1, mine: pl.owner === q.pid, name: pl.name || 'PLOT', who: pl.ownerName || 'SOMEONE', refund: pl.owner === q.pid ? Math.floor((pl.price || 0) / 2) : 0, sale: pl.sale || 0 })) }; }
 const MERGED_MAX = 64;                       // the longest side a merged plot may have
 function canMerge(a, b) {
   return (a.x0 === b.x0 && a.x1 === b.x1 && (a.z1 + 1 === b.z0 || b.z1 + 1 === a.z0)) ||
@@ -1073,6 +1073,41 @@ wss.on('connection', (ws) => {
       announceOffers(w);
       return fail('OFFER SENT TO ' + q.name);
     }
+    if (m.type === 'plotlist' || m.type === 'plotunlist') {
+      // the owner puts their plot up for sale at an asking price anyone can buy it for, or takes it off sale
+      const fail = text => sendTo(p, { type: 'notice', text });
+      if (![m.x0, m.z0, m.x1, m.z1].every(Number.isInteger)) return fail('CHOOSE A PLOT');
+      const pl = w.plots.find(o => o.owner === p.pid && o.x0 === m.x0 && o.z0 === m.z0 && o.x1 === m.x1 && o.z1 === m.z1);
+      if (!pl) return fail('THAT IS NOT YOUR PLOT');
+      if (m.type === 'plotunlist') { pl.sale = 0; scheduleSave(w); announcePlots(w); return fail('PLOT TAKEN OFF SALE'); }
+      const price = Number.isInteger(m.price) ? m.price : 0;
+      if (price < 1 || price > 1000000) return fail('TYPE AN ASKING PRICE FROM 1 TO 1000000');
+      pl.sale = price; scheduleSave(w); announcePlots(w);
+      return fail('YOUR PLOT IS FOR SALE AT ' + price);
+    }
+    if (m.type === 'plotbuylisted') {
+      // a buyer pays the asking price, and the plot (with every block on it) is theirs
+      const fail = text => sendTo(p, { type: 'notice', text });
+      if (![m.x0, m.z0, m.x1, m.z1].every(Number.isInteger)) return fail('CHOOSE A PLOT');
+      const pl = w.plots.find(o => o.x0 === m.x0 && o.z0 === m.z0 && o.x1 === m.x1 && o.z1 === m.z1);
+      if (!pl || !(pl.sale > 0)) return fail('THAT PLOT IS NOT FOR SALE');
+      if (pl.owner === p.pid) return fail('YOU ALREADY OWN THIS PLOT');
+      const cash = w.coins.get(p.pid) || 0, price = pl.sale, seller = pl.owner, sellerName = pl.ownerName;
+      if (cash < price) return fail('NOT ENOUGH CASH. THE PLOT COSTS ' + price);
+      w.coins.set(p.pid, cash - price);
+      w.coins.set(seller, (w.coins.get(seller) || 0) + price);
+      pl.owner = p.pid; pl.ownerName = p.name; pl.price = price; pl.sale = 0;
+      for (const k of [...w.offers.keys()]) { const x = w.offers.get(k); if (x.x0 === pl.x0 && x.z0 === pl.z0 && x.x1 === pl.x1 && x.z1 === pl.z1) w.offers.delete(k); }
+      const size = (pl.x1 - pl.x0 + 1) + ' x ' + (pl.z1 - pl.z0 + 1) + ' blocks';
+      logTxn(w, { kind: 'plot', amount: price, from: p.pid, fromName: p.name, what: size });
+      logTxn(w, { kind: 'plotsale', amount: price, to: seller, toName: sellerName, what: size });
+      scheduleSave(w);
+      announceOffers(w);
+      announcePlots(w);
+      for (const q of players.values()) if (q.world === w && q.joined && (q.pid === seller || q.pid === p.pid)) sendTo(q, walletMsg(w, q));
+      for (const q of players.values()) if (q.world === w && q.joined && q.pid === seller) sendTo(q, { type: 'notice', text: p.name + ' BOUGHT YOUR PLOT FOR ' + price });
+      return fail('YOU BOUGHT THE PLOT FOR ' + price);
+    }
     if (m.type === 'offeraccept') {
       // the buyer accepts: they pay the price, and the plot (with every block on it) is theirs
       const fail = text => sendTo(p, { type: 'notice', text });
@@ -1113,7 +1148,7 @@ wss.on('connection', (ws) => {
       const A = w.plots[ia], B = w.plots[ib];
       if (!canMerge(A, B)) return fail('PLOTS MERGE ONLY WHEN THEY SHARE A WHOLE SIDE, BLOCK TO BLOCK');
       const merged = { x0: Math.min(A.x0, B.x0), x1: Math.max(A.x1, B.x1), z0: Math.min(A.z0, B.z0), z1: Math.max(A.z1, B.z1),
-        owner: p.pid, ownerName: p.name, name: A.name || 'PLOT', price: (A.price || 0) + (B.price || 0) };
+        owner: p.pid, ownerName: p.name, name: A.name || 'PLOT', price: (A.price || 0) + (B.price || 0), sale: 0 };
       if (merged.x1 - merged.x0 + 1 > MERGED_MAX || merged.z1 - merged.z0 + 1 > MERGED_MAX) return fail('A MERGED PLOT CAN BE AT MOST ' + MERGED_MAX + ' BLOCKS ON EACH SIDE');
       w.plots = w.plots.filter((_, i) => i !== ia && i !== ib);
       w.plots.push(merged);
@@ -1145,8 +1180,8 @@ wss.on('connection', (ws) => {
       const total = pl.price || 0;
       const cutPrice = Math.round(total * (cw * cd) / (W * D)), restPrice = total - cutPrice;
       const cutName = cleanPlotName(m.name) || (pl.name || 'PLOT') + ' PART';
-      w.plots[i] = Object.assign({}, pl, rest, { price: restPrice });
-      w.plots.push(Object.assign({}, pl, cut, { name: cutName, price: cutPrice }));
+      w.plots[i] = Object.assign({}, pl, rest, { price: restPrice, sale: 0 });
+      w.plots.push(Object.assign({}, pl, cut, { name: cutName, price: cutPrice, sale: 0 }));
       for (const k of [...w.offers.keys()]) { if (sameRect(w.offers.get(k), m.plot)) w.offers.delete(k); }
       scheduleSave(w);
       announceOffers(w);
@@ -1174,13 +1209,13 @@ wss.on('connection', (ws) => {
       if (rest.some(r => Math.min(r.x1 - r.x0 + 1, r.z1 - r.z0 + 1) < PLOT_MIN)) return fail('THE LAND LEFT AROUND THE PART MUST BE AT LEAST ' + PLOT_MIN + ' BLOCKS ON EACH SIDE. PICK A DIFFERENT PART');
       const total = pl.price || 0, area = W * D, cutArea = cw * cd, restTotal = total - Math.round(total * cutArea / area);
       const restArea = area - cutArea, cutName = cleanPlotName(m.name) || (pl.name || 'PLOT') + ' PART';
-      const parts = [Object.assign({}, pl, cut, { name: cutName, price: Math.round(total * cutArea / area) })];
+      const parts = [Object.assign({}, pl, cut, { name: cutName, price: Math.round(total * cutArea / area), sale: 0 })];
       let left = restTotal;
       rest.forEach((r, k) => {
         const a = (r.x1 - r.x0 + 1) * (r.z1 - r.z0 + 1);
         const pr = k === rest.length - 1 ? left : Math.round(restTotal * a / restArea);
         left -= pr;
-        parts.push(Object.assign({}, pl, r, { name: k === 0 ? (pl.name || 'PLOT') : (pl.name || 'PLOT') + ' (' + (k + 1) + ')', price: pr }));
+        parts.push(Object.assign({}, pl, r, { name: k === 0 ? (pl.name || 'PLOT') : (pl.name || 'PLOT') + ' (' + (k + 1) + ')', price: pr, sale: 0 }));
       });
       w.plots.splice(i, 1, ...parts);
       for (const k of [...w.offers.keys()]) { if (sameRect(w.offers.get(k), m.plot)) w.offers.delete(k); }

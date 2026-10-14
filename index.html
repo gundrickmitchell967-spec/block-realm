@@ -269,6 +269,7 @@
   .termscheck{display:flex;align-items:flex-start;gap:8px;font-size:14px;line-height:1.4}
   .termscheck input{margin-top:3px;width:18px;height:18px;flex:0 0 auto}
   #termsgo{width:100%}
+  .tag.sale{background:#ffe066;color:#1d1d1d;font-weight:bold;border:2px solid #7a5a00}
 </style>
 </head>
 <body>
@@ -1436,7 +1437,9 @@ function getBlock(wx,wy,wz){
 }
 function solidAt(wx,wy,wz){ return isSolidId(getBlock(wx,wy,wz)); }
 // records the change even when the chunk is not loaded, so it is applied when the chunk is generated later
+var plotDirty = false;   // a block changed, so the land borders may need to move with it
 function setBlock(wx,wy,wz,t,quiet){
+  plotDirty = true;
   if(wy<0 || wy>=CH) return false;
   const cx=Math.floor(wx/CS), cz=Math.floor(wz/CS);
   const lx=wx-cx*CS, lz=wz-cz*CS, idx=lx+lz*CS+wy*CS*CS;
@@ -3915,18 +3918,60 @@ function renderShop(){
       mpSend({type:'plotsell', x0: pl.x0, z0: pl.z0, x1: pl.x1, z1: pl.z1});
       shopNote('SELLING...');
     });
+    // the sale: put it up at an asking price, or take it off sale
+    const saleBox = document.createElement('div'); saleBox.className = 'shoprow';
+    if(pl.sale){
+      const st = document.createElement('span'); st.textContent = 'FOR SALE AT ' + fmtCash(pl.sale);
+      const off = document.createElement('button'); off.className = 'btn'; off.type = 'button'; off.textContent = 'TAKE OFF SALE';
+      off.disabled = !mpMode;
+      off.addEventListener('click', () => mpSend({type:'plotunlist', x0: pl.x0, z0: pl.z0, x1: pl.x1, z1: pl.z1}));
+      saleBox.appendChild(st); saleBox.appendChild(off);
+    } else {
+      const ask = document.createElement('input'); ask.type = 'number'; ask.min = '1'; ask.max = '1000000'; ask.step = '1';
+      ask.placeholder = 'ASKING PRICE'; ask.className = 'plotname'; ask.setAttribute('aria-label', 'Asking price for this plot');
+      ask.addEventListener('keydown', e => e.stopPropagation());
+      const go = document.createElement('button'); go.className = 'btn'; go.type = 'button'; go.textContent = 'PUT FOR SALE';
+      go.disabled = !mpMode;
+      go.addEventListener('click', () => {
+        const v = Math.trunc(Number(ask.value));
+        if(!(v >= 1 && v <= 1000000)){ shopNote('TYPE AN ASKING PRICE FROM 1 TO 1000000'); return; }
+        mpSend({type:'plotlist', x0: pl.x0, z0: pl.z0, x1: pl.x1, z1: pl.z1, price: v});
+      });
+      saleBox.appendChild(ask); saleBox.appendChild(go);
+    }
     const mate = plotList.find(o => o.mine && o !== pl && canMerge(pl, o));
     if(mate){
       const mb = document.createElement('button'); mb.className = 'btn'; mb.type = 'button';
       mb.textContent = 'MERGE WITH ' + (mate.name || 'PLOT').toUpperCase();
       mb.disabled = !mpMode;
       mb.addEventListener('click', () => mpSend({type:'plotmerge', a:[pl.x0, pl.z0, pl.x1, pl.z1], b:[mate.x0, mate.z0, mate.x1, mate.z1]}));
-      row.appendChild(head); row.appendChild(txt); row.appendChild(mb); row.appendChild(sb); plotsPane.appendChild(row);
+      row.appendChild(head); row.appendChild(txt); row.appendChild(mb); row.appendChild(sb); row.appendChild(saleBox); plotsPane.appendChild(row);
     } else {
-      row.appendChild(head); row.appendChild(txt); row.appendChild(sb); plotsPane.appendChild(row);
+      row.appendChild(head); row.appendChild(txt); row.appendChild(sb); row.appendChild(saleBox); plotsPane.appendChild(row);
     }
   }
-  $('shopland').replaceChildren(land);
+  // the plots other players have put up for sale: buy one at its asking price
+  const forSale = document.createElement('div'); forSale.className = 'shopcard';
+  const fhead = document.createElement('div'); fhead.className = 'shoprow';
+  const fname = document.createElement('span'); fname.textContent = 'PLOTS FOR SALE'; fhead.appendChild(fname); forSale.appendChild(fhead);
+  const offers = plotList.filter(q => q.sale > 0 && !q.mine);
+  if(!offers.length){ const n = document.createElement('p'); n.className = 'hint'; n.textContent = 'No plots are for sale right now. Owners put their plots up for sale in MY PLOTS.'; forSale.appendChild(n); }
+  for(const q of offers){
+    const row = document.createElement('div'); row.className = 'shopcard';
+    const top = document.createElement('div'); top.className = 'shoprow';
+    const nm = document.createElement('span'); nm.textContent = (q.name || 'PLOT').toUpperCase();
+    const pr = document.createElement('span'); pr.textContent = fmtCash(q.sale);
+    top.appendChild(nm); top.appendChild(pr); row.appendChild(top);
+    const info = document.createElement('p'); info.className = 'hint';
+    info.textContent = (q.x1 - q.x0 + 1) + ' x ' + (q.z1 - q.z0 + 1) + ' blocks, owned by ' + (q.who || 'SOMEONE') + '.';
+    row.appendChild(info);
+    const buy = document.createElement('button'); buy.className = 'btn'; buy.type = 'button';
+    buy.textContent = 'BUY FOR ' + fmtCash(q.sale);
+    buy.disabled = !mpMode || myCoins < q.sale;
+    buy.addEventListener('click', () => { buyPending = true; mpSend({type:'plotbuylisted', x0: q.x0, z0: q.z0, x1: q.x1, z1: q.z1}); });
+    row.appendChild(buy); forSale.appendChild(row);
+  }
+  $('shopland').replaceChildren(forSale, land);
   $('shopplots').replaceChildren(plotsPane);
 }
 // buying: the server takes the cash and gives the item; the tool then goes into an empty inventory slot
@@ -4027,7 +4072,7 @@ function landBlock(x, z){                    // why this block can't be changed 
   return p.mine ? null : 'THIS LAND BELONGS TO ANOTHER PLAYER';
 }
 let landBorders = true;                      // the LAND BORDERS setting: show the plot outlines
-let plotBuiltFor = null, plotLineMine = null, plotLineOther = null;
+let plotBuiltFor = null, plotBuiltAt = 0, plotLineMine = null, plotLineOther = null;
 function makeLineVAO(){
   const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
   const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
@@ -4040,15 +4085,47 @@ function uploadLines(L, arr){
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(arr), gl.DYNAMIC_DRAW);
   L.n = arr.length / 3; gl.bindVertexArray(null);
 }
-// the outline of every plot: one red line per block along its edge, sitting on the ground
+// the FOR SALE signs: a plot put up for sale shows its asking price to anyone within 18 blocks who does not own it
+const saleSigns = new Map();
+function updateSaleSigns(VP){
+  const want = new Set();
+  if(mpMode && playing){
+    for(const pl of plotList){
+      if(!(pl.sale > 0) || pl.mine) continue;
+      const cx = (pl.x0 + pl.x1 + 1) / 2, cz = (pl.z0 + pl.z1 + 1) / 2;
+      if(Math.hypot(cx - player.x, cz - player.z) > 18) continue;
+      const key = pl.x0 + ',' + pl.z0;
+      want.add(key);
+      let el = saleSigns.get(key);
+      if(!el){ el = document.createElement('div'); el.className = 'tag sale'; $('tags').appendChild(el); saleSigns.set(key, el); }
+      const txt = 'FOR SALE: ' + fmtCash(pl.sale) + '  ' + (pl.name || 'PLOT').toUpperCase();
+      if(el.textContent !== txt) el.textContent = txt;
+      const sp = projectPoint(VP, cx, surfaceAt(cx, cz) + 2.6, cz);
+      if(sp){ el.hidden = false; el.style.left = sp[0] + 'px'; el.style.top = sp[1] + 'px'; } else el.hidden = true;
+    }
+  }
+  for(const [k, el] of saleSigns) if(!want.has(k)){ el.remove(); saleSigns.delete(k); }
+}
+// the top of the ground at a column: the highest solid block near the terrain (trees do not count, so the border is not lifted onto them)
+const TREE_IDS = new Set();
+BLOCKS.forEach((b, i) => { if(b && (b.name === 'Log' || b.name === 'Leaves')) TREE_IDS.add(i); });
+function surfaceAt(x, z){
+  const h = heightAt(x, z);
+  for(let y = Math.min(CH - 1, h + 4); y >= Math.max(0, h - 8); y--){
+    const b = getBlock(x, y, z);
+    if(b && isSolidId(b) && !TREE_IDS.has(b)) return y + 1;
+  }
+  return h;
+}
+// the outline of every plot: one red line per block along its edge, sitting on the top of the ground there
 function buildPlotLines(){
-  plotBuiltFor = plotList;
+  plotBuiltFor = plotList; plotBuiltAt = performance.now();
   if(!plotLineMine){ plotLineMine = makeLineVAO(); plotLineOther = makeLineVAO(); }
   const mine = [], other = [];
   // each edge is a strip of ground (0.3 blocks wide, lifted a little), so the border reads from a distance; GL lines are only one pixel wide
   const HW = 0.15;
   const seg = (out, ax, az, bx, bz, sx, sz) => {
-    const y = heightAt(sx, sz) + 0.08, horiz = az === bz;
+    const y = surfaceAt(sx, sz) + 0.08, horiz = az === bz;
     const x0 = horiz ? ax : ax - HW, x1 = horiz ? bx : ax + HW;
     const z0 = horiz ? az - HW : az, z1 = horiz ? az + HW : bz;
     out.push(x0,y,z0, x1,y,z0, x1,y,z1, x0,y,z0, x1,y,z1, x0,y,z1);
@@ -4439,24 +4516,38 @@ $('pmtext').addEventListener('keydown', e => {
 });
 function startSpectate(id){
   if(adminRole !== 'creator' || !mp.others.has(id)) return;
+  const o = mp.others.get(id);
+  spectate.home = {x: player.x, y: player.y, z: player.z};        // where you were, to go back to when you stop
   spectate.id = id;
+  // the free camera starts a little behind them; then the mouse looks around, and WASD flies the camera
+  const fx = -Math.sin(o.yaw), fz = -Math.cos(o.yaw);
+  player.x = o.x - fx * 4; player.z = o.z - fz * 4; player.y = o.y + 2.2;
+  player.vx = player.vy = player.vz = 0;
   if(!player.invisible) mpSend({type:'vanish', on:true});   // you are hidden from the others while you watch
   closeCode();
-  flashHud('WATCHING ' + mp.others.get(id).name.toUpperCase() + '. PRESS P TO OPEN THE PANEL AGAIN, OR STOP WATCHING');
+  flashHud('FREE CAMERA on ' + o.name.toUpperCase() + ': move the mouse to look. WASD flies, Space up, Ctrl down');
 }
 function stopSpectate(){
   if(spectate.id == null) return;
   spectate.id = null;
+  if(spectate.home){ Object.assign(player, spectate.home); spectate.home = null; }   // back where you were
   if(!player.invisible) mpSend({type:'vanish', on:false});
   if(codeOpen) renderAdmin();
 }
-// the camera follows the player you are watching, from just behind them
-function followSpectate(){
+// the free camera: flies where the mouse looks (no walls stop it). Only the view moves; nothing you do here is seen by anyone
+function specFly(dt){
   const o = mp.others.get(spectate.id);
   if(!o){ stopSpectate(); flashHud('THAT PLAYER LEFT'); return; }
-  const fx = -Math.sin(o.yaw), fz = -Math.cos(o.yaw);
-  player.x = o.x - fx * 4; player.z = o.z - fz * 4; player.y = o.y + 2.2;
-  player.vx = 0; player.vy = 0; player.vz = 0;
+  const P = player, sp = (keys.ShiftLeft || keys.ShiftRight) ? 24 : 12;
+  const fw = (keys.KeyW ? 1 : 0) - (keys.KeyS ? 1 : 0), rt = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
+  const cp = Math.cos(P.pitch), sn = Math.sin(P.pitch);
+  const lx = -Math.sin(P.yaw) * cp, ly = sn, lz = -Math.cos(P.yaw) * cp;   // the way the mouse looks
+  const rx = Math.cos(P.yaw), rz = -Math.sin(P.yaw);                        // to the right of it
+  const up = (keys.Space ? 1 : 0) - (keys.ControlLeft || keys.ControlRight ? 1 : 0);
+  P.x += (lx * fw + rx * rt) * sp * dt;
+  P.y += (ly * fw + up) * sp * dt;
+  P.z += (lz * fw + rz * rt) * sp * dt;
+  P.vx = P.vy = P.vz = 0;
 }
 function setInvisible(on){
   if(!isAdmin()) return;
@@ -4585,6 +4676,7 @@ function lockPointer(){
 cv.addEventListener('mousedown',e=>{
   if(!playing || invOpen || codeOpen || fridgeOpen || doorShown || shopOpen || player.sleeping) return;
   if(document.pointerLockElement!==cv) lockPointer();   // a click after a join or a pause captures the mouse
+  if(spectate.id!=null) return;   // watching someone with the free camera: the clicks do nothing
   if(document.pointerLockElement!==cv && e.button!==0) return;
   if(e.button===0) doBreak(); else if(e.button===2) doPlace();
 });
@@ -5589,7 +5681,7 @@ function render(){
   }
   // land borders: your own plots in red, other players' plots in grey (the LAND BORDERS setting turns them off)
   if(mpMode && landBorders && plotList.length){
-    if(plotList !== plotBuiltFor) buildPlotLines();
+    if(plotList !== plotBuiltFor || (plotDirty && performance.now() - plotBuiltAt > 120)){ plotDirty = false; buildPlotLines(); }
     gl.disable(gl.CULL_FACE);
     gl.useProgram(line);
     gl.uniformMatrix4fv(LU.uVP,false,new Float32Array(VP));
@@ -5657,6 +5749,7 @@ function render(){
   gl.bindVertexArray(cubeVAO);
   for(const K of [SHOPKEEPER, SHOPKEEPER2]) drawAvatar(K, VP, dl);
   gl.enable(gl.CULL_FACE);
+  updateSaleSigns(VP);
   const nearK = Math.hypot(SHOPKEEPER2.x - player.x, SHOPKEEPER2.z - player.z) < Math.hypot(SHOPKEEPER.x - player.x, SHOPKEEPER.z - player.z) ? SHOPKEEPER2 : SHOPKEEPER;
   const npNear = playing && Math.hypot(nearK.x - player.x, nearK.z - player.z) < 40;
   const np = npNear ? projectPoint(VP, nearK.x, nearK.y + 2.05, nearK.z) : null;
@@ -5987,8 +6080,8 @@ function frame(now){
   if(playing){
     worldTime+=dt;
     if(music.on && !music.timer) musicStart();   // the tune keeps going while you play
-    if(spectate.id!=null) followSpectate();
-    if(spectate.id==null && !cutOpen) applyLook(dt);
+    if(spectate.id!=null && !cutOpen) specFly(dt);
+    if(!cutOpen) applyLook(dt);
     player.sitAmt = (player.sitAmt || 0) + ((player.seat ? 1 : 0) - (player.sitAmt || 0))*(1 - Math.exp(-dt*6));
     player.visOff = (player.visOff || 0)*Math.exp(-dt*7);
     if(!player.sleeping && !player.seat && spectate.id==null && !cutOpen) physics(dt);      // asleep or sitting, the player stays where they are
