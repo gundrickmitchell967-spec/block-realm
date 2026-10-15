@@ -62,8 +62,6 @@ function pidFor(s) {
 // the game creator's BREAK ANY BLOCK switch: while it is on, the creator may break any block and open any locked door
 function canBypass(p) { return p.role === 'creator' && p.bypass === true; }
 function isDoorBlock(id) { return id >= 12 && id <= 15; }
-// two halves of one door that open or shut into each other (lower 12/13, upper 14/15)
-function sameDoorHalf(a, b) { return isDoorBlock(a) && isDoorBlock(b) && (a <= 13) === (b <= 13); }
 // the keys of the two blocks of a door, given its lower block [x,y,z]
 function lockKeys(lo) { return [lo.join(','), [lo[0], lo[1] + 1, lo[2]].join(',')]; }
 // the lower block [x,y,z] of the door that (x,y,z) is part of, if a player placed that door; otherwise null
@@ -111,6 +109,19 @@ function shutDecodedDoor(w, lo, lock) {
 // the plot a block position is in, if any (plots never overlap)
 function plotAt(w, x, z) { return w.plots.find(pl => x >= pl.x0 && x <= pl.x1 && z >= pl.z0 && z <= pl.z1) || null; }
 function plotsOverlap(a, b) { return a.x0 <= b.x1 && b.x0 <= a.x1 && a.z0 <= b.z1 && b.z0 <= a.z1; }
+// every block on a plot belongs to the plot's owner, whoever placed it, so the owner can always change it, and a plot that
+// is sold or given away takes its blocks and doors with it. Returns the locks inside the plot (the caller tells the players)
+function syncPlotOwners(w, pl) {
+  const inside = (x, z) => x >= pl.x0 && x <= pl.x1 && z >= pl.z0 && z <= pl.z1;
+  for (const [k, v] of w.edits) {
+    if (v === 0) continue;
+    const [x, , z] = k.split(',').map(Number);
+    if (inside(x, z)) w.owners.set(k, pl.owner);
+  }
+  const locks = [];
+  for (const L of new Set(w.locks.values())) if (inside(L.lower[0], L.lower[2])) { L.owner = pl.owner; locks.push(L); }
+  return locks;
+}
 function plotsMsg(w, q) { return { type: 'plots', list: w.plots.map(pl => ({ x0: pl.x0, z0: pl.z0, x1: pl.x1, z1: pl.z1, mine: pl.owner === q.pid, name: pl.name || 'PLOT', who: pl.ownerName || 'SOMEONE', refund: pl.owner === q.pid ? Math.floor((pl.price || 0) / 2) : 0, sale: pl.sale || 0 })) }; }
 const MERGED_MAX = 64;                       // the longest side a merged plot may have
 function canMerge(a, b) {
@@ -327,6 +338,7 @@ for (const w of Object.values(WORLDS)) {
       const lock = { lower: lo, owner: L.owner, salt: L.salt, digest: L.digest, allowed: new Set(L.allowed || []), keys: lockKeys(lo) };
       for (const k of lock.keys) w.locks.set(k, lock);
     }
+    for (const pl of w.plots) syncPlotOwners(w, pl);   // blocks on a plot belong to its owner (fixes saves from before a sale)
     w.loaded = true;
     console.log(`${w.name}: loaded ${w.edits.size} block edits from ${w.file}`);
   } catch (e) {
@@ -1024,7 +1036,9 @@ wss.on('connection', (ws) => {
       const cash = w.coins.get(p.pid) || 0;
       if (cash < price) return fail('NOT ENOUGH CASH. THE PLOT COSTS ' + price);
       w.coins.set(p.pid, cash - price);
-      w.plots.push(Object.assign(pl, { owner: p.pid, ownerName: p.name, name: plotName, price }));
+      const np = Object.assign(pl, { owner: p.pid, ownerName: p.name, name: plotName, price });
+      w.plots.push(np);
+      for (const L of syncPlotOwners(w, np)) announceLock(w, L.lower, L);
       logTxn(w, { kind: 'plot', amount: price, from: p.pid, fromName: p.name, what: sw + ' x ' + sd + ' blocks' });
       scheduleSave(w);
       announcePlots(w);
@@ -1097,6 +1111,7 @@ wss.on('connection', (ws) => {
       w.coins.set(p.pid, cash - price);
       w.coins.set(seller, (w.coins.get(seller) || 0) + price);
       pl.owner = p.pid; pl.ownerName = p.name; pl.price = price; pl.sale = 0;
+      for (const L of syncPlotOwners(w, pl)) announceLock(w, L.lower, L);
       for (const k of [...w.offers.keys()]) { const x = w.offers.get(k); if (x.x0 === pl.x0 && x.z0 === pl.z0 && x.x1 === pl.x1 && x.z1 === pl.z1) w.offers.delete(k); }
       const size = (pl.x1 - pl.x0 + 1) + ' x ' + (pl.z1 - pl.z0 + 1) + ' blocks';
       logTxn(w, { kind: 'plot', amount: price, from: p.pid, fromName: p.name, what: size });
@@ -1120,6 +1135,7 @@ wss.on('connection', (ws) => {
       w.coins.set(p.pid, cash - o.price);
       w.coins.set(o.fromPid, (w.coins.get(o.fromPid) || 0) + o.price);
       pl.owner = p.pid; pl.ownerName = p.name; pl.price = o.price;
+      for (const L of syncPlotOwners(w, pl)) announceLock(w, L.lower, L);
       for (const k of [...w.offers.keys()]) { const x = w.offers.get(k); if (x.x0 === o.x0 && x.z0 === o.z0 && x.x1 === o.x1 && x.z1 === o.z1) w.offers.delete(k); }
       logTxn(w, { kind: 'plot', amount: o.price, from: p.pid, fromName: p.name, what: o.size });
       logTxn(w, { kind: 'plotsale', amount: o.price, to: o.fromPid, toName: o.fromName, what: o.size });
@@ -1243,19 +1259,13 @@ wss.on('connection', (ws) => {
       if (dx * dx + dy * dy + dz * dz > REACH * REACH) return;   // too far from where this player last was
       const key = m.x + ',' + m.y + ',' + m.z;
       const landOwner = plotAt(w, m.x, m.z);
-      if (!canBypass(p)) {
-        // building (and breaking) is allowed only on a plot the player has bought
-        if (!landOwner) return fixBlock(p, w, key, 'BUILD ONLY ON LAND YOU HAVE BOUGHT');
-        if (landOwner.owner !== p.pid) return fixBlock(p, w, key, 'THIS LAND BELONGS TO ANOTHER PLAYER');
-      }
+      // claimed land belongs to its owner: nobody else may build, break or open anything on it
+      if (!canBypass(p) && landOwner && landOwner.owner !== p.pid) return fixBlock(p, w, key, 'THIS LAND BELONGS TO ANOTHER PLAYER');
       const cur = w.edits.has(key) ? w.edits.get(key) : null;     // null: land that no player has changed
       const owner = w.owners.get(key);                            // undefined: no player placed this block
-      if (owner !== undefined && owner !== p.pid && !canBypass(p)) {
-        // someone else's block: it can only be opened or shut, and only by a player who may open its door
-        if (m.id === 0 || !sameDoorHalf(cur, m.id)) return fixBlock(p, w, key, 'THAT BLOCK BELONGS TO ANOTHER PLAYER');
-        const lock = w.locks.get(key);
-        if (lock && !lockOpenFor(p, lock)) return fixBlock(p, w, key, 'THAT DOOR HAS A PASSWORD');
-      }
+      // a door with a password stays shut to anyone who has not typed it (the owner of the land always may open it)
+      const lock = w.locks.get(key);
+      if (lock && !canBypass(p) && !(landOwner && landOwner.owner === p.pid) && !lockOpenFor(p, lock)) return fixBlock(p, w, key, 'THAT DOOR HAS A PASSWORD');
       if (m.id === 0) { dropLock(w, key); w.owners.delete(key); }
       else {
         if (w.locks.has(key) && !isDoorBlock(m.id)) dropLock(w, key);

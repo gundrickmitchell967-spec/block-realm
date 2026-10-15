@@ -2540,6 +2540,10 @@ const skinParts = {
   head: skinVAO(0,0,8,8,8), body: skinVAO(16,16,8,12,4),
   rarm: skinVAO(40,16,4,12,4), larm: skinVAO(32,48,4,12,4),
   rleg: skinVAO(0,16,4,12,4), lleg: skinVAO(16,48,4,12,4),
+  // the outer layer of the skin: it stands a little out from the base parts, so it reads as clothing and hair
+  hat: skinVAO(32,0,8,8,8), jacket: skinVAO(16,32,8,12,4),
+  rsleeve: skinVAO(40,32,4,12,4), lsleeve: skinVAO(48,48,4,12,4),
+  rpants: skinVAO(0,32,4,12,4), lpants: skinVAO(0,48,4,12,4),
 };
 // the skin is painted once, here: the face, the hair and the hands keep their colours, the shirt and trousers are tinted by the player's colour
 function skinNoise(x,y,s){ let h = (x*374761393 + y*668265263 + s*1274126177) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) & 255) / 255 - 0.5; }
@@ -2549,26 +2553,79 @@ function makeSkinPixels(){
   const paint = (r, fn) => { for(let y=r[1]; y<r[3]; y++) for(let x=r[0]; x<r[2]; x++) put(x, y, fn(x-r[0], y-r[1])); };
   const RAW = c => [c[0], c[1], c[2], 200];                // keeps its own colour
   const TINT = g => [g, g, g, 255];                        // takes the player's colour
-  const SKIN = [232,188,150], HAIR = [62,42,28], EYE = [240,240,240], PUPIL = [35,22,18], MOUTH = [150,64,58];
+  const CLEAR = [0,0,0,0];                                 // see-through: this layer does not cover the pixel
+  const SKIN = [232,188,150], SKIN_SHADE = [208,160,126], BLUSH = [236,150,132], NOSE = [212,160,124];
+  const HAIR = [62,42,28], HAIR_LIGHT = [92,64,42], BROW = [46,30,22], EYE = [246,246,246], PUPIL = [34,22,18], MOUTH = [170,84,76];
+  const SHOE = [52,38,32], SHOE_TOP = [84,64,54], SOLE = [28,20,18], BUTTON = [238,238,232], GOLD = [222,186,84];
   const parts = (u0,v0,w,h,dd,fn) => { for(const f of ['top','bottom','right','front','left','back']){ const r = skinRect(u0,v0,w,h,dd,f); paint(r, (x,y) => fn(f,x,y)); } };
-  parts(0,0,8,8,8,(f,x,y) => {                              // the head: hair on top, a face on the front
-    if(f==='top') return RAW(HAIR);
-    if(f==='bottom') return RAW(SKIN);
+  // the base skin, which lies under the outer layer
+  parts(0,0,8,8,8,(f,x,y) => {                              // the head: hair on top and round the sides, a face on the front
+    if(f==='top') return RAW((x+y)%5===0 ? HAIR_LIGHT : HAIR);
+    if(f==='bottom') return RAW(SKIN_SHADE);
     if(y<2) return RAW(HAIR);
-    if(f==='front'){
-      if((y===3||y===4) && (x===1||x===2||x===5||x===6)) return RAW(x===2||x===5 ? PUPIL : EYE);
-      if(y===6 && x>=2 && x<=5) return RAW(MOUTH);
+    if(f==='back') return RAW(y<3 ? HAIR : SKIN);
+    if(f!=='front') return RAW(SKIN);
+    if(y===2 && (x===1||x===2||x===5||x===6)) return RAW(BROW);      // eyebrows
+    if(y===3 || y===4){
+      if(x===2 || x===5) return RAW(PUPIL);                          // pupils
+      if(x===1 || x===6) return RAW(EYE);                            // the whites of the eyes
     }
+    if(y===5 && (x===1||x===6)) return RAW(BLUSH);                   // cheeks
+    if(y===5 && (x===3||x===4)) return RAW(NOSE);                    // the nose
+    if(y===6 && x>=2 && x<=5) return RAW(MOUTH);                     // the mouth
+    if(y===7) return RAW(SKIN_SHADE);                                // the chin
     return RAW(SKIN);
   });
-  parts(16,16,8,12,4,(f,x,y) => {                           // the shirt
+  parts(16,16,8,12,4,(f,x,y) => {                           // the shirt: shading, a collar, buttons, a pocket and a belt with a buckle
     let g = 222 + skinNoise(x,y,1) * 14;
     if(y===0) g -= 30;
-    if(f==='front' && y===8) g = 150;                       // the belt
+    if(f==='left' || f==='right') g -= 8;
+    if(f==='front'){
+      if(y===0 && (x===3||x===4)) return TINT(120);                  // the collar
+      if(y===8) return (x===3||x===4) ? RAW(GOLD) : TINT(150);       // the belt, with its buckle
+      if(x===3 && (y===3||y===6)) return RAW(BUTTON);                // buttons
+      if((x===5||x===6) && (y===4||y===5)) g -= 26;                  // the pocket
+    }
     return TINT(g);
   });
-  for(const [u0,v0] of [[40,16],[32,48]]) parts(u0,v0,4,12,4,(f,x,y) => y >= 10 ? RAW(SKIN) : TINT(214 + skinNoise(x,y,2) * 14));   // sleeves, with the hands
-  for(const [u0,v0] of [[0,16],[16,48]]) parts(u0,v0,4,12,4,(f,x,y) => y >= 9 ? TINT(70 + skinNoise(x,y,3) * 10) : TINT(200 + skinNoise(x,y,4) * 12));   // trousers, with the shoes
+  for(const [u0,v0] of [[40,16],[32,48]]) parts(u0,v0,4,12,4,(f,x,y) => {   // the arms: sleeves, a darker cuff, then the hands
+    if(y>=10) return RAW(SKIN);
+    if(y===9) return RAW(SKIN_SHADE);
+    return TINT(214 + skinNoise(x,y,2) * 14 - (y===8 ? 26 : 0));
+  });
+  for(const [u0,v0] of [[0,16],[16,48]]) parts(u0,v0,4,12,4,(f,x,y) => {   // the legs: trousers, a waistband, then shoes with soles
+    if(y===11) return RAW(SOLE);
+    if(y>=9) return RAW(y===9 ? SHOE_TOP : SHOE);
+    if(y===0) return TINT(58 + skinNoise(x,y,3) * 8);
+    return TINT(74 + skinNoise(x,y,3) * 10 + ((f==='left'||f==='right') ? -8 : 0));
+  });
+  // the outer layer: hair, a jacket, sleeves and trousers, each a little bigger than the part under it. Where a layer is open, the base shows
+  parts(32,0,8,8,8,(f,x,y) => {                             // the hat: hair over the top, with a fringe over the forehead
+    if(f==='top') return RAW((x+y)%5===0 ? HAIR_LIGHT : HAIR);
+    if(f==='bottom') return CLEAR;
+    if(f==='front'){
+      if(y<=1) return RAW(HAIR);
+      if(y===2 && (x===0||x===3||x===4||x===7)) return RAW(HAIR);
+      return CLEAR;
+    }
+    return y<=2 ? RAW(HAIR) : CLEAR;
+  });
+  parts(16,32,8,12,4,(f,x,y) => {                           // the jacket: open at the front, so the shirt and buttons show; a collar and a hem
+    const g = 178 + skinNoise(x,y,5) * 12;
+    if(f==='front'){
+      if(y===0 || y===11 || x===0 || x===7) return TINT(g);
+      return CLEAR;
+    }
+    return TINT(y===11 ? g - 30 : g);
+  });
+  for(const [u0,v0] of [[40,32],[48,48]]) parts(u0,v0,4,12,4,(f,x,y) => {   // the sleeves, shaded at their ends
+    if(y>=8) return CLEAR;
+    return TINT(206 + skinNoise(x,y,6) * 12 + (y===7 ? -20 : 0));
+  });
+  for(const [u0,v0] of [[0,32],[0,48]]) parts(u0,v0,4,12,4,(f,x,y) => {   // the trousers, shaded at the hem
+    if(y>=9) return CLEAR;
+    return TINT(92 + skinNoise(x,y,7) * 12 + (y===8 ? -22 : 0));
+  });
   return d;
 }
 const skinTex = gl.createTexture();
@@ -3010,8 +3067,8 @@ function doBreak(){
   const cells=[[h.x,h.y,h.z]];
   const p=partnerOf(h.x,h.y,h.z,h.id); if(p) cells.push(p);   // a door or bed comes down as a whole
   { const lb = mpMode ? cells.map(([x,y,z]) => landBlock(x,z)).find(Boolean) : null; if(lb){ flashHud(lb); return; } }
-  // another player's block is not removed here at all, so nothing behind it can be reached while the server is told
-  if(mpMode && cells.some(([x,y,z]) => blockOwner.get(doorKeyOf(x,y,z)) === false)){ flashHud('THAT BLOCK BELONGS TO ANOTHER PLAYER'); return; }
+  // a locked door is not broken by a player who has not typed its password (the server would refuse it too)
+  if(mpMode && doorIsLocked(h)){ flashHud('THE DOOR IS LOCKED: TYPE ITS PASSWORD'); return; }
   for(const [x,y,z] of cells){ setBlock(x,y,z,0); blockOwner.delete(doorKeyOf(x,y,z)); mpSend({type:'edit', x, y, z, id:0}); }
   sfx.breakBlock(h.id);
   flashHud('BROKE '+BLOCKS[h.id].name.toUpperCase());
@@ -4064,12 +4121,11 @@ function surveyRight(h){
   cutPt = null;
   openCutPanel();
 }
-// why a block can't be changed here: you may only build on a plot you have bought (the server checks it too)
+// why a block can't be changed here: land a player has claimed is theirs alone (the server checks it too)
 function landBlock(x, z){                    // why this block can't be changed here, or null when it can
   if(adminBypass) return null;
   const p = plotAtClient(x, z);
-  if(!p) return 'BUILD ONLY ON LAND YOU HAVE BOUGHT';
-  return p.mine ? null : 'THIS LAND BELONGS TO ANOTHER PLAYER';
+  return p && !p.mine ? 'THIS LAND BELONGS TO ANOTHER PLAYER' : null;
 }
 let landBorders = true;                      // the LAND BORDERS setting: show the plot outlines
 let plotBuiltFor = null, plotBuiltAt = 0, plotLineMine = null, plotLineOther = null;
@@ -4118,23 +4174,30 @@ function surfaceAt(x, z){
   }
   return h;
 }
-// the border: a line of ground just OUTSIDE each plot's outline, one strip per outside tile, so it never sits on your own blocks
+// the border: a band of ground just OUTSIDE each plot's edge. It is drawn as one ring per plot, so the corners are square and closed
 function buildPlotLines(){
   plotBuiltFor = plotList; plotBuiltAt = performance.now();
   if(!plotLineMine){ plotLineMine = makeLineVAO(); plotLineOther = makeLineVAO(); }
   const mine = [], other = [];
-  const HW = 0.15;                                         // half the width of the strip, in blocks
-  // the strip covers the outside tile (tx, tz): horizontal runs along x, vertical runs along z
-  const strip = (out, tx, tz, horiz) => {
-    const y = surfaceAt(tx, tz) + 0.08;
-    const x0 = horiz ? tx : tx + 0.5 - HW, x1 = horiz ? tx + 1 : tx + 0.5 + HW;
-    const z0 = horiz ? tz + 0.5 - HW : tz, z1 = horiz ? tz + 0.5 + HW : tz + 1;
-    out.push(x0,y,z0, x1,y,z0, x1,y,z1, x0,y,z0, x1,y,z1, x0,y,z1);
-  };
+  const HW = 0.15;                                          // half the width of the band, in blocks
+  // a flat rectangle of the band, lying on the ground at height y
+  const quad = (out, x0, z0, x1, z1, y) => out.push(x0,y,z0, x1,y,z0, x1,y,z1, x0,y,z0, x1,y,z1, x0,y,z1);
+  // the band's centre lines run along the tiles just outside the plot, so the four sides meet exactly at the corners
+  const cuts = (a, b) => { const r = [a]; for(let k = Math.floor(a) + 1; k < b; k++) r.push(k); r.push(b); return r; };   // breaks at whole blocks, so each piece sits on its own tile
   for(const p of plotList){
     const out = p.mine ? mine : other;
-    for(let x = p.x0 - 1; x <= p.x1 + 1; x++){ strip(out, x, p.z0 - 1, true); strip(out, x, p.z1 + 1, true); }
-    for(let z = p.z0; z <= p.z1; z++){ strip(out, p.x0 - 1, z, false); strip(out, p.x1 + 1, z, false); }
+    const L = p.x0 - 0.5, R = p.x1 + 1.5, T = p.z0 - 0.5, B = p.z1 + 1.5;
+    const xs = cuts(L - HW, R + HW), zs = cuts(T + HW, B - HW);
+    for(let i = 0; i + 1 < xs.length; i++){                  // the top and bottom edges run the full width, corners included
+      const tx = Math.floor((xs[i] + xs[i+1]) / 2);
+      quad(out, xs[i], T - HW, xs[i+1], T + HW, surfaceAt(tx, Math.floor(T)) + 0.08);
+      quad(out, xs[i], B - HW, xs[i+1], B + HW, surfaceAt(tx, Math.floor(B)) + 0.08);
+    }
+    for(let i = 0; i + 1 < zs.length; i++){                  // the left and right edges run between the corners
+      const tz = Math.floor((zs[i] + zs[i+1]) / 2);
+      quad(out, L - HW, zs[i], L + HW, zs[i+1], surfaceAt(Math.floor(L), tz) + 0.08);
+      quad(out, R - HW, zs[i], R + HW, zs[i+1], surfaceAt(Math.floor(R), tz) + 0.08);
+    }
   }
   uploadLines(plotLineMine, mine); uploadLines(plotLineOther, other);
 }
@@ -4920,48 +4983,32 @@ const Sc = s => [s[0],0,0,0, 0,s[1],0,0, 0,0,s[2],0, 0,0,0,1];
 const boxIn = (M, c, s) => mul(mul(M, Tr(c[0],c[1],c[2])), Sc(s));
 const WHITE_RGB = [0.97,0.97,0.95], PUPIL_RGB = [0.08,0.06,0.05], SHOE_RGB = [0.1,0.09,0.1];
 // a player as its parts: each part has its skin piece and the colour it takes. o.phase (the stride) and o.amt (0 standing, 1 full walk) come from its movement
+// the outer layer is this much bigger than the base part, in blocks (so it stands clear of it, and reads as clothing)
+const SKIN_OV = 0.06;
 function avatarParts(o){
   const s = o.sitAmt || 0;                                         // 0 standing, 1 sitting down: the hips go down to the seat and the legs bend forward
   const root = mul(Tr(o.x, o.y - 0.75*s, o.z), Ry(o.yaw));
   const sw = Math.sin(o.phase) * o.amt * (1 - s);                 // -1..1 through a stride; no stride while sitting
   const dip = o.amt * 0.04 * Math.abs(Math.sin(o.phase)) * (1 - s);   // the body dips at each step
   const body = mul(root, Tr(0, -dip, 0));
+  const LIMB = [0.25 + SKIN_OV, 0.75 + SKIN_OV, 0.25 + SKIN_OV], TORSO = [0.5 + SKIN_OV, 0.75 + SKIN_OV, 0.25 + SKIN_OV], HEAD = 0.5 + SKIN_OV;
   const out = [];
   for(const side of [-1, 1]){
     const leg = mul(mul(root, Tr(side*0.125, 0.75, 0)), Rx((side < 0 ? 0.75*sw : -0.75*sw) + s*1.5708));   // legs swing from the hips, and fold forward when sitting
     out.push({part: side < 0 ? 'rleg' : 'lleg', M: boxIn(leg, [0,-0.375,0], [0.25,0.75,0.25]), tint: LEGS_RGB});
+    out.push({part: side < 0 ? 'rpants' : 'lpants', M: boxIn(leg, [0,-0.375,0], LIMB), tint: LEGS_RGB});
   }
   out.push({part:'body', M: boxIn(body, [0,1.125,0], [0.5,0.75,0.25]), tint: o.rgb});
+  out.push({part:'jacket', M: boxIn(body, [0,1.125,0], TORSO), tint: o.rgb});
   for(const side of [-1, 1]){
     const sh = mul(body, Tr(side*0.375, 1.5, 0));                 // the shoulder
     const arm = mul(sh, Rx((side < 0 ? -0.6*sw : 0.6*sw) + s*1.1));   // arms swing against the legs, and rest forward when sitting
     out.push({part: side < 0 ? 'rarm' : 'larm', M: boxIn(arm, [0,-0.375,0], [0.25,0.75,0.25]), tint: o.rgb});
+    out.push({part: side < 0 ? 'rsleeve' : 'lsleeve', M: boxIn(arm, [0,-0.375,0], LIMB), tint: o.rgb});
   }
   out.push({part:'head', M: boxIn(body, [0,1.75,0], [0.5,0.5,0.5]), tint: [1,1,1]});
+  out.push({part:'hat', M: boxIn(body, [0,1.75,0], [HEAD,HEAD,HEAD]), tint: [1,1,1]});
   return out;
-}
-// draws one player (or shopkeeper) with its skin
-function drawAvatar(o, VP, dl){
-  gl.useProgram(skinProg);
-  gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, skinTex); gl.uniform1i(SK.uSkin, 6);
-  gl.uniformMatrix4fv(SK.uVP, false, new Float32Array(VP));
-  gl.uniform1f(SK.uLight, 0.25 + 0.75*dl);
-  for(const P of avatarParts(o)){
-    gl.uniform3f(SK.uTint, P.tint[0], P.tint[1], P.tint[2]);
-    gl.uniformMatrix4fv(SK.uModel, false, new Float32Array(P.M));
-    gl.bindVertexArray(skinParts[P.part]);
-    gl.drawArrays(gl.TRIANGLES, 0, 36);
-  }
-  gl.bindVertexArray(null);
-}
-function hexRGB(h){ const n=parseInt(h.slice(1),16); return [(n>>16&255)/255,(n>>8&255)/255,(n&255)/255]; }
-function partMatrix(px,py,pz,yaw,c,s){
-  const cs=Math.cos(yaw), sn=Math.sin(yaw);
-  const T=[1,0,0,0, 0,1,0,0, 0,0,1,0, px,py,pz,1];
-  const R=[cs,0,-sn,0, 0,1,0,0, sn,0,cs,0, 0,0,0,1];
-  const C=[1,0,0,0, 0,1,0,0, 0,0,1,0, c[0],c[1],c[2],1];
-  const S=[s[0],0,0,0, 0,s[1],0,0, 0,0,s[2],0, 0,0,0,1];
-  return mul(mul(mul(T,R),C),S);
 }
 function mpStatus(t){ $('mpstatus').textContent=t; }
 function defaultWS(){
