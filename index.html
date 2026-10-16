@@ -270,6 +270,13 @@
   .termscheck input{margin-top:3px;width:18px;height:18px;flex:0 0 auto}
   #termsgo{width:100%}
   .tag.sale{background:#ffe066;color:#1d1d1d;font-weight:bold;border:2px solid #7a5a00}
+  #objhud{position:fixed;top:12px;right:12px;z-index:5;width:250px;box-sizing:border-box;padding:10px 12px;background:rgba(14,18,28,.82);border:2px solid #3a4560;font-size:13px;pointer-events:none}
+  #objhud .objh{font-weight:bold;letter-spacing:.12em;margin-bottom:6px;color:#ffe066}
+  #objhud .objr{margin:3px 0;color:#e6e9f2}
+  #objhud .objr.done{color:#6fcf6f;text-decoration:line-through}
+  .econ-row{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;width:100%;box-sizing:border-box;padding:8px 10px;background:#11151f;border:2px solid #3a4560;font-size:13px}
+  .econ-row > span{flex:1 1 150px;min-width:0;overflow-wrap:anywhere}
+  .econ-row .btn{width:auto;padding:6px 12px;font-size:12px}
 </style>
 </head>
 <body>
@@ -536,11 +543,12 @@
     <button class="btn" id="casinoclose" type="button">CLOSE (E)</button>
   </div>
 </div>
+<div id="objhud" hidden></div>
 <div id="shopbox" hidden>
   <div id="shoppanel" role="dialog" aria-labelledby="shoptitle">
     <h2 id="shoptitle">SHOP</h2>
     <p class="hint" id="shopcoins"></p>
-    <div id="shoptabs"><button class="tab on" type="button" data-kind="purchase" data-tab="items">ITEMS</button><button class="tab" type="button" data-kind="purchase" data-tab="plots">MY PLOTS</button><button class="tab" type="button" data-kind="purchase" data-tab="land">BUY LAND</button><button class="tab" type="button" data-kind="purchase" data-tab="bountyshop">BOUNTY</button><button class="tab" type="button" data-kind="career" data-tab="job">JOB</button><button class="tab" type="button" data-kind="career" data-tab="passive">PASSIVE INCOME</button><button class="tab" type="button" data-kind="career" data-tab="rewards">REWARDS</button></div>
+    <div id="shoptabs"><button class="tab on" type="button" data-kind="purchase" data-tab="items">ITEMS</button><button class="tab" type="button" data-kind="purchase" data-tab="plots">MY PLOTS</button><button class="tab" type="button" data-kind="purchase" data-tab="land">BUY LAND</button><button class="tab" type="button" data-kind="purchase" data-tab="bountyshop">BOUNTY</button><button class="tab" type="button" data-kind="purchase" data-tab="sell">SELL ORE</button><button class="tab" type="button" data-kind="purchase" data-tab="contract">HOUSE CONTRACT</button><button class="tab" type="button" data-kind="purchase" data-tab="furn">FURNITURE</button><button class="tab" type="button" data-kind="career" data-tab="job">JOB</button><button class="tab" type="button" data-kind="career" data-tab="passive">PASSIVE INCOME</button><button class="tab" type="button" data-kind="career" data-tab="rewards">REWARDS</button></div>
     <div id="shopitems" class="pane"></div>
     <div id="shopplots" class="pane" hidden></div>
     <div id="shopland" class="pane" hidden></div>
@@ -571,6 +579,9 @@
       <p class="hint" id="bountyclaim"></p>
       <button class="btn" id="bountyclaimbtn" type="button">CLAIM BOUNTY</button>
     </div>
+    <div id="shopsell" class="pane" hidden></div>
+    <div id="shopcontract" class="pane" hidden></div>
+    <div id="shopfurn" class="pane" hidden></div>
     <p id="shopmsg" role="status"></p>
     <div id="shopearn">
       <h3>HOW TO GET CASH</h3>
@@ -1399,6 +1410,7 @@ function loadEdits(){ try{ edits = JSON.parse(localStorage.getItem('blockrealm_e
 }
 function saveEdits(){ if(mpMode) return; try{ localStorage.setItem('blockrealm_edits_v1', JSON.stringify(edits)); }catch(e){} }
 
+const COAL_ORE_ID = 24, IRON_ORE_ID = 48, GOLD_ORE_ID = 49, DIAMOND_ORE_ID = 50;   // the ore blocks (the server counts each one a player mines)
 function genChunk(cx,cz){
   const data = new Uint16Array(CS*CS*CH);
   const heights = new Int32Array(CS*CS);
@@ -1413,6 +1425,20 @@ function genChunk(cx,cz){
         else t = beach?7:1;
       }
       data[x+z*CS+y*CS*CS]=t;
+    }
+  }
+  // coal ore: small specks in the stone below the surface. They are part of the world, so every world has the same ones
+  for(let z=0;z<CS;z++) for(let x=0;x<CS;x++){
+    const wx=cx*CS+x, wz=cz*CS+z, h=heights[x+z*CS];
+    for(let y=2; y<h-5 && y<CH; y++){
+      const i=x+z*CS+y*CS*CS;
+      if(data[i]!==3) continue;
+      // the ores: coal near the surface, iron deeper, gold deeper still and diamond only very deep. Specks, so each is worth a look.
+      const r = rnd2(wx*131+y, wz, SEED+30);
+      if(y < h-5 && r < 0.004) data[i]=COAL_ORE_ID;
+      else if(y < h-9 && r < 0.0055) data[i]=IRON_ORE_ID;
+      else if(y < 14 && r < 0.0062) data[i]=GOLD_ORE_ID;
+      else if(y < 7 && r < 0.0064) data[i]=DIAMOND_ORE_ID;
     }
   }
   // grass tufts and flowers on the top of the ground (they are not blocks: you walk through them)
@@ -3070,7 +3096,8 @@ function mpSend(msg){ if(mp.ws && mp.ws.readyState===1) mp.ws.send(JSON.stringif
 // sets one block and tells the server
 function placeCell(x,y,z,id){
   if(mpMode && id!==0 && getBlock(x,y,z)===0) blockOwner.set(doorKeyOf(x,y,z), true);   // a new block is this player's
-  applyBlock(x,y,z,id); mpSend({type:'edit', x, y, z, id});
+  const was = getBlock(x,y,z);                          // the block before this change: the server counts ore mined from the ground by it
+  applyBlock(x,y,z,id); mpSend({type:'edit', x, y, z, id, was});
 }
 // the other half of a door or a bed, if there is one next to this block
 function partnerOf(x,y,z,id){
@@ -3962,12 +3989,76 @@ function canMerge(a, b){
   return (a.x0 === b.x0 && a.x1 === b.x1 && (a.z1 + 1 === b.z0 || b.z1 + 1 === a.z0)) ||
          (a.z0 === b.z0 && a.z1 === b.z1 && (a.x1 + 1 === b.x0 || b.x1 + 1 === a.x0));
 }
+/* ---------- the economy: objectives, selling ore, house contracts, and the furniture shop ---------- */
+let myEcon = null;                                   // what the server says about this player: ore, prices, objectives, contracts
+function onEconomy(m){ myEcon = m; renderObjectives(); if(shopOpen) renderEcon(); }
+// the objectives list in the corner, until they are all done
+function renderObjectives(){
+  const box = $('objhud');
+  const left = myEcon ? myEcon.objectives.filter(o => !o.done) : [];
+  if(!playing || !mpMode || !left.length){ box.hidden = true; return; }
+  box.hidden = false;
+  const head = document.createElement('div'); head.className = 'objh'; head.textContent = 'OBJECTIVES';
+  const rows = [head];
+  for(const o of myEcon.objectives){
+    const r = document.createElement('div'); r.className = 'objr' + (o.done ? ' done' : '');
+    r.textContent = (o.done ? '[x] ' : '[ ] ') + o.text + '  +' + o.reward;
+    rows.push(r);
+  }
+  box.replaceChildren(...rows);
+}
+setInterval(renderObjectives, 1000);
+function econRow(parts){ const r = document.createElement('div'); r.className = 'econ-row'; for(const x of parts) r.appendChild(x); return r; }
+function econText(t){ const s = document.createElement('span'); s.textContent = t; return s; }
+function econBtn(label, fn, disabled){ const b = document.createElement('button'); b.className = 'btn'; b.type = 'button'; b.textContent = label; b.disabled = !!disabled; b.addEventListener('click', fn); return b; }
+function econHint(pane, t){ const p = document.createElement('p'); p.className = 'hint'; p.textContent = t; pane.appendChild(p); }
+function renderEcon(){
+  if(!myEcon || !shopOpen) return;
+  if(shopTab === 'sell'){
+    const pane = $('shopsell'); pane.replaceChildren();
+    econHint(pane, 'The shopkeeper buys the ore you mine. Break coal ore in the ground, then sell it here.');
+    for(const kind of Object.keys(myEcon.prices)){
+      const have = +myEcon.ore[kind] || 0, price = myEcon.prices[kind];
+      pane.appendChild(econRow([econText(kind.toUpperCase() + '  x' + have + '  (' + price + ' each)'),
+        econBtn('SELL 1', () => mpSend({type:'sell', ore:kind, n:1}), have < 1),
+        econBtn('SELL ALL', () => mpSend({type:'sell', ore:kind, n:'all'}), have < 1)]));
+    }
+  }
+  if(shopTab === 'contract'){
+    const pane = $('shopcontract'); pane.replaceChildren();
+    econHint(pane, 'A house on a plot you own: a door, a bed, two windows and a lamp. The shopkeeper pays ' + myEcon.contractPay + ' cash once for each plot.');
+    if(!myEcon.contracts.length) econHint(pane, 'You do not own a plot yet. Buy land first.');
+    for(const c of myEcon.contracts){
+      pane.appendChild(econRow([econText(c.name + '  ' + (c.x1 - c.x0 + 1) + ' x ' + (c.z1 - c.z0 + 1)),
+        c.done ? econText('PAID') : econBtn('INSPECT HOUSE', () => mpSend({type:'contract', x0:c.x0, z0:c.z0, x1:c.x1, z1:c.z1}))]));
+    }
+  }
+  if(shopTab === 'furn'){
+    const pane = $('shopfurn'); pane.replaceChildren();
+    econHint(pane, 'Furniture for your plots. A piece goes into an empty inventory slot.');
+    for(const [name, price] of myEcon.furn.slice().sort((a, b) => a[1] - b[1])){
+      pane.appendChild(econRow([econText(name + '  ' + price), econBtn('BUY', () => buyFurn(name), myCoins < price)]));
+    }
+  }
+}
+function buyFurn(name){
+  if(HOTBAR.indexOf(null) < 0){ shopNote('CLEAR AN INVENTORY SLOT FIRST'); return; }
+  mpSend({type:'buyfurn', name});
+}
+// the shop has taken the cash: the piece goes into an empty slot, as the catalog does
+function addFurnitureToSlot(name){
+  const t = FURN.findIndex(p => p.name === name), e = HOTBAR.indexOf(null);
+  if(t < 0 || e < 0){ flashHud('NO EMPTY SLOT FOR ' + name.toUpperCase()); return; }
+  HOTBAR[e] = FURN_BASES[t]; saveInv(); refreshInv(); flashHud('BOUGHT ' + name.toUpperCase());
+}
 function setShopTab(name){
   for(const b of document.querySelectorAll('#shoptabs .tab')) b.classList.toggle('on', b.dataset.tab === name);
+  $('shopsell').hidden = name !== 'sell'; $('shopcontract').hidden = name !== 'contract'; $('shopfurn').hidden = name !== 'furn';
   $('shopitems').hidden = name !== 'items'; $('shopplots').hidden = name !== 'plots'; $('shopland').hidden = name !== 'land';
   $('shopjob').hidden = name !== 'job'; $('shoprewards').hidden = name !== 'rewards'; $('shopbounty').hidden = name !== 'bountyshop';
   $('shoppassive').hidden = name !== 'passive';
   shopTab = name;
+  if(name === 'sell' || name === 'contract' || name === 'furn') renderEcon();
   if(name === 'job') renderJob();
   if(name === 'bountyshop') renderBountyShop();
   if(name === 'rewards') askRewards();
@@ -5248,10 +5339,12 @@ function onServerMessage(m){
   else if(m.type==='doorresult'){ onDoorResult(m); }
   else if(m.type==='wallet'){
     cashSound(+m.cash || 0);
-    myCoins = +m.cash || 0; myTools = +m.tools || 0; syncTool(); syncCash(); if(shopOpen) casinoMode ? renderCasino() : renderShop();
+    myCoins = +m.cash || 0; myTools = +m.tools || 0; syncTool(); syncCash(); if(shopOpen){ casinoMode ? renderCasino() : renderShop(); renderEcon(); }
     if(cashVisible()){ renderCash(); mpSend({type:'cashlog'}); }
   }
   else if(m.type==='plots'){ plotList = m.list || []; if(shopOpen) renderShop(); }
+  else if(m.type==='economy'){ onEconomy(m); }
+  else if(m.type==='furnbought'){ addFurnitureToSlot(String(m.name)); }
   else if(m.type==='board'){ renderBoard(m.rows || []); }
   else if(m.type==='offers'){
     const before = new Set(offers.incoming.map(o => o.id));

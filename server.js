@@ -185,6 +185,120 @@ function endShift(p, text) {
   sendTo(p, shiftMsg(p));
   sendTo(p, { type: 'notice', text: text + '. YOU EARNED ' + paid });
 }
+// ---- the economy: how players earn cash, and what they can spend it on ----
+// the ore blocks (the client has the same ids), and what the shop pays for each one a player has mined: rarer ore pays more
+const ORE_BY_ID = { 24: 'coal', 48: 'iron', 49: 'gold', 50: 'diamond' };
+const ORE_PRICES = { coal: 8, iron: 20, gold: 45, diamond: 150 };
+// furniture the shop sells, by name (the client lists these in the FURNITURE tab)
+const FURN_PRICES = {
+  'Plant': 150, 'Red Flower': 60, 'Yellow Flower': 60, 'Blue Flower': 60, 'White Flower': 60, 'Trash Can': 120,
+  'Rug': 250, 'Checker Rug': 400, 'Striped Rug': 350, 'Shag Rug': 700, 'Persian Rug': 900,
+  'Chair': 300, 'Table': 600, 'Nightstand': 400, 'Drawers': 500, 'Kitchen Cabinet': 700, 'Ceiling Light': 500,
+  'Computer Desk': 1200, 'Sofa': 1500, 'Coffee Machine': 800, 'Microwave': 900, 'Toilet': 1000, 'Bathroom Sink': 700,
+  'Kitchen Sink': 900, 'Oven': 1800, 'Washing Machine': 2000, 'Dishwasher': 1400, 'Fridge': 2500, 'Bathtub': 2200,
+  'TV': 4000, 'Fireplace': 3500,
+};
+const PLOT_TAX = 0.1;                                   // a sale between players sends this share of the price to the game
+const CONTRACT_PAY = 800;                               // a house contract pays this, once per plot
+const MINE_CAP = 6;                                      // most ore counted for one player in a minute (about 48 cash a minute at most) (stops a fast miner outrunning the game)
+const OBJECTIVES = [
+  { id: 'mine',  text: 'Mine 10 ore',                 reward: 200, done: s => s.mined >= 10 },
+  { id: 'sell',  text: 'Sell ore to the shopkeeper',  reward: 300, done: s => s.sold >= 1 },
+  { id: 'job',   text: 'Start a shift at the shop',   reward: 200, done: s => s.shifts >= 1 },
+  { id: 'house', text: 'Finish a house contract',     reward: 800, done: s => s.contracts >= 1 },
+  { id: 'plot',  text: 'Claim your first plot',       reward: 500, done: (s, w, p) => w.plots.some(pl => pl.owner === p.pid) },
+];
+const hasOwn = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
+function statsOf(w, pid) {
+  let s = w.stats.get(pid);
+  if (!s) { s = { mined: 0, sold: 0, shifts: 0, contracts: 0, paid: [] }; w.stats.set(pid, s); }
+  return s;
+}
+function oreOf(w, pid) {
+  let o = w.ore.get(pid);
+  if (!o) { o = { coal: 0, iron: 0, gold: 0, diamond: 0 }; w.ore.set(pid, o); }
+  return o;
+}
+function economyMsg(w, p) {
+  const s = statsOf(w, p.pid), o = oreOf(w, p.pid);
+  return {
+    type: 'economy', ore: o, prices: ORE_PRICES, furn: Object.entries(FURN_PRICES), contractPay: CONTRACT_PAY,
+    stats: { mined: s.mined, sold: s.sold, contracts: s.contracts },
+    objectives: OBJECTIVES.map(x => ({ id: x.id, text: x.text, reward: x.reward, done: s.paid.includes(x.id) })),
+    contracts: w.plots.filter(pl => pl.owner === p.pid).map(pl => ({ x0: pl.x0, z0: pl.z0, x1: pl.x1, z1: pl.z1, name: pl.name || 'PLOT', done: !!pl.contract })),
+  };
+}
+// pays each objective once, the first time it is complete, and tells the player
+function checkObjectives(w, p) {
+  if (!p.pid) return;
+  const s = statsOf(w, p.pid);
+  for (const o of OBJECTIVES) {
+    if (s.paid.includes(o.id) || !o.done(s, w, p)) continue;
+    s.paid.push(o.id);
+    w.coins.set(p.pid, (w.coins.get(p.pid) || 0) + o.reward);
+    sendTo(p, { type: 'notice', text: 'OBJECTIVE DONE: ' + o.text.toUpperCase() + '. +' + o.reward + ' CASH' });
+    sendTo(p, walletMsg(w, p));
+  }
+  scheduleSave(w);
+  sendTo(p, economyMsg(w, p));
+}
+// the shopkeeper buys the ore a player has mined (the server keeps the count, so it cannot be faked from the browser)
+function sellOre(w, p, m) {
+  if (!hasOwn(ORE_PRICES, m.ore)) return sendTo(p, { type: 'notice', text: 'THE SHOP DOES NOT BUY THAT' });
+  const o = oreOf(w, p.pid), have = o[m.ore] || 0;
+  const n = m.n === 'all' ? have : Math.min(have, Math.max(0, Math.floor(Number(m.n) || 0)));
+  if (n < 1) return sendTo(p, { type: 'notice', text: 'YOU HAVE NO ' + m.ore.toUpperCase() + ' TO SELL' });
+  o[m.ore] = have - n;
+  const earn = n * ORE_PRICES[m.ore];
+  w.coins.set(p.pid, (w.coins.get(p.pid) || 0) + earn);
+  statsOf(w, p.pid).sold += n;
+  logTxn(w, { kind: 'sell', amount: earn, to: p.pid, toName: p.name, what: n + ' ' + m.ore });
+  sendTo(p, walletMsg(w, p));
+  sendTo(p, { type: 'notice', text: 'SOLD ' + n + ' ' + m.ore.toUpperCase() + ' FOR ' + earn });
+  scheduleSave(w);
+  checkObjectives(w, p);
+}
+// a house contract: the plot is the player's own, and holds a door, a bed, two windows and a lamp. Paid once per plot.
+function inspectHouse(w, p, m) {
+  const pl = w.plots.find(q => q.owner === p.pid && q.x0 === m.x0 && q.z0 === m.z0 && q.x1 === m.x1 && q.z1 === m.z1);
+  if (!pl) return sendTo(p, { type: 'notice', text: 'PICK ONE OF YOUR PLOTS' });
+  if (pl.contract) return sendTo(p, { type: 'notice', text: 'THIS PLOT HAS ALREADY BEEN PAID FOR ITS HOUSE' });
+  const c = { door: 0, bed: 0, glass: 0, lamp: 0 };
+  for (const [k, v] of w.edits) {
+    if (v === 0) continue;
+    const [x, , z] = k.split(',').map(Number);
+    if (x < pl.x0 || x > pl.x1 || z < pl.z0 || z > pl.z1) continue;
+    if (v >= 12 && v <= 15) c.door++;                 // both halves of a door
+    else if (v === 16 || v === 17) c.bed++;          // both halves of a bed
+    else if (v === 10) c.glass++;
+    else if (v === 11 || v === 26 || v === 258 || v === 259) c.lamp++;
+  }
+  const miss = [];
+  if (c.door < 2) miss.push('A DOOR');
+  if (c.bed < 2) miss.push('A BED');
+  if (c.glass < 2) miss.push('TWO WINDOWS');
+  if (c.lamp < 1) miss.push('A LAMP');
+  if (miss.length) return sendTo(p, { type: 'notice', text: 'NOT YET. THE HOUSE NEEDS ' + miss.join(', ') });
+  pl.contract = true;
+  statsOf(w, p.pid).contracts++;
+  w.coins.set(p.pid, (w.coins.get(p.pid) || 0) + CONTRACT_PAY);
+  logTxn(w, { kind: 'contract', amount: CONTRACT_PAY, to: p.pid, toName: p.name, what: pl.name || 'plot' });
+  sendTo(p, { type: 'notice', text: 'HOUSE CONTRACT DONE. +' + CONTRACT_PAY + ' CASH' });
+  sendTo(p, walletMsg(w, p));
+  scheduleSave(w);
+  checkObjectives(w, p);
+}
+// furniture from the shop: the server takes the cash, and the client puts the piece in an empty slot
+function buyFurn(w, p, m) {
+  if (!hasOwn(FURN_PRICES, m.name)) return sendTo(p, { type: 'notice', text: 'THE SHOP DOES NOT SELL THAT' });
+  const price = FURN_PRICES[m.name], cash = w.coins.get(p.pid) || 0;
+  if (cash < price) return sendTo(p, { type: 'notice', text: 'NOT ENOUGH CASH. YOU NEED ' + price });
+  w.coins.set(p.pid, cash - price);
+  logTxn(w, { kind: 'buy', amount: price, from: p.pid, fromName: p.name, what: m.name });
+  scheduleSave(w);
+  sendTo(p, walletMsg(w, p));
+  sendTo(p, { type: 'furnbought', name: m.name });
+}
 function sendBounties(w) {
   const list = [...w.bounties.values()].map(b => ({ name: b.name, amount: b.amount }));
   for (const q of players.values()) if (q.world === w && q.joined) {
@@ -315,6 +429,8 @@ for (const w of Object.values(WORLDS)) {
   w.locks = new Map();     // "x,y,z" of each half of a door with a password -> the lock (both halves share one lock)
   w.coins = new Map();     // hashed player id -> cash (the game creator gives it, players trade it and buy with it)
   w.tools = new Map();     // hashed player id -> hacker tools they own (each one can be used once)
+  w.ore = new Map();       // hashed player id -> ore mined and not yet sold: { coal: n }
+  w.stats = new Map();     // hashed player id -> { mined, sold, shifts, contracts, paid: [objective ids already paid] }
   w.mail = new Map();      // lowercase name -> the messages waiting for that player: [{ from, text, at }]
   w.bounties = new Map();  // target's id -> { amount, name }: cash paid out to whoever smacks them
   w.claims = new Map();
@@ -331,6 +447,8 @@ for (const w of Object.values(WORLDS)) {
     const list = Array.isArray(data) ? data : data.edits;          // older saves were just the list of edits
     for (const [pid, n] of (Array.isArray(data) ? [] : (data.coins || []))) w.coins.set(pid, n);
     for (const [pid, n] of (Array.isArray(data) ? [] : (data.tools || []))) w.tools.set(pid, n);
+    for (const [pid, o] of (Array.isArray(data) ? [] : (data.ore || []))) w.ore.set(pid, o);
+    for (const [pid, st] of (Array.isArray(data) ? [] : (data.stats || []))) w.stats.set(pid, st);
     if (!Array.isArray(data)) { w.plots = data.plots || []; w.log = data.log || []; for (const [to, list] of (data.mail || [])) w.mail.set(to, list); for (const [k, v] of (data.bounties || [])) w.bounties.set(k, v); for (const [k, v] of (data.claims || [])) w.claims.set(k, v); for (const [k, v] of (data.rewards || [])) w.rewards.set(k, v); }
     for (const [k, v, o] of list) { if (v === 260 || v === 261) continue; w.edits.set(k, v); if (o !== undefined) w.owners.set(k, o); }   // the removed camera and screen blocks
     for (const L of Array.isArray(data) ? [] : (data.locks || [])) {
@@ -356,7 +474,7 @@ function saveWorld(w) {
   const locks = [...new Set(w.locks.values())].map(L => ({ lower: L.lower.join(','), owner: L.owner, salt: L.salt, digest: L.digest, allowed: [...L.allowed] }));
   const tmp = w.file + '.tmp';
   try {
-    fs.writeFileSync(tmp, JSON.stringify({ edits, locks, coins: [...w.coins], tools: [...w.tools], plots: w.plots, log: w.log, mail: [...w.mail], bounties: [...w.bounties], claims: [...w.claims], rewards: [...w.rewards] }));
+    fs.writeFileSync(tmp, JSON.stringify({ edits, locks, coins: [...w.coins], tools: [...w.tools], ore: [...w.ore], stats: [...w.stats], plots: w.plots, log: w.log, mail: [...w.mail], bounties: [...w.bounties], claims: [...w.claims], rewards: [...w.rewards] }));
     fs.renameSync(tmp, w.file);
   } catch (e) {
     console.error(`${w.name}: could not save the world:`, e.message);
@@ -547,6 +665,7 @@ function hello(p, id, m) {
   const all = [];
   // each block also says who it belongs to for this player: 1 = yours, 0 = another player's, null = nobody's (land or older saves)
   for (const [k, v] of w.edits) { const [x, y, z] = k.split(',').map(Number); const o = w.owners.get(k); all.push([x, y, z, v, o === undefined ? null : (o === p.pid ? 1 : 0)]); }
+  checkObjectives(w, p);                                 // pays any objective already met (for example a plot claimed before this update)
   sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, edits: all, players: list, time: worldTime(w), mob: w.mob, tvs: tvList(w), sources: tvSources(w), locks: lockList(w, p), coins: w.coins.get(p.pid) || 0, tools: w.tools.get(p.pid) || 0, plots: plotsMsg(w, p).list });
   // mail that was waiting for this player's name is handed over once, after they have joined, and removed from the mailbox
   const waiting = w.mail.get((p.name || '').toLowerCase());
@@ -778,6 +897,9 @@ wss.on('connection', (ws) => {
       p.bypass = m.on === true;
       return sendTo(p, { type: 'bypass', on: p.bypass });
     }
+    if (m.type === 'sell') return sellOre(w, p, m);
+    if (m.type === 'contract') return inspectHouse(w, p, m);
+    if (m.type === 'buyfurn') return buyFurn(w, p, m);
     if (m.type === 'buy') {
       // the shop: a player buys an item with their cash (the item is added to the player's tools)
       const item = SHOP_PRICES[m.item];
@@ -841,6 +963,7 @@ wss.on('connection', (ws) => {
         if (p.shift) return fail('YOU ARE ALREADY ON A SHIFT');
         if (p.shiftBreakUntil > now) return fail('ON A BREAK: ' + Math.ceil((p.shiftBreakUntil - now) / 60000) + ' MINUTES LEFT');
         p.shift = { start: now, lastPay: now, paid: 0, job: m.job };
+        statsOf(p.world, p.pid).shifts++; checkObjectives(p.world, p);
         sendTo(p, shiftMsg(p));
         return fail('SHIFT STARTED AS ' + job.name.toUpperCase() + ': ' + job.perMin + ' CASH A MINUTE');
       }
@@ -1039,6 +1162,7 @@ wss.on('connection', (ws) => {
       const np = Object.assign(pl, { owner: p.pid, ownerName: p.name, name: plotName, price });
       w.plots.push(np);
       for (const L of syncPlotOwners(w, np)) announceLock(w, L.lower, L);
+      checkObjectives(w, p);
       logTxn(w, { kind: 'plot', amount: price, from: p.pid, fromName: p.name, what: sw + ' x ' + sd + ' blocks' });
       scheduleSave(w);
       announcePlots(w);
@@ -1109,9 +1233,10 @@ wss.on('connection', (ws) => {
       const cash = w.coins.get(p.pid) || 0, price = pl.sale, seller = pl.owner, sellerName = pl.ownerName;
       if (cash < price) return fail('NOT ENOUGH CASH. THE PLOT COSTS ' + price);
       w.coins.set(p.pid, cash - price);
-      w.coins.set(seller, (w.coins.get(seller) || 0) + price);
+      w.coins.set(seller, (w.coins.get(seller) || 0) + price - Math.floor(price * PLOT_TAX));   // the game keeps a share of a sale between players
       pl.owner = p.pid; pl.ownerName = p.name; pl.price = price; pl.sale = 0;
       for (const L of syncPlotOwners(w, pl)) announceLock(w, L.lower, L);
+      checkObjectives(w, p);
       for (const k of [...w.offers.keys()]) { const x = w.offers.get(k); if (x.x0 === pl.x0 && x.z0 === pl.z0 && x.x1 === pl.x1 && x.z1 === pl.z1) w.offers.delete(k); }
       const size = (pl.x1 - pl.x0 + 1) + ' x ' + (pl.z1 - pl.z0 + 1) + ' blocks';
       logTxn(w, { kind: 'plot', amount: price, from: p.pid, fromName: p.name, what: size });
@@ -1133,9 +1258,10 @@ wss.on('connection', (ws) => {
       const cash = w.coins.get(p.pid) || 0;
       if (cash < o.price) return fail('NOT ENOUGH CASH. THE PLOT COSTS ' + o.price);
       w.coins.set(p.pid, cash - o.price);
-      w.coins.set(o.fromPid, (w.coins.get(o.fromPid) || 0) + o.price);
+      w.coins.set(o.fromPid, (w.coins.get(o.fromPid) || 0) + o.price - Math.floor(o.price * PLOT_TAX));
       pl.owner = p.pid; pl.ownerName = p.name; pl.price = o.price;
       for (const L of syncPlotOwners(w, pl)) announceLock(w, L.lower, L);
+      checkObjectives(w, p);
       for (const k of [...w.offers.keys()]) { const x = w.offers.get(k); if (x.x0 === o.x0 && x.z0 === o.z0 && x.x1 === o.x1 && x.z1 === o.z1) w.offers.delete(k); }
       logTxn(w, { kind: 'plot', amount: o.price, from: p.pid, fromName: p.name, what: o.size });
       logTxn(w, { kind: 'plotsale', amount: o.price, to: o.fromPid, toName: o.fromName, what: o.size });
@@ -1270,6 +1396,11 @@ wss.on('connection', (ws) => {
       else {
         if (w.locks.has(key) && !isDoorBlock(m.id)) dropLock(w, key);
         if (owner === undefined && (cur === null || cur === 0)) w.owners.set(key, p.pid);   // a new block is the placer's
+      }
+      if (m.id === 0 && hasOwn(ORE_BY_ID, String(m.was)) && !w.edits.has(key)) {
+        const now = Date.now();
+        if (!p.mine || now - p.mine.start > 60000) p.mine = { start: now, n: 0 };
+        if (p.mine.n < MINE_CAP) { p.mine.n++; oreOf(w, p.pid)[ORE_BY_ID[m.was]]++; statsOf(w, p.pid).mined++; checkObjectives(w, p); }
       }
       w.edits.set(key, m.id);
       p.workedAt = Date.now();
