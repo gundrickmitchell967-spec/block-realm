@@ -1334,33 +1334,58 @@ function machineAt(wx, wy, wz){
 function insideShop(wx, wz){ return SHOP_SITES.some(S => wx >= S.x0 && wz >= S.z0 && wx < S.x0 + SHOP_W && wz < S.z0 + SHOP_D); }
 // does a rectangle of blocks (inclusive corners) touch either shop: plots cannot be bought there
 function rectTouchesShop(x0, z0, x1, z1){ return SHOP_SITES.some(S => x0 <= S.x0 + SHOP_W - 1 && x1 >= S.x0 && z0 <= S.z0 + SHOP_D - 1 && z1 >= S.z0); }
+// the furniture the shops are dressed with (the block a player carries, facing front), looked up by name once
+const SHOP_FURN_IDS = {};
+for(const n of ['Drawers', 'Plant', 'Persian Rug', 'Kitchen Cabinet', 'Coffee Machine']){ const t = FURN.findIndex(p => p.name === n); SHOP_FURN_IDS[n] = t >= 0 ? FURN_BASES[t] : 0; }
+// what stands on the shop floor, by cell 'lx,lz' (the counter is the row at lz 3, in front of the shopkeeper)
+const SHOP_FLOOR_PLAN = {
+  '1,1': 'Drawers', '1,5': 'Plant',                                        // the shelves and plants stand at the edges, so both side aisles stay open
+  '7,1': 'Plant',   '7,5': 'Drawers',
+  '4,1': 'Persian Rug',                                                    // the welcome mat inside the door
+  '2,3': 'Kitchen Cabinet', '3,3': 'Kitchen Cabinet', '4,3': 'Kitchen Cabinet', '5,3': 'Kitchen Cabinet', '6,3': 'Kitchen Cabinet',
+};
+// what sits on top of the counter (the second row of the room)
+const SHOP_TOP_PLAN = { '3,3': 'Coffee Machine', '5,3': 'Plant' };
+// the room inside a shop: furniture on the floor and the counter, and lamps in the ceiling. The casino keeps its machines and nothing else.
+function shopInterior(S, lx, lz, hy){
+  if(hy === SHOP_H && (lx === 2 || lx === 6) && (lz === 2 || lz === 4)) return LAMP_ID;   // lamps in the ceiling
+  if(hy === 1){ const n = SHOP_FLOOR_PLAN[lx + ',' + lz]; return n ? SHOP_FURN_IDS[n] : 0; }
+  if(hy === 2){ const n = SHOP_TOP_PLAN[lx + ',' + lz]; return n ? SHOP_FURN_IDS[n] : 0; }
+  return 0;
+}
 // what the shop puts in the block at (wx,wy,wz), given the ground height h of that column; -1 when the shop does not change it
 function shopBlockAtSite(S, wx, wy, wz, h){
   const lx = wx - S.x0, lz = wz - S.z0;
   if(lx < 0 || lz < 0 || lx >= SHOP_W || lz >= SHOP_D) return -1;
   const F = S.floorY;
   if(wy < F) return wy >= h ? 3 : -1;               // stone foundation, down to the ground
-  if(wy === F) return 7;                            // planks floor
+  if(wy === F) return (lx + lz) % 2 ? 7 : 3;        // the floor: planks and stone tiles in a checker
   const hy = wy - F;                                // 1..SHOP_H is inside the walls
-  if(hy === SHOP_H + 1) return 7;                   // planks roof
-  if(hy > SHOP_H + 1) return 0;
   const wall = lx === 0 || lz === 0 || lx === SHOP_W - 1 || lz === SHOP_D - 1;
+  if(hy === SHOP_H + 1) return wall ? 3 : 7;        // the roof: a stone edge round planks
+  if(hy > SHOP_H + 1) return 0;
   if(!wall){
-    if(S.casino && lz === CASINO_MACHINE_Z && (hy === 1 || hy === 2) && CASINO_MACHINE_XS.includes(lx)) return hy === 1 ? SLOT_BOTTOM_ID : SLOT_TOP_ID;   // a slot machine
-    if(hy === 1 && lz === S.counterZ && lx >= 2 && lx <= SHOP_W - 3) return 7;   // the counter
-    return 0;                                       // the room is empty
+    if(S.casino){
+      if(lz === CASINO_MACHINE_Z && (hy === 1 || hy === 2) && CASINO_MACHINE_XS.includes(lx)) return hy === 1 ? SLOT_BOTTOM_ID : SLOT_TOP_ID;   // a slot machine
+      return 0;
+    }
+    return shopInterior(S, lx, lz, hy);
   }
-  if(lz === 0 && lx === S.doorX){                // the doorway in the front wall
+  if(lz === 0 && lx === S.doorX){                   // the doorway in the front wall, with a lantern over it
     if(hy === 1) return DOOR_ID;
     if(hy === 2) return DOOR_TOP_ID;
-    return 8;
+    if(hy === 3) return LAMP_ID;
+    return 7;
   }
-  // windows of glass, two blocks high, in the side walls and the back wall
+  // display windows of glass, two blocks high: the front wall beside the door, both side walls, and the back wall
   const windowRow = hy === 2 || hy === 3;
+  const frontWindow = lz === 0 && lx !== 0 && lx !== SHOP_W - 1 && lx !== S.doorX;
   const sideWindow = (lx === 0 || lx === SHOP_W - 1) && (lz === 2 || lz === 4);
   const backWindow = lz === SHOP_D - 1 && (lx === 2 || lx === SHOP_W - 3);
-  if(windowRow && (sideWindow || backWindow)) return 10;
-  return 8;                                         // cobblestone walls
+  if(windowRow && (frontWindow || sideWindow || backWindow)) return 10;
+  if(hy === 1) return 8;                            // a cobblestone plinth
+  if(hy === SHOP_H) return 7;                       // a planks trim under the roof
+  return 9;                                         // brick walls
 }
 function shopBlockAt(wx, wy, wz, h){ for(const S of SHOP_SITES){ const v = shopBlockAtSite(S, wx, wy, wz, h); if(v !== -1) return v; } return -1; }
 
@@ -2557,6 +2582,7 @@ function makeSkinPixels(){
   const SKIN = [232,188,150], SKIN_SHADE = [208,160,126], BLUSH = [236,150,132], NOSE = [212,160,124];
   const HAIR = [62,42,28], HAIR_LIGHT = [92,64,42], BROW = [46,30,22], EYE = [246,246,246], PUPIL = [34,22,18], MOUTH = [170,84,76];
   const SHOE = [52,38,32], SHOE_TOP = [84,64,54], SOLE = [28,20,18], BUTTON = [238,238,232], GOLD = [222,186,84];
+  const IRIS = [58,104,160], LACE = [214,206,192];
   const parts = (u0,v0,w,h,dd,fn) => { for(const f of ['top','bottom','right','front','left','back']){ const r = skinRect(u0,v0,w,h,dd,f); paint(r, (x,y) => fn(f,x,y)); } };
   // the base skin, which lies under the outer layer
   parts(0,0,8,8,8,(f,x,y) => {                              // the head: hair on top and round the sides, a face on the front
@@ -2567,7 +2593,7 @@ function makeSkinPixels(){
     if(f!=='front') return RAW(SKIN);
     if(y===2 && (x===1||x===2||x===5||x===6)) return RAW(BROW);      // eyebrows
     if(y===3 || y===4){
-      if(x===2 || x===5) return RAW(PUPIL);                          // pupils
+      if(x===2 || x===5) return RAW(y===3 ? IRIS : PUPIL);           // blue irises with dark pupils below them
       if(x===1 || x===6) return RAW(EYE);                            // the whites of the eyes
     }
     if(y===5 && (x===1||x===6)) return RAW(BLUSH);                   // cheeks
@@ -2595,6 +2621,7 @@ function makeSkinPixels(){
   });
   for(const [u0,v0] of [[0,16],[16,48]]) parts(u0,v0,4,12,4,(f,x,y) => {   // the legs: trousers, a waistband, then shoes with soles
     if(y===11) return RAW(SOLE);
+    if(y===10 && (x===1 || x===2)) return RAW(LACE);                  // shoelaces
     if(y>=9) return RAW(y===9 ? SHOE_TOP : SHOE);
     if(y===0) return TINT(58 + skinNoise(x,y,3) * 8);
     return TINT(74 + skinNoise(x,y,3) * 10 + ((f==='left'||f==='right') ? -8 : 0));
@@ -2614,6 +2641,7 @@ function makeSkinPixels(){
     const g = 178 + skinNoise(x,y,5) * 12;
     if(f==='front'){
       if(y===0 || y===11 || x===0 || x===7) return TINT(g);
+      if(y===6 && (x===1 || x===2 || x===5 || x===6)) return TINT(g - 30);   // the pocket flaps
       return CLEAR;
     }
     return TINT(y===11 ? g - 30 : g);
@@ -3683,6 +3711,56 @@ const SHOPKEEPER = { x: SHOP.npcX + 0.5, y: SHOP.floorY + 1, z: SHOP.npcZ + 0.5,
 const SHOPKEEPER2 = { x: SHOP_HOUSE_A.npcX + 0.5, y: SHOP_HOUSE_A.floorY + 1, z: SHOP_HOUSE_A.npcZ + 0.5, yaw: 0, phase: 0, amt: 0, rgb: [0.3, 0.42, 0.6] };
 const shopTag = document.createElement('div'); shopTag.className = 'tag'; shopTag.hidden = true; shopTag.textContent = 'SHOPKEEPER';
 $('tags').appendChild(shopTag);
+// the shopkeepers walk about inside their shops: over the open floor, round the counter and the shelves, along paths they can really take
+const SHOP_WALK_SPEED = 1.2;                              // blocks a second
+// a cell inside a shop is open to walk on when the two blocks above its floor are open
+function shopWalkable(S, lx, lz){
+  if(lx < 1 || lz < 1 || lx > SHOP_W - 2 || lz > SHOP_D - 2) return false;
+  const y = S.floorY + 1;
+  return !solidAt(S.x0 + lx, y, S.z0 + lz) && !solidAt(S.x0 + lx, y + 1, S.z0 + lz);
+}
+// a path (a list of cells, not counting the cell he is on) to a random open cell up to 8 steps away; empty when none is reachable
+function shopRandomPath(S, lx, lz){
+  const key = (x, z) => x + ',' + z;
+  const prev = new Map([[key(lx, lz), null]]);
+  const queue = [[lx, lz, 0]], reach = [];
+  while(queue.length){
+    const [x, z, d] = queue.shift();
+    if(d > 0) reach.push([x, z]);
+    if(d === 8) continue;
+    for(const [dx, dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx = x + dx, nz = z + dz, k = key(nx, nz);
+      if(prev.has(k) || !shopWalkable(S, nx, nz)) continue;
+      prev.set(k, key(x, z)); queue.push([nx, nz, d + 1]);
+    }
+  }
+  if(!reach.length) return [];
+  const [tx, tz] = reach[Math.floor(Math.random() * reach.length)];
+  const path = [];
+  for(let k = key(tx, tz); k !== null; k = prev.get(k)){ const [x, z] = k.split(',').map(Number); path.unshift([x, z]); }
+  return path.slice(1);
+}
+// moves one shopkeeper along his path, pauses between walks, and turns to face the player when he is close
+function shopkeeperWalk(K, S, dt){
+  if(!S || Math.hypot(K.x - player.x, K.z - player.z) > 64) return;   // only walks while his shop is loaded near the player
+  K.path = K.path || []; K.wait = K.wait || 0;
+  let moved = 0;
+  if(K.path.length){
+    const [lx, lz] = K.path[0];
+    const tx = S.x0 + lx + 0.5, tz = S.z0 + lz + 0.5;
+    const dx = tx - K.x, dz = tz - K.z, dist = Math.hypot(dx, dz), step = SHOP_WALK_SPEED * dt;
+    if(dist <= step){ K.x = tx; K.z = tz; K.path.shift(); moved = dist; }
+    else { K.x += dx / dist * step; K.z += dz / dist * step; moved = step; }
+    if(dist > 1e-6) K.yaw = Math.atan2(-dx, -dz);       // the model faces -z at yaw 0, so this turns him to face where he walks
+  } else {
+    K.wait -= dt;
+    if(K.wait <= 0){ K.path = shopRandomPath(S, Math.floor(K.x - S.x0), Math.floor(K.z - S.z0)); K.wait = 1.5 + Math.random() * 3; }
+    const px = player.x - K.x, pz = player.z - K.z;
+    if(Math.hypot(px, pz) < 6) K.yaw = Math.atan2(-px, -pz);   // standing still, he turns to the player
+  }
+  K.phase = (K.phase || 0) + moved * 1.6;
+  K.amt = (K.amt || 0) + ((moved > 0 ? 1 : 0) - (K.amt || 0)) * (1 - Math.exp(-dt * 10));
+}
 // the distance along the view to the shopkeeper's body, or -1 when the view does not reach it
 function shopkeeperDistOf(K){
   const o = [player.x, eyeY(), player.z], d = camDir();
@@ -6172,6 +6250,7 @@ function frame(now){
   }
   ensureChunks();
   if(lightDirty) relightLamps();
+  for(const [K, S] of [[SHOPKEEPER, SHOP], [SHOPKEEPER2, SHOP_HOUSE_A]]) shopkeeperWalk(K, S, dt);
   remesh();
   if(loadWaiting && (groundReady() || performance.now() > loadUntil)) hideLoading();
   render();
