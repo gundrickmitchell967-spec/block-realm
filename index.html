@@ -5010,6 +5010,28 @@ function avatarParts(o){
   out.push({part:'hat', M: boxIn(body, [0,1.75,0], [HEAD,HEAD,HEAD]), tint: [1,1,1]});
   return out;
 }
+function drawAvatar(o, VP, dl){
+  gl.useProgram(skinProg);
+  gl.activeTexture(gl.TEXTURE6); gl.bindTexture(gl.TEXTURE_2D, skinTex); gl.uniform1i(SK.uSkin, 6);
+  gl.uniformMatrix4fv(SK.uVP, false, new Float32Array(VP));
+  gl.uniform1f(SK.uLight, 0.25 + 0.75*dl);
+  for(const P of avatarParts(o)){
+    gl.uniform3f(SK.uTint, P.tint[0], P.tint[1], P.tint[2]);
+    gl.uniformMatrix4fv(SK.uModel, false, new Float32Array(P.M));
+    gl.bindVertexArray(skinParts[P.part]);
+    gl.drawArrays(gl.TRIANGLES, 0, 36);
+  }
+  gl.bindVertexArray(null);
+}
+function hexRGB(h){ const n=parseInt(h.slice(1),16); return [(n>>16&255)/255,(n>>8&255)/255,(n&255)/255]; }
+function partMatrix(px,py,pz,yaw,c,s){
+  const cs=Math.cos(yaw), sn=Math.sin(yaw);
+  const T=[1,0,0,0, 0,1,0,0, 0,0,1,0, px,py,pz,1];
+  const R=[cs,0,-sn,0, 0,1,0,0, sn,0,cs,0, 0,0,0,1];
+  const C=[1,0,0,0, 0,1,0,0, 0,0,1,0, c[0],c[1],c[2],1];
+  const S=[s[0],0,0,0, 0,s[1],0,0, 0,0,s[2],0, 0,0,0,1];
+  return mul(mul(mul(T,R),C),S);
+}
 function mpStatus(t){ $('mpstatus').textContent=t; }
 function defaultWS(){
   if(location.protocol==='http:' || location.protocol==='https:') return (location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws';
