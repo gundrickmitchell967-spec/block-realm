@@ -299,6 +299,139 @@ function buyFurn(w, p, m) {
   sendTo(p, walletMsg(w, p));
   sendTo(p, { type: 'furnbought', name: m.name });
 }
+// ---- districts: the map opens a square at a time. Land in a district that is not open yet cannot be built on.
+const DISTRICT_SIZE = 64;                                   // each district is this many blocks on each side; the first is centred on the spawn
+const ROAD_ID = 58;                                         // the road block: only the game creator can lay it
+function districtOf(x, z) { return { gx: Math.floor((x + DISTRICT_SIZE / 2) / DISTRICT_SIZE), gz: Math.floor((z + DISTRICT_SIZE / 2) / DISTRICT_SIZE) }; }
+function dkey(gx, gz) { return gx + ',' + gz; }
+function districtOpen(w, x, z) { const d = districtOf(x, z); return w.districts.has(dkey(d.gx, d.gz)); }
+// true when every district the rectangle touches is open
+function rectOpen(w, x0, z0, x1, z1) {
+  const a = districtOf(x0, z0), b = districtOf(x1, z1);
+  for (let gx = Math.min(a.gx, b.gx); gx <= Math.max(a.gx, b.gx); gx++)
+    for (let gz = Math.min(a.gz, b.gz); gz <= Math.max(a.gz, b.gz); gz++) if (!w.districts.has(dkey(gx, gz))) return false;
+  return true;
+}
+function districtPrice(gx, gz) { return 2500 * Math.max(Math.abs(gx), Math.abs(gz)); }   // the further from downtown, the dearer
+function districtName(gx, gz) {
+  const r = Math.max(Math.abs(gx), Math.abs(gz));
+  if (r === 0) return 'DOWNTOWN';
+  const ns = gz < 0 ? 'NORTH' : gz > 0 ? 'SOUTH' : '', ew = gx < 0 ? 'WEST' : gx > 0 ? 'EAST' : '';
+  return (ns + (ns && ew ? ' ' : '') + ew) + ' ' + r;
+}
+function openList(w) { return [...w.districts].map(k => k.split(',').map(Number)); }
+function districtsMsg(w) { return { type: 'districts', open: openList(w) }; }
+// a player buys a district next to one that is already open
+function unlockDistrict(w, p, m) {
+  const fail = text => sendTo(p, { type: 'notice', text });
+  if (!Number.isInteger(m.gx) || !Number.isInteger(m.gz)) return fail('CHOOSE A DISTRICT');
+  const gx = m.gx, gz = m.gz;
+  if (w.districts.has(dkey(gx, gz))) return fail('THAT DISTRICT IS ALREADY OPEN');
+  if (!([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => w.districts.has(dkey(gx + dx, gz + dz)))))
+    return fail('OPEN A DISTRICT NEXT TO THIS ONE FIRST');
+  const price = districtPrice(gx, gz), cash = w.coins.get(p.pid) || 0;
+  if (cash < price) return fail('NOT ENOUGH CASH. YOU NEED ' + price);
+  w.coins.set(p.pid, cash - price);
+  w.districts.add(dkey(gx, gz));
+  logTxn(w, { kind: 'buy', amount: price, from: p.pid, fromName: p.name, what: districtName(gx, gz).toLowerCase() + ' district' });
+  scheduleSave(w);
+  broadcast(w, districtsMsg(w));
+  sendTo(p, walletMsg(w, p));
+  sendTo(p, { type: 'notice', text: districtName(gx, gz) + ' IS OPEN FOR BUILDING' });
+}
+// sets a list of [x, y, z, id] blocks at once, for the creator's builds: nobody owns these blocks, and every player is told
+function setCells(w, list) {
+  const out = [];
+  for (const [x, y, z, id] of list) {
+    const key = x + ',' + y + ',' + z;
+    if (w.edits.get(key) === id && !w.owners.has(key)) continue;
+    if (w.locks.has(key)) dropLock(w, key);
+    w.owners.delete(key);
+    w.edits.set(key, id);
+    out.push([x, y, z, id]);
+  }
+  scheduleSave(w);
+  if (out.length) broadcast(w, { type: 'edits', list: out });
+  return out.length;
+}
+
+// ---- blueprints: whole buildings the game creator places with one click. A blueprint is a map of 'dx,dy,dz' -> block id,
+// measured from the cell the creator clicks (dy 0 is the air just above the ground). Block ids are the ones in BLOCKS (index.html).
+const BP = { STONE_BRICK: 34, SPRUCE: 27, QUARTZ: 53, GLASS: 10, LAMP: 11, DOOR: 12, DOOR_TOP: 14, BED_FOOT: 16, BED_HEAD: 17,
+  BOOKSHELF: 23, IRON: 21, GOLD: 22, GRANITE: 39, COPPER: 51, MOSS: 36 };
+function blueprintHouse() {
+  const cells = new Map(), put = (x, y, z, id) => cells.set(x + ',' + y + ',' + z, id);
+  const W = 11, D = 9;                                       // the footprint: x 0..10, z 0..8
+  for (let y = -3; y <= -1; y++) for (let x = 0; x < W; x++) for (let z = 0; z < D; z++) put(x, y, z, BP.STONE_BRICK);   // a foundation that sinks into the ground
+  for (let x = 0; x < W; x++) for (let z = 0; z < D; z++) put(x, 0, z, BP.SPRUCE);                    // a spruce floor
+  for (let y = 1; y <= 3; y++) for (let x = 0; x < W; x++) for (let z = 0; z < D; z++) {             // walls of quartz, with windows
+    if (!(x === 0 || x === W - 1 || z === 0 || z === D - 1)) continue;
+    const frontOrBack = z === 0 || z === D - 1;
+    const glazed = y <= 2 && (frontOrBack ? [2, 4, 6, 8].includes(x) : (z === 2 || z === 5));
+    put(x, y, z, glazed ? BP.GLASS : BP.QUARTZ);
+  }
+  put(5, 1, 0, BP.DOOR); put(5, 2, 0, BP.DOOR_TOP);            // the front door
+  for (let x = -1; x <= W; x++) for (let z = -1; z <= D; z++) put(x, 4, z, BP.STONE_BRICK);   // a flat roof with an overhang
+  put(3, 3, 4, BP.LAMP); put(7, 3, 4, BP.LAMP);                // lamps under the roof
+  put(1, 1, 1, BP.BOOKSHELF); put(1, 2, 1, BP.BOOKSHELF); put(1, 1, 2, BP.BOOKSHELF);
+  put(1, 1, 5, BP.BED_HEAD); put(1, 1, 6, BP.BED_FOOT);        // a bed
+  put(5, -1, -1, BP.MOSS); put(5, -1, -2, BP.MOSS); put(5, -1, -3, BP.MOSS);   // a path to the door
+  return { cx: 5, cz: 4, cells };
+}
+function blueprintTower() {
+  const cells = new Map(), put = (x, y, z, id) => cells.set(x + ',' + y + ',' + z, id);
+  const W = 11, D = 11, FLOORS = 8, STEP = 4;                // footprint x 0..10, z 0..10; eight floors, four blocks each
+  for (let y = -3; y <= -1; y++) for (let x = 0; x < W; x++) for (let z = 0; z < D; z++) put(x, y, z, BP.GRANITE);   // a granite base that sinks into the ground
+  for (let f = 0; f < FLOORS; f++) {
+    const b = f * STEP;                                      // this floor's slab is at height b
+    for (let x = 0; x < W; x++) for (let z = 0; z < D; z++) put(x, b, z, f === 0 ? BP.GRANITE : BP.QUARTZ);
+    for (let y = b + 1; y <= b + 3; y++) for (let x = 0; x < W; x++) for (let z = 0; z < D; z++) {   // curtain wall: glass between iron mullions
+      if (!(x === 0 || x === W - 1 || z === 0 || z === D - 1)) continue;
+      const mullion = x % 2 === 0 || z % 2 === 0;
+      put(x, y, z, y === b + 3 ? BP.QUARTZ : mullion ? BP.IRON : BP.GLASS);
+    }
+    put(5, b + 1, 5, BP.LAMP);                               // a light in the middle of each floor
+  }
+  put(5, 1, 0, BP.DOOR); put(5, 2, 0, BP.DOOR_TOP);          // the entrance
+  const top = FLOORS * STEP;                                 // the roof, a parapet, and a copper spire with a gold tip
+  for (let x = 0; x < W; x++) for (let z = 0; z < D; z++) put(x, top, z, BP.GRANITE);
+  for (let x = 0; x < W; x++) for (let z = 0; z < D; z++) if (x === 0 || x === W - 1 || z === 0 || z === D - 1) put(x, top + 1, z, BP.IRON);
+  for (let y = top + 1; y <= top + 3; y++) put(5, y, 5, BP.COPPER);
+  put(5, top + 4, 5, BP.GOLD);
+  return { cx: 5, cz: 5, cells };
+}
+const BLUEPRINTS = { house: blueprintHouse, tower: blueprintTower };
+// the game creator places a blueprint where they clicked
+function placeBlueprint(w, p, m) {
+  if (p.role !== 'creator') return;
+  const make = hasOwn(BLUEPRINTS, m.kind) ? BLUEPRINTS[m.kind] : null;
+  if (!make) return sendTo(p, { type: 'notice', text: 'NO SUCH BLUEPRINT' });
+  if (![m.x, m.y, m.z].every(Number.isInteger)) return;
+  const bp = make(), ox = m.x - bp.cx, oz = m.z - bp.cz, list = [];
+  for (const [k, id] of bp.cells) {
+    const [dx, dy, dz] = k.split(',').map(Number), y = m.y + dy;
+    if (y < 0 || y >= CH) continue;
+    list.push([ox + dx, y, oz + dz, id]);
+  }
+  const n = setCells(w, list);
+  sendTo(p, { type: 'notice', text: (m.kind === 'tower' ? 'SKYSCRAPER' : 'HOUSE') + ' PLACED: ' + n + ' BLOCKS' });
+}
+// the game creator lays a road along the cells the client worked out: it paves the ground, and skips claimed land and anything a player built
+function buildRoad(w, p, m) {
+  if (p.role !== 'creator') return;
+  if (!Array.isArray(m.cells) || m.cells.length > 800) return sendTo(p, { type: 'notice', text: 'A ROAD CAN BE 800 BLOCKS AT MOST' });
+  const list = [];
+  for (const c of m.cells) {
+    if (!Array.isArray(c) || ![c[0], c[1], c[2]].every(Number.isInteger) || c[1] < 0 || c[1] >= CH) continue;
+    const [x, y, z] = c, key = x + ',' + y + ',' + z, have = w.edits.get(key) || 0;
+    if (plotAt(w, x, z)) continue;
+    if (have > 0 && have !== ROAD_ID) continue;
+    list.push([x, y, z, ROAD_ID]);
+  }
+  const n = setCells(w, list);
+  sendTo(p, { type: 'notice', text: 'ROAD LAID: ' + n + ' BLOCKS' });
+}
+
 function sendBounties(w) {
   const list = [...w.bounties.values()].map(b => ({ name: b.name, amount: b.amount }));
   for (const q of players.values()) if (q.world === w && q.joined) {
@@ -431,6 +564,7 @@ for (const w of Object.values(WORLDS)) {
   w.tools = new Map();     // hashed player id -> hacker tools they own (each one can be used once)
   w.ore = new Map();       // hashed player id -> ore mined and not yet sold: { coal: n }
   w.stats = new Map();     // hashed player id -> { mined, sold, shifts, contracts, paid: [objective ids already paid] }
+  w.districts = new Set(['0,0']);   // the districts that are open for building: 'gx,gz' keys (the spawn district is open from the start)
   w.mail = new Map();      // lowercase name -> the messages waiting for that player: [{ from, text, at }]
   w.bounties = new Map();  // target's id -> { amount, name }: cash paid out to whoever smacks them
   w.claims = new Map();
@@ -449,6 +583,7 @@ for (const w of Object.values(WORLDS)) {
     for (const [pid, n] of (Array.isArray(data) ? [] : (data.tools || []))) w.tools.set(pid, n);
     for (const [pid, o] of (Array.isArray(data) ? [] : (data.ore || []))) w.ore.set(pid, o);
     for (const [pid, st] of (Array.isArray(data) ? [] : (data.stats || []))) w.stats.set(pid, st);
+    for (const k of (Array.isArray(data) ? [] : (data.districts || []))) w.districts.add(k);
     if (!Array.isArray(data)) { w.plots = data.plots || []; w.log = data.log || []; for (const [to, list] of (data.mail || [])) w.mail.set(to, list); for (const [k, v] of (data.bounties || [])) w.bounties.set(k, v); for (const [k, v] of (data.claims || [])) w.claims.set(k, v); for (const [k, v] of (data.rewards || [])) w.rewards.set(k, v); }
     for (const [k, v, o] of list) { if (v === 260 || v === 261) continue; w.edits.set(k, v); if (o !== undefined) w.owners.set(k, o); }   // the removed camera and screen blocks
     for (const L of Array.isArray(data) ? [] : (data.locks || [])) {
@@ -456,6 +591,9 @@ for (const w of Object.values(WORLDS)) {
       const lock = { lower: lo, owner: L.owner, salt: L.salt, digest: L.digest, allowed: new Set(L.allowed || []), keys: lockKeys(lo) };
       for (const k of lock.keys) w.locks.set(k, lock);
     }
+    // land that is already built on, or claimed, stays open when the districts are first saved (older worlds)
+    for (const [k, v] of w.edits) if (v !== 0) { const [x, , z] = k.split(',').map(Number), d = districtOf(x, z); w.districts.add(dkey(d.gx, d.gz)); }
+    for (const pl of w.plots) for (const [x, z] of [[pl.x0, pl.z0], [pl.x1, pl.z1]]) { const d = districtOf(x, z); w.districts.add(dkey(d.gx, d.gz)); }
     for (const pl of w.plots) syncPlotOwners(w, pl);   // blocks on a plot belong to its owner (fixes saves from before a sale)
     w.loaded = true;
     console.log(`${w.name}: loaded ${w.edits.size} block edits from ${w.file}`);
@@ -474,7 +612,7 @@ function saveWorld(w) {
   const locks = [...new Set(w.locks.values())].map(L => ({ lower: L.lower.join(','), owner: L.owner, salt: L.salt, digest: L.digest, allowed: [...L.allowed] }));
   const tmp = w.file + '.tmp';
   try {
-    fs.writeFileSync(tmp, JSON.stringify({ edits, locks, coins: [...w.coins], tools: [...w.tools], ore: [...w.ore], stats: [...w.stats], plots: w.plots, log: w.log, mail: [...w.mail], bounties: [...w.bounties], claims: [...w.claims], rewards: [...w.rewards] }));
+    fs.writeFileSync(tmp, JSON.stringify({ edits, locks, coins: [...w.coins], tools: [...w.tools], ore: [...w.ore], stats: [...w.stats], districts: [...w.districts], plots: w.plots, log: w.log, mail: [...w.mail], bounties: [...w.bounties], claims: [...w.claims], rewards: [...w.rewards] }));
     fs.renameSync(tmp, w.file);
   } catch (e) {
     console.error(`${w.name}: could not save the world:`, e.message);
@@ -666,7 +804,7 @@ function hello(p, id, m) {
   // each block also says who it belongs to for this player: 1 = yours, 0 = another player's, null = nobody's (land or older saves)
   for (const [k, v] of w.edits) { const [x, y, z] = k.split(',').map(Number); const o = w.owners.get(k); all.push([x, y, z, v, o === undefined ? null : (o === p.pid ? 1 : 0)]); }
   checkObjectives(w, p);                                 // pays any objective already met (for example a plot claimed before this update)
-  sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, edits: all, players: list, time: worldTime(w), mob: w.mob, tvs: tvList(w), sources: tvSources(w), locks: lockList(w, p), coins: w.coins.get(p.pid) || 0, tools: w.tools.get(p.pid) || 0, plots: plotsMsg(w, p).list });
+  sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, edits: all, players: list, time: worldTime(w), mob: w.mob, tvs: tvList(w), sources: tvSources(w), locks: lockList(w, p), coins: w.coins.get(p.pid) || 0, tools: w.tools.get(p.pid) || 0, plots: plotsMsg(w, p).list, districts: openList(w) });
   // mail that was waiting for this player's name is handed over once, after they have joined, and removed from the mailbox
   const waiting = w.mail.get((p.name || '').toLowerCase());
   if (waiting) { w.mail.delete((p.name || '').toLowerCase()); scheduleSave(w); sendTo(p, { type: 'mail', list: waiting }); }
@@ -898,6 +1036,9 @@ wss.on('connection', (ws) => {
       return sendTo(p, { type: 'bypass', on: p.bypass });
     }
     if (m.type === 'sell') return sellOre(w, p, m);
+    if (m.type === 'unlockdistrict') return unlockDistrict(w, p, m);
+    if (m.type === 'blueprint') return placeBlueprint(w, p, m);
+    if (m.type === 'road') return buildRoad(w, p, m);
     if (m.type === 'contract') return inspectHouse(w, p, m);
     if (m.type === 'buyfurn') return buyFurn(w, p, m);
     if (m.type === 'buy') {
@@ -1147,6 +1288,7 @@ wss.on('connection', (ws) => {
       const sw = pl.x1 - pl.x0 + 1, sd = pl.z1 - pl.z0 + 1;
       if (sw < PLOT_MIN || sd < PLOT_MIN || sw > PLOT_MAX || sd > PLOT_MAX) return fail('A PLOT MUST BE ' + PLOT_MIN + ' TO ' + PLOT_MAX + ' BLOCKS ON EACH SIDE');
       if (w.plots.some(o => plotsOverlap(o, pl))) return fail('THAT LAND IS ALREADY OWNED');
+      if (!rectOpen(w, pl.x0, pl.z0, pl.x1, pl.z1)) return fail('THAT LAND IS IN A DISTRICT THAT IS NOT OPEN YET');
       for (const [k, v] of w.edits) {
         if (v === 0) continue;
         const [x, , z] = k.split(',').map(Number);
@@ -1385,6 +1527,8 @@ wss.on('connection', (ws) => {
       if (dx * dx + dy * dy + dz * dz > REACH * REACH) return;   // too far from where this player last was
       const key = m.x + ',' + m.y + ',' + m.z;
       const landOwner = plotAt(w, m.x, m.z);
+      if (!canBypass(p) && !districtOpen(w, m.x, m.z)) return fixBlock(p, w, key, 'THIS DISTRICT IS NOT OPEN YET. BUY IT IN THE SHOP');
+      if (m.id === ROAD_ID && p.role !== 'creator') return fixBlock(p, w, key, 'ONLY THE GAME CREATOR CAN BUILD ROADS');
       // claimed land belongs to its owner: nobody else may build, break or open anything on it
       if (!canBypass(p) && landOwner && landOwner.owner !== p.pid) return fixBlock(p, w, key, 'THIS LAND BELONGS TO ANOTHER PLAYER');
       const cur = w.edits.has(key) ? w.edits.get(key) : null;     // null: land that no player has changed

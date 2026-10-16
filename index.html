@@ -499,6 +499,13 @@
           <button class="btn" id="takego" type="button">TAKE</button>
         </div>
         <p class="hint">GIVE adds cash. TAKE removes it (a player never goes below zero).</p>
+        <h3>BUILD TOOLS</h3>
+        <div id="buildtools">
+          <select id="bpkind" aria-label="Blueprint"><option value="house">MODERN HOUSE</option><option value="tower">SKYSCRAPER</option></select>
+          <button class="btn" id="bpbtn" type="button">BLUEPRINT: OFF</button>
+          <button class="btn" id="roadbtn" type="button">ROAD: OFF</button>
+        </div>
+        <p class="hint">BLUEPRINT: left-click the ground where it should stand. ROAD: left-click the start, then the end. Right-click cancels.</p>
         <div id="pmbox" hidden>
           <p class="hint" id="pmto"></p>
           <input id="pmtext" maxlength="200" autocomplete="off" aria-label="Message to the player">
@@ -548,7 +555,7 @@
   <div id="shoppanel" role="dialog" aria-labelledby="shoptitle">
     <h2 id="shoptitle">SHOP</h2>
     <p class="hint" id="shopcoins"></p>
-    <div id="shoptabs"><button class="tab on" type="button" data-kind="purchase" data-tab="items">ITEMS</button><button class="tab" type="button" data-kind="purchase" data-tab="plots">MY PLOTS</button><button class="tab" type="button" data-kind="purchase" data-tab="land">BUY LAND</button><button class="tab" type="button" data-kind="purchase" data-tab="bountyshop">BOUNTY</button><button class="tab" type="button" data-kind="purchase" data-tab="sell">SELL ORE</button><button class="tab" type="button" data-kind="purchase" data-tab="contract">HOUSE CONTRACT</button><button class="tab" type="button" data-kind="purchase" data-tab="furn">FURNITURE</button><button class="tab" type="button" data-kind="career" data-tab="job">JOB</button><button class="tab" type="button" data-kind="career" data-tab="passive">PASSIVE INCOME</button><button class="tab" type="button" data-kind="career" data-tab="rewards">REWARDS</button></div>
+    <div id="shoptabs"><button class="tab on" type="button" data-kind="purchase" data-tab="items">ITEMS</button><button class="tab" type="button" data-kind="purchase" data-tab="plots">MY PLOTS</button><button class="tab" type="button" data-kind="purchase" data-tab="land">BUY LAND</button><button class="tab" type="button" data-kind="purchase" data-tab="bountyshop">BOUNTY</button><button class="tab" type="button" data-kind="purchase" data-tab="sell">SELL ORE</button><button class="tab" type="button" data-kind="purchase" data-tab="contract">HOUSE CONTRACT</button><button class="tab" type="button" data-kind="purchase" data-tab="furn">FURNITURE</button><button class="tab" type="button" data-kind="purchase" data-tab="dist">DISTRICTS</button><button class="tab" type="button" data-kind="career" data-tab="job">JOB</button><button class="tab" type="button" data-kind="career" data-tab="passive">PASSIVE INCOME</button><button class="tab" type="button" data-kind="career" data-tab="rewards">REWARDS</button></div>
     <div id="shopitems" class="pane"></div>
     <div id="shopplots" class="pane" hidden></div>
     <div id="shopland" class="pane" hidden></div>
@@ -582,6 +589,7 @@
     <div id="shopsell" class="pane" hidden></div>
     <div id="shopcontract" class="pane" hidden></div>
     <div id="shopfurn" class="pane" hidden></div>
+    <div id="shopdist" class="pane" hidden></div>
     <p id="shopmsg" role="status"></p>
     <div id="shopearn">
       <h3>HOW TO GET CASH</h3>
@@ -719,7 +727,8 @@ const BLOCKS = [null,
   {name:'Furnace',          top:56,side:57,bot:56,sw:'#6a6a6e'},   // 54
   {name:'Pumpkin',          top:58,side:59,bot:58,sw:'#d07a20'},   // 55
   {name:'Melon',            top:60,side:61,bot:60,sw:'#4a9a3a'},   // 56
-  {name:'Mushroom Block',   top:62,side:63,bot:63,sw:'#b8382e'}    // 57
+  {name:'Mushroom Block',   top:62,side:63,bot:63,sw:'#b8382e'},   // 57
+  {name:'Road',            top:101,side:100,bot:100,sw:'#3a3a3e'}    // 58: roads, laid by the game creator (not in the catalog)
 ];
 // ---- furniture: each piece is a set of boxes. Coordinates run 0 to 1 across the block; the FRONT is the +z side.
 // B(x0,y0,z0, x1,y1,z1, top tile, side tile, bottom tile, glow) makes one box
@@ -2860,6 +2869,8 @@ function makeAtlasCanvas(){
   oreTile(51,90,220,230,104);    // diamond ore
   tile(52,(px,py)=>{ const n=rnd2(px,py,106); const rivet=(px%8===3||px%8===4)&&(py%8===3||py%8===4); const d=rivet?30:0; return [g(n,186,40)+d,g(n,108,30)+d,g(n,60,20)+d]; });   // copper block
   tile(53,(px,py)=>{ const n=rnd2(px,py,107); const facet=((px+py)%12<2)||((px-py+64)%12<2); const d=facet?40:0; return [g(n,110,24)+d,g(n,230,20)+d,g(n,236,16)+d]; });   // diamond block
+  tile(100,(px,py)=>{ const n=rnd2(px,py,200); const sp=rnd2(px>>1,py>>1,201); const d=sp>0.9?12:(sp<0.1?-10:0); return [g(n,58,12)+d,g(n,58,12)+d,g(n,62,12)+d]; });   // road: asphalt
+  tile(101,(px,py)=>{ const n=rnd2(px,py,202); const dash=(px>=7&&px<=8)&&(py%8<5); return dash ? [236,236,230] : [g(n,58,12),g(n,58,12),g(n,62,12)]; });   // road: asphalt with a dashed centre line
   tile(54,(px,py)=>{ const n=rnd2(px,py,108); return [g(n,240,8),g(n,238,8),g(n,232,8)]; });   // quartz top
   tile(55,(px,py)=>{ const n=rnd2(px,py,109); const line=(px%16<2)?-24:0; return [g(n,240,8)+line,g(n,238,8)+line,g(n,232,8)+line]; });   // quartz side
   tile(56,(px,py)=>{ const n=rnd2(px,py,110); const seam=(px%8===0||py%8===0)?-30:0; return [g(n,120,30)+seam,g(n,120,30)+seam,g(n,124,30)+seam]; });   // furnace top and sides
@@ -4051,14 +4062,137 @@ function addFurnitureToSlot(name){
   if(t < 0 || e < 0){ flashHud('NO EMPTY SLOT FOR ' + name.toUpperCase()); return; }
   HOTBAR[e] = FURN_BASES[t]; saveInv(); refreshInv(); flashHud('BOUGHT ' + name.toUpperCase());
 }
+/* ---------- districts: the border, the shop, the creator's blueprints and roads ---------- */
+const DISTRICT_SIZE = 64, DISTRICT_WALL_H = 3;
+let openDistricts = new Set(['0,0']);          // 'gx,gz' keys of the districts that are open for building
+let districtWall = null;                       // the border walls, drawn as lines
+const districtOfC = (x, z) => ({ gx: Math.floor((x + DISTRICT_SIZE / 2) / DISTRICT_SIZE), gz: Math.floor((z + DISTRICT_SIZE / 2) / DISTRICT_SIZE) });
+function districtOpenC(x, z){ const d = districtOfC(x, z); return openDistricts.has(d.gx + ',' + d.gz); }
+function districtNameC(gx, gz){
+  const r = Math.max(Math.abs(gx), Math.abs(gz));
+  if(r === 0) return 'DOWNTOWN';
+  const ns = gz < 0 ? 'NORTH' : gz > 0 ? 'SOUTH' : '', ew = gx < 0 ? 'WEST' : gx > 0 ? 'EAST' : '';
+  return (ns + (ns && ew ? ' ' : '') + ew) + ' ' + r;
+}
+function districtPriceC(gx, gz){ return 2500 * Math.max(Math.abs(gx), Math.abs(gz)); }
+function setDistricts(list){
+  openDistricts = new Set((list || []).map(([gx, gz]) => gx + ',' + gz));
+  if(!openDistricts.size) openDistricts.add('0,0');
+  buildDistrictWalls();
+  if(shopOpen && shopTab === 'dist') renderDistricts();
+}
+// a wall along each edge of an open district that borders a closed one, standing on the ground
+function buildDistrictWalls(){
+  if(!districtWall) districtWall = makeLineVAO();
+  const out = [], S = DISTRICT_SIZE, H = DISTRICT_WALL_H;
+  for(const key of openDistricts){
+    const [gx, gz] = key.split(',').map(Number);
+    const x0 = gx * S - S / 2, z0 = gz * S - S / 2;
+    const edges = [];
+    if(!openDistricts.has((gx + 1) + ',' + gz)) edges.push({ axis: 'x', at: x0 + S, a: z0, b: z0 + S, tile: x0 + S - 1 });
+    if(!openDistricts.has((gx - 1) + ',' + gz)) edges.push({ axis: 'x', at: x0, a: z0, b: z0 + S, tile: x0 });
+    if(!openDistricts.has(gx + ',' + (gz + 1))) edges.push({ axis: 'z', at: z0 + S, a: x0, b: x0 + S, tile: z0 + S - 1 });
+    if(!openDistricts.has(gx + ',' + (gz - 1))) edges.push({ axis: 'z', at: z0, a: x0, b: x0 + S, tile: z0 });
+    // a fence: a rail along the top of the edge, and posts every 8 blocks that stand a little above it
+    for(const e of edges){
+      for(let t = e.a; t < e.b; t++){
+        const y0 = (e.axis === 'x' ? heightAt(e.tile, t) : heightAt(t, e.tile)) + 0.05, y1 = y0 + H, r0 = y1 - 0.35;
+        if(e.axis === 'x') out.push(e.at,r0,t, e.at,r0,t+1, e.at,y1,t+1,  e.at,r0,t, e.at,y1,t+1, e.at,y1,t);
+        else out.push(t,r0,e.at, t+1,r0,e.at, t+1,y1,e.at,  t,r0,e.at, t+1,y1,e.at, t,y1,e.at);
+        if((t - e.a) % 8 === 0){
+          const top = y1 + 0.5, w = 0.17;
+          if(e.axis === 'x'){
+            out.push(e.at,y0,t-w, e.at,y0,t+w, e.at,top,t+w,  e.at,y0,t-w, e.at,top,t+w, e.at,top,t-w);
+            out.push(e.at-w,y0,t, e.at+w,y0,t, e.at+w,top,t,  e.at-w,y0,t, e.at+w,top,t, e.at-w,top,t);
+          } else {
+            out.push(t-w,y0,e.at, t+w,y0,e.at, t+w,top,e.at,  t-w,y0,e.at, t+w,top,e.at, t-w,top,e.at);
+            out.push(t,y0,e.at-w, t,y0,e.at+w, t,top,e.at+w,  t,y0,e.at-w, t,top,e.at+w, t,top,e.at-w);
+          }
+        }
+      }
+    }
+  }
+  uploadLines(districtWall, out);
+}
+buildDistrictWalls();                         // the border around the open downtown district, from the start
+function renderDistricts(){
+  const pane = $('shopdist'); pane.replaceChildren();
+  econHint(pane, 'The map opens a district at a time: a square 64 blocks on each side, next to one that is already open. Once bought, everyone can build there.');
+  const cand = new Map();
+  for(const key of openDistricts){
+    const [gx, gz] = key.split(',').map(Number);
+    for(const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){
+      const nx = gx + dx, nz = gz + dz, k = nx + ',' + nz;
+      if(!openDistricts.has(k)) cand.set(k, [nx, nz]);
+    }
+  }
+  if(!cand.size) econHint(pane, 'Every district around the map is open.');
+  const list = [...cand.values()].sort((a, b) => districtPriceC(a[0], a[1]) - districtPriceC(b[0], b[1]));
+  for(const [gx, gz] of list){
+    const price = districtPriceC(gx, gz);
+    pane.appendChild(econRow([econText(districtNameC(gx, gz) + '  ' + price + ' cash'), econBtn('UNLOCK', () => mpSend({type:'unlockdistrict', gx, gz}), myCoins < price)]));
+  }
+}
+// the creator's build tools: a blueprint is placed with one click; a road is drawn between two clicks
+let adminTool = null;                          // null, or { kind: 'blueprint' }, or { kind: 'road', from: null or {x, z} }
+function setAdminTool(t){
+  adminTool = t;
+  $('bpbtn').textContent = 'BLUEPRINT: ' + (t && t.kind === 'blueprint' ? 'ON' : 'OFF');
+  $('roadbtn').textContent = 'ROAD: ' + (t && t.kind === 'road' ? (t.from ? 'PICK THE END' : 'ON') : 'OFF');
+  flashHud(!t ? 'BUILD TOOL OFF' : t.kind === 'blueprint' ? 'CLICK THE GROUND TO PLACE THE ' + $('bpkind').value.toUpperCase() : t.from ? 'CLICK THE END OF THE ROAD' : 'CLICK THE START OF THE ROAD');
+}
+$('bpbtn').addEventListener('click', () => setAdminTool(adminTool && adminTool.kind === 'blueprint' ? null : { kind: 'blueprint' }));
+$('roadbtn').addEventListener('click', () => setAdminTool(adminTool && adminTool.kind === 'road' ? null : { kind: 'road', from: null }));
+function adminToolClick(button){
+  if(button === 2){ setAdminTool(null); return; }
+  if(button !== 0) return;
+  const h = raycast(120);
+  if(!h){ flashHud('NO GROUND THERE'); return; }
+  if(adminTool.kind === 'blueprint'){ mpSend({type:'blueprint', kind: $('bpkind').value, x: h.x + h.nx, y: h.y + h.ny, z: h.z + h.nz}); return; }
+  if(!adminTool.from){ adminTool.from = {x: h.x, z: h.z}; setAdminTool(adminTool); return; }
+  mpSend({type:'road', cells: roadCells(adminTool.from, {x: h.x, z: h.z})});
+  adminTool.from = null; setAdminTool(adminTool);
+}
+// the top block of the ground in a column, or null when it is not loaded or nothing solid is there
+function roadTop(x, z){
+  for(let y = CH - 1; y >= 0; y--){
+    const v = getBlock(x, y, z);
+    if(v === -1) return null;
+    if(v > 0 && isSolidId(v) && !isFurn(v)) return y;
+  }
+  return null;
+}
+// the road's cells from a to b: a line three blocks wide, laid on the ground, skipping claimed land, shops and closed districts
+function roadCells(a, b){
+  const out = [], seen = new Set(), along = Math.abs(b.x - a.x) >= Math.abs(b.z - a.z);
+  let x = a.x, z = a.z;
+  const dx = Math.abs(b.x - a.x), dz = -Math.abs(b.z - a.z), sx = a.x < b.x ? 1 : -1, sz = a.z < b.z ? 1 : -1;
+  let err = dx + dz;
+  for(let n = 0; n < 2000; n++){
+    for(const o of [-1, 0, 1]){
+      const cx = along ? x : x + o, cz = along ? z + o : z, k = cx + ',' + cz;
+      if(seen.has(k)) continue;
+      seen.add(k);
+      const y = roadTop(cx, cz);
+      if(y === null || plotAtClient(cx, cz) || insideShop(cx, cz) || landBlock(cx, cz)) continue;
+      out.push([cx, y, cz]);
+    }
+    if(x === b.x && z === b.z) break;
+    const e2 = 2 * err;
+    if(e2 >= dz){ err += dz; x += sx; }
+    if(e2 <= dx){ err += dx; z += sz; }
+  }
+  return out.slice(0, 800);
+}
 function setShopTab(name){
   for(const b of document.querySelectorAll('#shoptabs .tab')) b.classList.toggle('on', b.dataset.tab === name);
-  $('shopsell').hidden = name !== 'sell'; $('shopcontract').hidden = name !== 'contract'; $('shopfurn').hidden = name !== 'furn';
+  $('shopsell').hidden = name !== 'sell'; $('shopcontract').hidden = name !== 'contract'; $('shopfurn').hidden = name !== 'furn'; $('shopdist').hidden = name !== 'dist';
   $('shopitems').hidden = name !== 'items'; $('shopplots').hidden = name !== 'plots'; $('shopland').hidden = name !== 'land';
   $('shopjob').hidden = name !== 'job'; $('shoprewards').hidden = name !== 'rewards'; $('shopbounty').hidden = name !== 'bountyshop';
   $('shoppassive').hidden = name !== 'passive';
   shopTab = name;
   if(name === 'sell' || name === 'contract' || name === 'furn') renderEcon();
+  if(name === 'dist') renderDistricts();
   if(name === 'job') renderJob();
   if(name === 'bountyshop') renderBountyShop();
   if(name === 'rewards') askRewards();
@@ -4293,6 +4427,7 @@ function surveyRight(h){
 // why a block can't be changed here: land a player has claimed is theirs alone (the server checks it too)
 function landBlock(x, z){                    // why this block can't be changed here, or null when it can
   if(adminBypass) return null;
+  if(!districtOpenC(x, z)) return 'THIS DISTRICT IS NOT OPEN YET. BUY IT IN THE SHOP';
   const p = plotAtClient(x, z);
   return p && !p.mine ? 'THIS LAND BELONGS TO ANOTHER PLAYER' : null;
 }
@@ -4645,7 +4780,7 @@ function syncAdmin(){
   $('codetitle').textContent = a ? (creator ? 'GAME CREATOR' : 'GAME DESIGNER') : 'ADMIN CODE';
   $('adminrole').textContent = a ? 'Your admin powers are unlocked.' : '';
   $('adminpanel').hidden = !creator;
-  $('bypassbtn').hidden = !creator; $('bypasshint').hidden = !creator;
+  $('bypassbtn').hidden = !creator; $('bypasshint').hidden = !creator; $('buildtools').hidden = !creator;
   $('tadmin').hidden = !a;
   syncInvisBtn();
   renderAdmin();
@@ -4904,6 +5039,7 @@ cv.addEventListener('mousedown',e=>{
   if(!playing || invOpen || codeOpen || fridgeOpen || doorShown || shopOpen || player.sleeping) return;
   if(document.pointerLockElement!==cv) lockPointer();   // a click after a join or a pause captures the mouse
   if(spectate.id!=null) return;   // watching someone with the free camera: the clicks do nothing
+  if(adminTool && adminRole === 'creator'){ adminToolClick(e.button); return; }
   if(document.pointerLockElement!==cv && e.button!==0) return;
   if(e.button===0) doBreak(); else if(e.button===2) doPlace();
 });
@@ -5284,7 +5420,7 @@ function connectMP(){
   ws.onmessage = ev=>{
     let m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
     if(m.type==='denied'){ denied = m.msg || 'Could not join.'; mpStatus(denied); return; }
-    if(m.type==='welcome'){ clearTimeout(timer); enterWorld(m); }
+    if(m.type==='welcome'){ clearTimeout(timer); setDistricts(m.districts); enterWorld(m); }
     else if(mpMode) onServerMessage(m);
   };
   ws.onclose = ()=>{
@@ -5345,6 +5481,8 @@ function onServerMessage(m){
   else if(m.type==='plots'){ plotList = m.list || []; if(shopOpen) renderShop(); }
   else if(m.type==='economy'){ onEconomy(m); }
   else if(m.type==='furnbought'){ addFurnitureToSlot(String(m.name)); }
+  else if(m.type==='districts'){ setDistricts(m.open); }
+  else if(m.type==='edits'){ for(const [x, y, z, id] of (m.list || [])) applyBlock(x, y, z, id); }
   else if(m.type==='board'){ renderBoard(m.rows || []); }
   else if(m.type==='offers'){
     const before = new Set(offers.incoming.map(o => o.id));
@@ -5913,6 +6051,16 @@ function render(){
     gl.bindVertexArray(outlineVAO);
     gl.drawArrays(gl.LINES,0,24);
     gl.enable(gl.CULL_FACE);
+  }
+  // the district border: amber walls where open land meets land that is not open yet (always shown, in single player too)
+  if(districtWall && districtWall.n){
+    gl.disable(gl.CULL_FACE);
+    gl.useProgram(line);
+    gl.uniformMatrix4fv(LU.uVP,false,new Float32Array(VP));
+    gl.uniform3f(LU.uOff,0,0,0);
+    gl.uniform4f(LU.uCol,1,0.72,0.18,1);
+    gl.bindVertexArray(districtWall.vao); gl.drawArrays(gl.TRIANGLES,0,districtWall.n);
+    gl.bindVertexArray(null);
   }
   // land borders: your own plots in red, other players' plots in grey (the LAND BORDERS setting turns them off)
   if(mpMode && landBorders && plotList.length){
