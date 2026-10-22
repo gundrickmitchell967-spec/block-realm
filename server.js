@@ -12,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const { WebSocketServer } = require('ws');
 const crypto = require('crypto');
+const zlib = require('zlib');
 
 const PORT = Number(process.env.PORT) || 8080;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -27,10 +28,15 @@ const HACK_MS = (Number(process.env.HACK_SECONDS) || 30) * 1000;   // how long a
 const SHOP_PRICES = { hacktool: { name: 'Hacker Tool', price: 10000 } };   // the shop's items and prices (the client shows the same prices)
 const VOICE_RELAY_RANGE = 48;   // voice connections can only be set up between players this close (see VOICE_RANGE in index.html)
 
+// the actions that only exist where there is an economy (shops, plots, cash, jobs, casino, bounties)
+const ECON_ONLY = new Set(['sell', 'unlockdistrict', 'blueprint', 'road', 'contract', 'buyfurn', 'buy', 'pay', 'hack', 'job', 'reward',
+  'bounty', 'smack', 'claim', 'wheel', 'slots', 'plotbuy', 'plotsell', 'plotoffer', 'plotlist', 'plotunlist', 'plotbuylisted',
+  'offeraccept', 'offerdecline', 'plotmerge', 'plotsplit', 'plotcut']);
 // the two worlds. MAIN WORLD keeps the world that was already saved in world.json (its key stays 'our' so the save still loads)
 const WORLDS = {
   our: {
     key: 'our', name: 'MAIN WORLD',
+    economy: true,                     // the only world with shops, plots, cash, jobs and the casino
     file: process.env.WORLD_FILE || path.join(__dirname, 'world.json'),
     password: null,
   },
@@ -466,7 +472,7 @@ setInterval(jobTick, 10000);
 function rewardTick() {
   const now = Date.now();
   for (const p of players.values()) {
-    if (!p.joined || !p.pid || !p.world || now - (p.movedAt || 0) > PLAY_ACTIVE) continue;
+    if (!p.joined || !p.pid || !p.world || p.world.economy !== true || now - (p.movedAt || 0) > PLAY_ACTIVE) continue;
     const r = rewardsOf(p.world, p.pid);
     r.play += 10000;
     if (r.play >= PLAY_BLOCK) { r.play -= PLAY_BLOCK; if (r.banked < PLAY_BANK_MAX) r.banked++; }
@@ -1019,12 +1025,24 @@ const requestHandler = (req, res) => {
     if (req.method !== 'POST') { res.writeHead(405, { 'Content-Type': 'text/plain' }); return res.end('use POST'); }
     return handleUpload(req, res, new URL(req.url, 'http://localhost').searchParams.get('token') || '');
   }
+  // the background music: the files in public/music (track0.mp3 ... track4.mp3)
+  if (url.startsWith('/music/')) {
+    const name = path.basename(url);
+    if (!/^track\d+\.mp3$/.test(name)) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('not found'); }
+    const file = path.join(__dirname, 'public', 'music', name);
+    return fs.stat(file, (err, st) => {
+      if (err || !st.isFile()) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('not found'); }
+      res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Content-Length': st.size, 'Cache-Control': 'max-age=86400' });
+      fs.createReadStream(file).pipe(res);
+    });
+  }
   if (url.startsWith('/api/')) return apiRouter(req, res, url);
   if (url === '/' || url === '/index.html') {
     fs.readFile(PAGE, (err, data) => {
       if (err) { res.writeHead(500, { 'Content-Type': 'text/plain' }); return res.end('game page missing'); }
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
-      res.end(data);
+      const gz = /gzip/.test(req.headers['accept-encoding'] || '');     // the page is compressed when the browser can take it
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', ...(gz ? { 'Content-Encoding': 'gzip', 'Vary': 'Accept-Encoding' } : {}) });
+      res.end(gz ? zlib.gzipSync(data) : data);
     });
     return;
   }
@@ -1163,7 +1181,7 @@ function hello(p, id, m) {
   // each block also says who it belongs to for this player: 1 = yours, 0 = another player's, null = nobody's (land or older saves)
   for (const [k, v] of w.edits) { const [x, y, z] = k.split(',').map(Number); const o = w.owners.get(k); all.push([x, y, z, v, o === undefined ? null : (o === p.pid ? 1 : 0)]); }
   checkObjectives(w, p);                                 // pays any objective already met (for example a plot claimed before this update)
-  sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, seed: w.seed || 1337, isOwner: !!(w.owner && p.pid === w.owner), edits: all, players: list, time: worldTime(w), mob: w.mob, tvs: tvList(w), sources: tvSources(w), locks: lockList(w, p), coins: w.coins.get(p.pid) || 0, tools: w.tools.get(p.pid) || 0, plots: plotsMsg(w, p).list, districts: openList(w) });
+  sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, seed: w.seed || 1337, economy: w.economy === true, isOwner: !!(w.owner && p.pid === w.owner), edits: all, players: list, time: worldTime(w), mob: w.mob, tvs: tvList(w), sources: tvSources(w), locks: lockList(w, p), coins: w.coins.get(p.pid) || 0, tools: w.tools.get(p.pid) || 0, plots: plotsMsg(w, p).list, districts: openList(w) });
   // mail that was waiting for this player's name is handed over once, after they have joined, and removed from the mailbox
   const waiting = w.mail.get((p.name || '').toLowerCase());
   if (waiting) { w.mail.delete((p.name || '').toLowerCase()); scheduleSave(w); sendTo(p, { type: 'mail', list: waiting }); }
@@ -1395,6 +1413,7 @@ wss.on('connection', (ws) => {
       p.bypass = m.on === true;
       return sendTo(p, { type: 'bypass', on: p.bypass });
     }
+    if (ECON_ONLY.has(m.type) && w.economy !== true) return sendTo(p, { type: 'notice', text: 'THIS WORLD HAS NO ECONOMY' });
     if (m.type === 'sell') return sellOre(w, p, m);
     if (m.type === 'unlockdistrict') return unlockDistrict(w, p, m);
     if (m.type === 'blueprint') return placeBlueprint(w, p, m);
