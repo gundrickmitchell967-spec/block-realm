@@ -392,6 +392,19 @@
   #menu .ccard-public .ccard-go{color:#13274f}
   #menu .ccard:hover .ccard-go{filter:brightness(1.08)}
   #menu .hubpane[data-hub="community"]{gap:12px}
+
+  /* the Play screen opens the card to nearly the whole window */
+  #menu .card{transition:width .25s ease,max-height .25s ease}
+  #menu .card.wide{width:min(1100px,96vw);max-height:94vh;padding:28px 30px 24px}
+  #menu .card.wide #playbox{align-items:stretch}
+  #menu .card.wide .hubtabs .tab{font-size:13px;padding:12px 16px 11px}
+  #menu .card.wide .hubpane[data-hub="community"]{flex-direction:row;align-items:stretch;gap:18px}
+  #menu .card.wide .ccard{min-height:260px}
+  #menu .card.wide .ccard-title{font-size:30px}
+  #menu .card.wide .hublist{max-height:52vh;overflow-y:auto}
+
+  #menu textarea{font-family:'Segoe UI',Arial,sans-serif;font-size:14px;width:100%;box-sizing:border-box;border:1px solid rgba(255,255,255,.14);border-radius:10px;background:rgba(0,0,0,.35);color:#f3efe2;padding:11px 13px;resize:vertical}
+  #menu textarea:focus{outline:none;box-shadow:0 0 0 2px rgba(255,211,77,.6)}
 </style>
 </head>
 <body>
@@ -497,7 +510,6 @@
       <button class="btn cashbtn" id="cashbtn" type="button">CASH</button>
       <p class="sect">ONLINE</p>
       <button class="btn" id="mmic" type="button" hidden>MIC: OFF</button>
-      <button class="btn" id="multi">MULTIPLAYER</button>
       <button class="btn" id="leave" hidden>LEAVE SERVER</button>
       <button class="btn" id="srvadmin" type="button" hidden>SERVER ADMIN</button>
       <button class="btn" id="adminbtn" type="button">ADMIN CODE</button>
@@ -552,13 +564,24 @@
         <button class="btn sel" id="modecreative" type="button">CREATIVE</button>
         <button class="btn" id="modesurvival" type="button" disabled>SURVIVAL: SOON</button>
       </div>
-      <p class="sect">Who can play</p>
-      <button class="btn" id="cmulti" type="button">PLAY ALONE</button>
-      <p class="hint" id="cmultihint"></p>
       <div id="cseedwrap"><label class="flab" for="cseed">Seed (optional)</label><input id="cseed" maxlength="16" autocomplete="off" placeholder="Leave empty for a random world" aria-label="Seed"></div>
+      <label class="flab" for="cdesc">Description</label>
+      <textarea id="cdesc" maxlength="140" rows="2" placeholder="What is this place about? (optional)" aria-label="Description"></textarea>
       <button class="btn" id="createGo" type="button">CREATE WORLD</button>
       <button class="btn ghost" id="createback" type="button">BACK</button>
       <p id="createmsg" class="hint" role="status"></p>
+    </div>
+    <div id="editbox" hidden>
+      <h2 id="edittitle">EDIT WORLD</h2>
+      <label class="flab" for="ename">Name</label>
+      <input id="ename" maxlength="24" autocomplete="off" aria-label="Name">
+      <label class="flab" for="edesc">Description</label>
+      <textarea id="edesc" maxlength="140" rows="3" placeholder="What is this place about?" aria-label="Description"></textarea>
+      <p class="sect">Visibility</p>
+      <div id="editvis" class="hublist"></div>
+      <button class="btn" id="esave" type="button">SAVE CHANGES</button>
+      <button class="btn ghost" id="eback" type="button">BACK</button>
+      <p id="emsg" class="hint" role="status"></p>
     </div>
     <div id="adminsrv" hidden>
       <h2>SERVER ADMIN</h2>
@@ -5166,6 +5189,7 @@ let flashT=0;
 function flashHud(text){ $('tm').textContent=text; flashT=2.0; }
 
 addEventListener('keydown',e=>{
+  if(e.target && e.target.closest && e.target.closest('#menu input, #menu select, #menu textarea')) return;   // typing in a menu box: the game's keys stay out
   if(chatOpen) return;
   if(mapOpen){ if((e.code==='KeyN' || e.code==='Escape') && !e.repeat){ e.preventDefault(); closeMap(); } return; }   // the map is open: only N or Esc does anything                          // while typing in chat, keys belong to the chat box
   if(fridgeOpen){                               // the fridge shelves are open: only E or Esc do anything
@@ -5875,7 +5899,6 @@ let played=false;
 function menuState(){
   $('play').hidden = played || mpMode;
   $('resume').hidden = !played;
-  $('multi').hidden = played || SINGLE_ONLY;
   $('leave').hidden = !mpMode;
   $('srvadmin').hidden = !(mpMode && (srvOwner || adminRole === 'creator'));   // the owner of a server, or the creator on a community server
   syncSettings();
@@ -6271,10 +6294,11 @@ document.addEventListener('click', e => { const b = menuButton(e); if(b && !b.di
 const WORLDS_KEY = 'blockrealm_worlds_v1';
 function loadWorlds(){ try{ const a = JSON.parse(localStorage.getItem(WORLDS_KEY) || '[]'); return Array.isArray(a) ? a : []; }catch(e){ return []; } }
 function saveWorlds(a){ try{ localStorage.setItem(WORLDS_KEY, JSON.stringify(a)); }catch(e){} }
-function hideSubs(){ $('playbox').hidden = true; $('createbox').hidden = true; $('adminsrv').hidden = true; }
+function hideSubs(){ $('playbox').hidden = true; $('createbox').hidden = true; $('editbox').hidden = true; $('adminsrv').hidden = true; $('menu').querySelector('.card').classList.remove('wide'); }
 function showHub(){
   $('mainbtns').hidden = true; $('mpbox').hidden = true; $('settingsbox').hidden = true; $('howbox').hidden = true; $('cashscreen').hidden = true;
-  $('createbox').hidden = true; $('playbox').hidden = false;
+  $('createbox').hidden = true; $('editbox').hidden = true; $('playbox').hidden = false;
+  $('menu').querySelector('.card').classList.add('wide');
   renderHub();
 }
 function hubRow(name, sub, label, onClick, disabled){
@@ -6294,70 +6318,101 @@ function renderHub(){
   refreshServers();
   showHubTab(hubTab);
 }
+// a button with a label and an action
+function mkBtn(text, cls, fn){ const b = document.createElement('button'); b.type = 'button'; b.className = cls; b.textContent = text; b.addEventListener('click', fn); return b; }
 function worldRow(w){
-  const row = hubRow(w.name, 'Offline, only you · seed ' + w.seed, 'PLAY', () => playSolo(w), false);
-  const pub = document.createElement('button'); pub.className = 'btn ghost'; pub.type = 'button'; pub.textContent = 'PUBLISH';
-  pub.addEventListener('click', () => publishSolo(w));
-  row.append(pub);
+  const sub = (w.description ? w.description + ' · ' : '') + (w.serverId ? 'Public' : 'Offline, only you') + ' · seed ' + w.seed;
+  const row = hubRow(w.name, sub, 'PLAY', () => playSolo(w), false);
+  row.append(mkBtn('EDIT', 'btn ghost', () => openEdit({kind:'world', id: w.id, name: w.name, description: w.description || '', serverId: w.serverId || null})));
   return row;
 }
-// turns a world into a public server: its blocks and seed are copied, and it shows under YOUR SERVERS straight away
-async function publishSolo(w){
-  if(!confirm('Make "' + w.name + '" a public server?\nIts blocks and seed are copied. Anyone can find it under PLAYER SERVERS and join.')) return;
-  if(activeSolo && activeSolo.id === w.id) await flushSoloSave();
-  let r;
-  try{ r = await apiCall('/api/servers', {action:'publish', worldId: w.id}); }
-  catch(e){ if(e.message !== 'expired') alert('Could not reach the server.'); return; }
-  if(r.error){ alert(r.error); return; }
-  showHubTab('mine');
-  refreshServers();
+// the edit screen: a world or a server. A world can be made public from here; a server can be public or private
+let editing = null;
+function openEdit(item){
+  editing = item;
+  $('playbox').hidden = true; $('createbox').hidden = true;
+  $('menu').querySelector('.card').classList.remove('wide');
+  $('editbox').hidden = false;
+  $('edittitle').textContent = item.kind === 'server' ? 'EDIT SERVER' : 'EDIT WORLD';
+  $('ename').value = item.name;
+  $('edesc').value = item.description || '';
+  $('emsg').textContent = '';
+  renderEditVis();
 }
+function renderEditVis(){
+  const box = $('editvis'); box.replaceChildren();
+  if(editing.kind === 'server'){
+    box.append(mkBtn('PUBLIC · anyone can join', 'btn' + (editing.public ? ' sel' : ''), () => { editing.public = true; renderEditVis(); }));
+    box.append(mkBtn('PRIVATE · only you can join', 'btn' + (!editing.public ? ' sel' : ''), () => { editing.public = false; renderEditVis(); }));
+  } else if(editing.serverId){
+    const p = document.createElement('p'); p.className = 'hint';
+    p.textContent = 'This world is public. Change its visibility under YOUR SERVERS.';
+    box.append(p);
+  } else {
+    box.append(mkBtn('MAKE PUBLIC', 'btn', publishFromEdit));
+    const p = document.createElement('p'); p.className = 'hint';
+    p.textContent = 'Makes a public server from this world. Its blocks and seed are copied, and it shows under YOUR SERVERS.';
+    box.append(p);
+  }
+}
+async function publishFromEdit(){
+  const name = $('ename').value.trim() || editing.name, description = $('edesc').value.trim();
+  if(!confirm('Make "' + name + '" public?\nIts blocks and seed are copied to a public server.')) return;
+  if(activeSolo && activeSolo.id === editing.id) await flushSoloSave();
+  let r;
+  try{ r = await apiCall('/api/servers', {action:'publish', worldId: editing.id, name, description}); }
+  catch(e){ if(e.message !== 'expired') $('emsg').textContent = 'Could not reach the server.'; return; }
+  if(r.error){ $('emsg').textContent = r.error; return; }
+  showHubTab('mine');
+  showHub();
+}
+$('esave').addEventListener('click', async () => {
+  const name = $('ename').value.trim() || editing.name, description = $('edesc').value.trim();
+  let r;
+  try{
+    r = editing.kind === 'server'
+      ? await apiCall('/api/servers', {action:'update', id: editing.id, name, description, public: editing.public})
+      : await apiCall('/api/solo/worlds', {action:'update', worldId: editing.id, name, description});
+  }catch(e){ if(e.message !== 'expired') $('emsg').textContent = 'Could not reach the server.'; return; }
+  if(r.error){ $('emsg').textContent = r.error; return; }
+  showHub();
+});
+$('eback').addEventListener('click', showHub);
 async function refreshWorlds(){
   const wl = $('worldlist'); wl.replaceChildren();
-  wl.append(worldRow(LEGACY_WORLD));
   let data;
   try{ data = await apiCall('/api/solo/worlds'); }
   catch(e){ if(e.message !== 'expired') listNote(wl, 'Could not reach the server.'); return; }
+  if(data.legacy) wl.append(worldRow(data.legacy));
   for(const w of data.worlds || []) wl.append(worldRow(w));
 }
-let createMulti = false;
-function syncCreate(){
-  $('cmulti').textContent = createMulti ? 'MULTIPLAYER SERVER' : 'PLAY ALONE';
-  $('cmulti').classList.toggle('sel', createMulti);
-  $('cmultihint').textContent = createMulti
-    ? 'You are the admin. Anyone can find it on the Play screen and join.'
-    : 'Only you play in this world.';
-  $('createGo').textContent = createMulti ? 'CREATE SERVER' : 'CREATE WORLD';
-}
-function openCreate(multi){
-  createMulti = !!multi;
-  $('playbox').hidden = true; $('createbox').hidden = false;
+let createMulti = false;    // true: the form makes a server. false: it makes a world
+function syncCreate(){ $('createGo').textContent = createMulti ? 'CREATE SERVER' : 'CREATE WORLD'; }
+function openCreate(server){
+  createMulti = !!server;
+  $('playbox').hidden = true; $('createbox').hidden = false; $('editbox').hidden = true;
+  $('menu').querySelector('.card').classList.remove('wide');
   $('createtitle').textContent = createMulti ? 'NEW SERVER' : 'NEW WORLD';
   $('cname').value = createMulti ? 'New Server' : 'New World';
+  $('cdesc').value = ''; $('cseed').value = '';
   $('createmsg').textContent = '';
-  $('cseed').value = '';
   syncCreate(); $('cname').focus();
 }
 $('newworld').addEventListener('click', () => openCreate(false));
 $('newserver').addEventListener('click', () => openCreate(true));
-$('cmulti').addEventListener('click', () => { createMulti = !createMulti; syncCreate(); });
 $('createback').addEventListener('click', showHub);
 $('playback').addEventListener('click', showMain);
 $('createGo').addEventListener('click', async () => {
   const name = ($('cname').value.trim()) || (createMulti ? 'New Server' : 'New World');
-  if(createMulti){
-    $('createmsg').textContent = 'Making your server...';
-    let r;
-    try{ r = await srvApi({action:'create', name, seed: $('cseed').value}); }
-    catch(e){ $('createmsg').textContent = 'Could not reach the server. Check that it is running.'; return; }
-    if(r.error){ $('createmsg').textContent = r.error; return; }
-    joinServer(r.id); return;
-  }
-  let entry;
-  try{ entry = await apiCall('/api/solo/worlds', {action:'create', name, seed: seedNum($('cseed').value)}); }
-  catch(e){ if(e.message !== 'expired') $('createmsg').textContent = 'Could not reach the server. Check that it is running.'; return; }
-  if(entry.error){ $('createmsg').textContent = entry.error; return; }
-  playSolo(entry);
+  const description = $('cdesc').value.trim();
+  $('createmsg').textContent = createMulti ? 'Making your server...' : 'Making your world...';
+  let r;
+  try{
+    r = createMulti ? await srvApi({action:'create', name, seed: $('cseed').value, description})
+                    : await apiCall('/api/solo/worlds', {action:'create', name, seed: seedNum($('cseed').value), description});
+  }catch(e){ if(e.message !== 'expired') $('createmsg').textContent = 'Could not reach the server. Check that it is running.'; return; }
+  if(r.error){ $('createmsg').textContent = r.error; return; }
+  if(createMulti) joinServer(r.id); else playSolo(r);
 });
 $('joinmain').addEventListener('click', () => { showMP(); pickWorld('our'); });
 $('joinpublic').addEventListener('click', () => { showMP(); pickWorld('public'); });
@@ -6391,9 +6446,11 @@ async function refreshServers(){
   $('newserver').disabled = (data.mine || 0) >= max;
 }
 function serverRow(s, mine){
-  const sub = (mine ? 'Yours, you are the admin' : 'Player server') + ' · ' + s.online + ' online';
-  const row = hubRow(s.name, sub, 'JOIN', () => joinServer(s.id), false);
+  const bits = [s.description || 'No description yet', s.online + ' online'];
+  if(s.public === false) bits.push('PRIVATE');
+  const row = hubRow(s.name, bits.join(' · '), 'JOIN', () => joinServer(s.id), false);
   if(mine){
+    row.append(mkBtn('EDIT', 'btn ghost', () => openEdit({kind:'server', id: s.id, name: s.name, description: s.description || '', public: s.public !== false})));
     const del = document.createElement('button'); del.className = 'btn ghost holdbtn'; del.type = 'button'; del.textContent = 'HOLD TO DELETE';
     armDelete(del, s); row.append(del);
   }
@@ -6401,7 +6458,6 @@ function serverRow(s, mine){
 }
 // joining a server: it connects straight away, and the server sends back the seed and whether you are the admin
 function joinServer(id){ showMP(); mpWorld = id; connectMP(); }
-$('newserver').addEventListener('click', () => openCreate(true));
 
 // the owner's admin panel: the players here, with a kick and a timed ban for each
 function srvSend(o){ if(mp.ws && mp.ws.readyState === 1) mp.ws.send(JSON.stringify(o)); }
@@ -6594,7 +6650,6 @@ $('resume').addEventListener('click', () => { if(mpMode || (activeSolo && soloLo
 $('adminbtn').addEventListener('click',()=>{ sfx.init(); openCode(); });
 $('stopspec').addEventListener('click', stopSpectate);
 $('mmic').addEventListener('click',()=>{ if(voice.on){ setMic(false); } else toggleMic(); });
-$('multi').addEventListener('click',showMP);
 $('mpback').addEventListener('click',showMain);
 $('mpgo').addEventListener('click',connectMP);
 $('mpname').addEventListener('keydown',e=>{ if(e.key==='Enter') connectMP(); });
