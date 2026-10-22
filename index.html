@@ -312,6 +312,86 @@
   #menu .tab.on{background:#ffd54a;color:#2a1c00;box-shadow:inset 0 -3px 0 #a57400}
   #menu .bcol{background:#141a28;border:3px solid #0b0f18}
   #menu .bcol h4{font-family:inherit;color:#ffd54a;letter-spacing:.02em}
+
+  /* ---- menus, second pass: glass panels, cinematic scene, play screens ---- */
+  #menubg{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
+  #menu::after{display:none}
+  #menu [hidden]{display:none!important}
+  #menu .card{position:relative;z-index:1;width:min(400px,100%);padding:28px 26px 24px;background:rgba(12,17,28,.74);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2);border:1px solid rgba(255,255,255,.12);border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08)}
+  #menu h1{font-family:'Segoe UI Black','Helvetica Neue',Arial,sans-serif;font-weight:900;font-size:clamp(28px,7.5vw,40px);letter-spacing:.02em;background:linear-gradient(#fff6c4,#ffc83d 70%,#e8931a);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 4px 14px rgba(0,0,0,.5))}
+  #menu .tagline{color:#b8c5dc;font-size:13px}
+  #menu h2{font-family:'Segoe UI',Arial,sans-serif;font-size:20px;font-weight:700;letter-spacing:0;color:#f3efe2;text-shadow:none}
+  #menu .sect{font-family:'Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:.03em;color:#9fd27f;border-bottom:none;padding:0;margin:10px 0 0}
+  #menu p{color:#c4cfe3}
+  #menu .btn{font-family:'Segoe UI',Arial,sans-serif;width:100%;max-width:300px;padding:13px 16px;border-radius:12px;border:1px solid rgba(255,255,255,.16);background:linear-gradient(#67c250,#3f9130);color:#fff;font-size:14px;font-weight:700;letter-spacing:.04em;box-shadow:0 8px 20px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.28);text-shadow:0 1px 2px rgba(0,0,0,.35);transition:transform .12s ease,filter .12s ease,box-shadow .12s ease}
+  #menu .btn:hover{background:linear-gradient(#77d25c,#49a238);filter:brightness(1.06);transform:translateY(-1px);box-shadow:0 10px 24px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.32)}
+  #menu .btn:active{transform:translateY(1px) scale(.99)}
+  #menu .btn:disabled{opacity:.45;cursor:not-allowed;transform:none;filter:none}
+  #menu .btn.ghost{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.2);box-shadow:none;color:#dfe7f5;text-shadow:none}
+  #menu .btn.ghost:hover{background:rgba(255,255,255,.12);filter:none}
+  #menu .btn.cashbtn{background:linear-gradient(#ffd85a,#e0a010);color:#2a1c00;text-shadow:none}
+  #menu .btn.cashbtn:hover{background:linear-gradient(#ffe27a,#eab430)}
+  #menu .btn.sel{background:linear-gradient(#ffe27a,#f2b82a);color:#2a1c00;border-color:#fff3b0;text-shadow:none;box-shadow:0 0 0 3px rgba(255,211,77,.35),0 8px 20px rgba(0,0,0,.28)}
+  #menu #fsbtn{width:auto;max-width:none;font-size:12px;padding:8px 12px;border-radius:10px}
+  #menu #offerlist .btn,#menu #givebox .btn{width:auto;max-width:none;flex:0 0 auto;padding:6px 10px;font-size:12px;border-radius:8px}
+  #menu #mpbox{width:280px}
+  #menu #mpbox .worldpick .btn{flex:1;width:auto;max-width:none;font-size:12px;padding:10px 4px}
+  #menu input,#menu select{font-family:'Segoe UI',Arial,sans-serif;font-size:14px;border:1px solid rgba(255,255,255,.14);border-radius:10px;background:rgba(0,0,0,.35);box-shadow:none;color:#f3efe2;padding:11px 13px}
+  #menu input:focus,#menu select:focus{outline:none;box-shadow:0 0 0 2px rgba(255,211,77,.6)}
+  #menu input::placeholder{color:#6f7b95}
+  #menu .tab{font-family:'Segoe UI',Arial,sans-serif;font-size:12px;font-weight:700;border-radius:9px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#cfd8ea;box-shadow:none}
+  #menu .tab.on{background:rgba(255,211,77,.18);color:#ffe27a;border-color:rgba(255,211,77,.7);box-shadow:none}
+  #menu .bcol{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.1);border-radius:12px}
+  #menu .bcol h4{font-family:'Segoe UI',Arial,sans-serif;color:#ffe27a;letter-spacing:0}
+  #playbox,#createbox{width:100%;display:flex;flex-direction:column;align-items:center;gap:10px}
+  .hublist{width:100%;display:flex;flex-direction:column;gap:8px}
+  #menu .hubrow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)}
+  #menu .hubrow .hubname{display:flex;flex-direction:column;min-width:0;text-align:left}
+  #menu .hubrow b{font-size:14px;color:#f3efe2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #menu .hubrow span{font-size:12px;color:#93a3bf}
+  #menu .hubrow .btn{width:auto;max-width:none;flex:0 0 auto;padding:8px 14px;font-size:12px;border-radius:9px}
+  #menu .hubempty{margin:0;font-size:12px;color:#8e9bb5;text-align:left;width:100%}
+  #menu .flab{align-self:stretch;text-align:left;font-size:12px;color:#9fd27f;font-weight:700;margin-top:2px}
+  #menu .modepick{display:flex;gap:8px;width:100%}
+  #menu .modepick .btn{flex:1;max-width:none;font-size:12px;padding:10px 6px}
+
+  #menu .hubtabs{display:flex;gap:4px;width:100%;border-bottom:1px solid rgba(255,255,255,.14);margin:2px 0 4px;overflow-x:auto;scrollbar-width:none}
+  #menu .hubtabs::-webkit-scrollbar{display:none}
+  #menu .hubtabs .tab{flex:1 1 0;min-width:max-content;padding:10px 12px 9px;margin:0;border:1px solid transparent;border-bottom:none;border-radius:10px 10px 0 0;background:rgba(255,255,255,.04);color:#9fb0cc;font-size:11px;letter-spacing:.03em;white-space:nowrap;box-shadow:none;margin-bottom:-1px;transition:background .12s,color .12s}
+  #menu .hubtabs .tab:hover{background:rgba(255,255,255,.1);color:#e6edf8}
+  #menu .hubtabs .tab.on{background:#1b2231;color:#ffe27a;border-color:rgba(255,255,255,.14);box-shadow:inset 0 3px 0 #ffd54a}
+
+  #menu .hubpane{width:100%;display:flex;flex-direction:column;align-items:center;gap:10px}
+  #menu .holdbtn{position:relative;overflow:hidden;background:rgba(255,255,255,.06)}
+  #menu .holdbtn::after{content:'';position:absolute;inset:0;background:rgba(255,90,90,.55);transform:scaleX(var(--p,0));transform-origin:left center;pointer-events:none}
+
+  /* the community cards: big, bright, with block art */
+  #menu .ccard{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:6px;width:100%;min-height:150px;padding:18px 18px 16px;border-radius:16px;border:1px solid rgba(255,255,255,.16);overflow:hidden;text-align:left;cursor:pointer;color:#fff;font-family:'Segoe UI',Arial,sans-serif;box-shadow:0 14px 30px rgba(0,0,0,.35);transition:transform .15s ease,box-shadow .15s ease,filter .15s ease}
+  #menu .ccard:hover{transform:translateY(-3px) scale(1.01);box-shadow:0 22px 40px rgba(0,0,0,.45)}
+  #menu .ccard:active{transform:translateY(0) scale(.995)}
+  #menu .ccard-art{position:absolute;inset:0;pointer-events:none}
+  #menu .ccard-main{background:linear-gradient(160deg,#3e9d3a 0%,#1f5b2b 55%,#14331e 100%)}
+  #menu .ccard-public{background:linear-gradient(160deg,#3f7fd6 0%,#22468a 55%,#13274f 100%)}
+  #menu .ccard-main .ccard-art{background:
+      linear-gradient(45deg,rgba(0,0,0,.14) 25%,transparent 25%) 0 0/22px 22px,
+      linear-gradient(-45deg,rgba(0,0,0,.14) 25%,transparent 25%) 0 0/22px 22px,
+      radial-gradient(circle at 85% 18%,rgba(255,226,122,.85) 0 12%,transparent 13%)}
+  #menu .ccard-public .ccard-art{background:
+      linear-gradient(45deg,rgba(0,0,0,.14) 25%,transparent 25%) 0 0/22px 22px,
+      linear-gradient(-45deg,rgba(0,0,0,.14) 25%,transparent 25%) 0 0/22px 22px,
+      radial-gradient(circle at 80% 22%,rgba(170,230,255,.8) 0 10%,transparent 11%)}
+  #menu .ccard-art::after{content:'';position:absolute;right:16px;bottom:14px;width:70px;height:70px;background:
+      linear-gradient(#8fe07a,#58b04a) 0 0/100% 26%,linear-gradient(#a0683c,#7a4b26) 0 26%/100% 74%;
+      border:3px solid rgba(0,0,0,.45);transform:rotate(-8deg);opacity:.9}
+  #menu .ccard-public .ccard-art::after{background:
+      linear-gradient(#e7f3ff,#b7d4f2) 0 0/100% 26%,linear-gradient(#7dc1ff,#3c86d6) 0 26%/100% 74%}
+  #menu .ccard-badge{position:relative;font-size:10px;font-weight:800;letter-spacing:.12em;padding:4px 9px;border-radius:999px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.25);color:#fff}
+  #menu .ccard-title{position:relative;font-family:'Segoe UI Black','Helvetica Neue',Arial,sans-serif;font-weight:900;font-size:24px;letter-spacing:.01em;text-shadow:0 3px 10px rgba(0,0,0,.4);margin-top:4px}
+  #menu .ccard-sub{position:relative;font-size:13px;line-height:1.4;color:rgba(255,255,255,.88);max-width:78%}
+  #menu .ccard-go{position:relative;margin-top:auto;font-size:12px;font-weight:800;letter-spacing:.08em;padding:7px 12px;border-radius:9px;background:#fff;color:#14331e}
+  #menu .ccard-public .ccard-go{color:#13274f}
+  #menu .ccard:hover .ccard-go{filter:brightness(1.08)}
+  #menu .hubpane[data-hub="community"]{gap:12px}
 </style>
 </head>
 <body>
@@ -368,12 +448,39 @@
 </div>
 <div id="hotbar"></div>
 <div id="menu">
+  <canvas id="menubg" aria-hidden="true"></canvas>
   <button class="btn" id="fsbtn" type="button">FULL SCREEN</button>
   <p id="fsmsg" role="status" hidden></p>
   <div class="card">
     <h1>BLOCK REALM</h1>
     <p class="tagline">Build it. Share it. Sleep through the night.</p>
     <div class="menublocks" aria-hidden="true"><i class="mb-grass"></i><i class="mb-dirt"></i><i class="mb-stone"></i><i class="mb-gold"></i><i class="mb-wood"></i></div>
+    <div id="authbox" hidden>
+      <div class="hubtabs" role="tablist">
+        <button class="tab on" type="button" data-auth="login">LOG IN</button>
+        <button class="tab" type="button" data-auth="create">CREATE ACCOUNT</button>
+        <button class="tab" type="button" data-auth="reset">FORGOT PASSWORD</button>
+      </div>
+      <div class="hubpane" data-authpane="login">
+        <input id="lname" maxlength="16" placeholder="Username" autocomplete="username" aria-label="Username">
+        <input id="lpass" type="password" maxlength="64" placeholder="Password" autocomplete="current-password" aria-label="Password">
+        <button class="btn" id="loginbtn" type="button">LOG IN</button>
+      </div>
+      <div class="hubpane" data-authpane="create" hidden>
+        <input id="cuser" maxlength="16" placeholder="Username (3 to 16 letters or numbers)" autocomplete="username" aria-label="New username">
+        <input id="cpass" type="password" maxlength="64" placeholder="Password (6 or more characters)" autocomplete="new-password" aria-label="New password">
+        <input id="cpass2" type="password" maxlength="64" placeholder="Type the password again" autocomplete="new-password" aria-label="Type the password again">
+        <button class="btn" id="createacc" type="button">CREATE ACCOUNT</button>
+      </div>
+      <div class="hubpane" data-authpane="reset" hidden>
+        <p class="hint">Type your username, the owner's override code, and a new password.</p>
+        <input id="rname" maxlength="16" placeholder="Username" autocomplete="username" aria-label="Username">
+        <input id="rcode" type="password" maxlength="16" placeholder="Override code" autocomplete="off" aria-label="Override code">
+        <input id="rpass" type="password" maxlength="64" placeholder="New password" autocomplete="new-password" aria-label="New password">
+        <button class="btn" id="resetbtn" type="button">CHANGE PASSWORD</button>
+      </div>
+      <p id="authmsg" class="hint" role="status"></p>
+    </div>
     <div id="board" hidden>
       <h3 class="sect">LEADERBOARD: LIVE PLAYERS</h3>
       <div class="bcols">
@@ -382,7 +489,8 @@
         <div class="bcol"><h4>MOST CASH</h4><div id="bcash"></div></div>
       </div>
     </div>
-    <div id="mainbtns">
+    <div id="mainbtns" hidden>
+      <p id="whoami" class="hint" hidden></p>
       <p class="sect">GAME</p>
       <button class="btn" id="play">PLAY</button>
       <button class="btn" id="resume" hidden>RESUME</button>
@@ -391,10 +499,75 @@
       <button class="btn" id="mmic" type="button" hidden>MIC: OFF</button>
       <button class="btn" id="multi">MULTIPLAYER</button>
       <button class="btn" id="leave" hidden>LEAVE SERVER</button>
+      <button class="btn" id="srvadmin" type="button" hidden>SERVER ADMIN</button>
       <button class="btn" id="adminbtn" type="button">ADMIN CODE</button>
       <p class="sect">OPTIONS</p>
       <button class="btn" id="settings">SETTINGS</button>
       <button class="btn" id="howbtn" type="button">HOW TO</button>
+      <button class="btn ghost" id="logoutbtn" type="button">LOG OUT</button>
+    </div>
+    <div id="playbox" hidden>
+      <h2>PLAY</h2>
+      <div class="hubtabs" role="tablist">
+        <button class="tab on" type="button" data-hubtab="worlds">YOUR WORLDS</button>
+        <button class="tab" type="button" data-hubtab="mine">YOUR SERVERS</button>
+        <button class="tab" type="button" data-hubtab="players">PLAYER SERVERS</button>
+        <button class="tab" type="button" data-hubtab="community">COMMUNITY</button>
+      </div>
+      <div class="hubpane" data-hub="worlds">
+        <div id="worldlist" class="hublist"></div>
+        <button class="btn" id="newworld" type="button">NEW WORLD</button>
+      </div>
+      <div class="hubpane" data-hub="mine" hidden>
+        <div id="serverlist" class="hublist"></div>
+        <button class="btn" id="newserver" type="button">NEW SERVER</button>
+      </div>
+      <div class="hubpane" data-hub="players" hidden>
+        <div id="playerlist" class="hublist"></div>
+      </div>
+      <div class="hubpane" data-hub="community" hidden>
+        <button class="ccard ccard-main" id="joinmain" type="button">
+          <span class="ccard-art" aria-hidden="true"></span>
+          <span class="ccard-badge">ECONOMY</span>
+          <span class="ccard-title">MAIN WORLD</span>
+          <span class="ccard-sub">Shops, jobs, plots and cash. Build your way up and get rich.</span>
+          <span class="ccard-go">JOIN NOW</span>
+        </button>
+        <button class="ccard ccard-public" id="joinpublic" type="button">
+          <span class="ccard-art" aria-hidden="true"></span>
+          <span class="ccard-badge">OPEN</span>
+          <span class="ccard-title">PUBLIC WORLD</span>
+          <span class="ccard-sub">Anyone can build here. No rules, just blocks and friends.</span>
+          <span class="ccard-go">JOIN NOW</span>
+        </button>
+      </div>
+      <button class="btn ghost" id="playback" type="button">BACK</button>
+    </div>
+    <div id="createbox" hidden>
+      <h2 id="createtitle">NEW WORLD</h2>
+      <label class="flab" for="cname">Name</label>
+      <input id="cname" maxlength="24" autocomplete="off" aria-label="Name">
+      <p class="sect">Mode</p>
+      <div class="modepick">
+        <button class="btn sel" id="modecreative" type="button">CREATIVE</button>
+        <button class="btn" id="modesurvival" type="button" disabled>SURVIVAL: SOON</button>
+      </div>
+      <p class="sect">Who can play</p>
+      <button class="btn" id="cmulti" type="button">PLAY ALONE</button>
+      <p class="hint" id="cmultihint"></p>
+      <div id="cseedwrap"><label class="flab" for="cseed">Seed (optional)</label><input id="cseed" maxlength="16" autocomplete="off" placeholder="Leave empty for a random world" aria-label="Seed"></div>
+      <button class="btn" id="createGo" type="button">CREATE WORLD</button>
+      <button class="btn ghost" id="createback" type="button">BACK</button>
+      <p id="createmsg" class="hint" role="status"></p>
+    </div>
+    <div id="adminsrv" hidden>
+      <h2>SERVER ADMIN</h2>
+      <p class="hint">Kick removes a player. A ban keeps them out for the time you choose, up to 24 hours. You do not need a reason.</p>
+      <p class="sect">Ban length</p>
+      <select id="banhours" aria-label="Ban length in hours"><option value="1">1 hour</option><option value="6">6 hours</option><option value="12">12 hours</option><option value="24">24 hours</option></select>
+      <p class="sect">Players in this server</p>
+      <div id="srvroster" class="hublist"></div>
+      <button class="btn ghost" id="srvadminback" type="button">BACK</button>
     </div>
     <div id="settingsbox" hidden>
       <h2>SETTINGS</h2>
@@ -696,7 +869,8 @@ const MUSIC_TRACKS = [
 const CS = 16, CH = 64;                 // chunk width and height in blocks
 let RD = 4;
 try{ RD = Math.max(2, Math.min(6, Number(localStorage.getItem('blockrealm_draw_v1')) || 4)); }catch(e){}                           // render distance, in chunks
-const SEED = 1337;
+let SEED = 1337;
+let EDITS_KEY = 'blockrealm_edits_v1', PLAYER_KEY = 'blockrealm_player_v1';   // the save of the single-player world being played
 const DAY_LEN = 480;                    // seconds for one full day
 const PW = 0.3, PH = 1.8, EYE = 1.62;   // player width, height and eye height
 const SINGLE_ONLY = false;              // true in the build published as an artifact: no multiplayer (its sandbox blocks WebSockets)
@@ -1369,12 +1543,18 @@ function findShopSite(ax, az){
   site.npcX = site.x0 + 4; site.npcZ = site.z0 + 4; // the shopkeeper stands behind the counter
   return site;
 }
-const SHOP = findShopSite(22, 14);                  // the first shop
-const SHOP_HOUSE_A = findShopSite(22, -18);         // ShopkeeperHouseA: a second shop, north of the first
-const CASINO = findShopSite(-20, 14);               // the casino: the same kind of building, with a row of slot machines at the back
-CASINO.casino = true; CASINO.counterZ = -1;         // no counter in the casino
-const CASINO_SITES = [CASINO];
-const SHOP_SITES = [SHOP, SHOP_HOUSE_A, CASINO];
+let SHOP = null, SHOP_HOUSE_A = null, CASINO = null;
+const CASINO_SITES = [], SHOP_SITES = [];
+// the shops and the casino are worked out from the world's seed, so they are placed again when a world with another seed is joined
+function setShopSites(){
+  SHOP = findShopSite(22, 14);                      // the first shop
+  SHOP_HOUSE_A = findShopSite(22, -18);             // ShopkeeperHouseA: a second shop, north of the first
+  CASINO = findShopSite(-20, 14);                   // the casino: the same kind of building, with a row of slot machines at the back
+  CASINO.casino = true; CASINO.counterZ = -1;       // no counter in the casino
+  CASINO_SITES.length = 0; CASINO_SITES.push(CASINO);
+  SHOP_SITES.length = 0; SHOP_SITES.push(SHOP, SHOP_HOUSE_A, CASINO);
+}
+setShopSites();
 // the slot machines: three in the back row of the casino, each two gold blocks high. More machines go in this list.
 const CASINO_MACHINE_XS = [2, 4, 6], CASINO_MACHINE_Z = SHOP_D - 2;
 // which slot machine (0, 1, 2...) the block at (wx,wy,wz) is part of, or -1
@@ -1450,10 +1630,10 @@ const chunks = new Map();     // "cx,cz" -> chunk
 let edits = {};               // "cx,cz" -> { index: blockType }
 let editsDirty = false;       // true when the edits have changed since they were last saved
 function chunkKey(cx,cz){ return cx+','+cz; }
-function loadEdits(){ try{ edits = JSON.parse(localStorage.getItem('blockrealm_edits_v1')||'{}') || {}; }catch(e){ edits = {}; }
+function loadEdits(){ try{ edits = JSON.parse(localStorage.getItem(EDITS_KEY)||'{}') || {}; }catch(e){ edits = {}; }
   for(const k in edits) for(const i in edits[k]) if(edits[k][i] === 260 || edits[k][i] === 261) delete edits[k][i];   // the removed camera and screen blocks
 }
-function saveEdits(){ if(mpMode) return; try{ localStorage.setItem('blockrealm_edits_v1', JSON.stringify(edits)); }catch(e){} }
+function saveEdits(){ if(mpMode) return; scheduleSoloSave(); }
 
 const COAL_ORE_ID = 24, IRON_ORE_ID = 48, GOLD_ORE_ID = 49, DIAMOND_ORE_ID = 50;   // the ore blocks (the server counts each one a player mines)
 function genChunk(cx,cz){
@@ -3781,8 +3961,15 @@ $('takego').addEventListener('click', ()=>{
 
 /* ---------- the shopkeeper, and the shop panel ---------- */
 // the shopkeeper: he stands behind the counter, facing the doorway. He is drawn like a player, with the same figure
-const SHOPKEEPER = { x: SHOP.npcX + 0.5, y: SHOP.floorY + 1, z: SHOP.npcZ + 0.5, yaw: 0, phase: 0, amt: 0, rgb: [0.55, 0.32, 0.12] };
-const SHOPKEEPER2 = { x: SHOP_HOUSE_A.npcX + 0.5, y: SHOP_HOUSE_A.floorY + 1, z: SHOP_HOUSE_A.npcZ + 0.5, yaw: 0, phase: 0, amt: 0, rgb: [0.3, 0.42, 0.6] };
+const SHOPKEEPER = { x: 0, y: 0, z: 0, yaw: 0, phase: 0, amt: 0, rgb: [0.55, 0.32, 0.12] };
+const SHOPKEEPER2 = { x: 0, y: 0, z: 0, yaw: 0, phase: 0, amt: 0, rgb: [0.3, 0.42, 0.6] };
+function placeShopkeepers(){
+  Object.assign(SHOPKEEPER, { x: SHOP.npcX + 0.5, y: SHOP.floorY + 1, z: SHOP.npcZ + 0.5 });
+  Object.assign(SHOPKEEPER2, { x: SHOP_HOUSE_A.npcX + 0.5, y: SHOP_HOUSE_A.floorY + 1, z: SHOP_HOUSE_A.npcZ + 0.5 });
+}
+placeShopkeepers();
+// a world's seed: the terrain, the shops and the casino are worked out again for it
+function applyWorldSeed(s){ SEED = s; setShopSites(); placeShopkeepers(); }
 const shopTag = document.createElement('div'); shopTag.className = 'tag'; shopTag.hidden = true; shopTag.textContent = 'SHOPKEEPER';
 $('tags').appendChild(shopTag);
 // the shopkeepers walk about inside their shops: over the open floor, round the counter and the shelves, along paths they can really take
@@ -5378,15 +5565,15 @@ function defaultWS(){
   if(location.protocol==='http:' || location.protocol==='https:') return (location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws';
   return 'ws://localhost:8080/ws';
 }
-function showMain(){ $('mainbtns').hidden=false; $('mpbox').hidden=true; $('settingsbox').hidden=true; $('howbox').hidden=true; $('cashscreen').hidden=true; }
-function showHow(){ $('mainbtns').hidden=true; $('mpbox').hidden=true; $('settingsbox').hidden=true; $('howbox').hidden=false; }
+function showMain(){ hideSubs(); $('mainbtns').hidden=false; $('mpbox').hidden=true; $('settingsbox').hidden=true; $('howbox').hidden=true; $('cashscreen').hidden=true; }
+function showHow(){ hideSubs(); $('mainbtns').hidden=true; $('mpbox').hidden=true; $('settingsbox').hidden=true; $('howbox').hidden=false; }
 // the settings screen holds the music and sound effect switches
 function syncSettings(){
   $('sound').textContent = 'SOUND EFFECTS: ' + (sfx.on ? 'ON' : 'OFF');
   $('musicbtn').textContent = 'MUSIC: ' + (music.on ? 'ON' : 'OFF');
   $('drawbtn').textContent = 'DRAW DISTANCE: ' + RD;
 }
-function showSettings(){
+function showSettings(){ hideSubs();
   $('mainbtns').hidden=true; $('mpbox').hidden=true; $('settingsbox').hidden=false; $('howbox').hidden=true; $('cashscreen').hidden=true;
   syncSettings();
 }
@@ -5399,7 +5586,7 @@ function pickWorld(w){
 }
 $('worldpublic').addEventListener('click', () => pickWorld('public'));
 $('worldour').addEventListener('click', () => pickWorld('our'));
-function showMP(){
+function showMP(){ hideSubs();
   $('mainbtns').hidden=true; $('mpbox').hidden=false; $('settingsbox').hidden=true; $('howbox').hidden=true; $('cashscreen').hidden=true;
   let saved={}; try{ saved=JSON.parse(sessionStorage.getItem('blockrealm_mp')||'{}')||{}; }catch(e){}
   if(!$('mpname').value) $('mpname').value = saved.name || '';
@@ -5450,7 +5637,7 @@ function connectMP(){
   const timer = setTimeout(()=>{
     if(!mpMode){ mpStatus('No answer from the server. Check the address and that the server is running.'); try{ ws.close(); }catch(e){} }
   }, 6000);
-  ws.onopen = ()=>{ ws.send(JSON.stringify({type:'hello', name, world, password, pid: playerId()})); };
+  ws.onopen = ()=>{ ws.send(JSON.stringify({type:'hello', name, world, password, token: authToken})); };
   ws.onmessage = ev=>{
     let m; try{ m=JSON.parse(ev.data); }catch(e){ return; }
     if(m.type==='denied'){ denied = m.msg || 'Could not join.'; mpStatus(denied); return; }
@@ -5460,13 +5647,17 @@ function connectMP(){
   ws.onclose = ()=>{
     clearTimeout(timer);
     mp.ws = null;
-    adminRole = null; spectate.id = null; adminBypass = false; doorLocks.clear(); myCoins = 0; myTools = 0; plotList = []; walletSeen = false;
+    srvOwner = false; adminRole = null; spectate.id = null; adminBypass = false; doorLocks.clear(); myCoins = 0; myTools = 0; plotList = []; walletSeen = false;
     if(mpMode){ mpDropped(); }
     else { mpStatus(denied || 'Could not connect. Check the address and that the server is running.'); }
   };
 }
 function enterWorld(m){
+  flushSoloSave();                       // a single-player world is saved before a server takes over
   mpMode = true; mp.id = m.id;
+  applyWorldSeed(+m.seed || 1337);      // the server's world: its own terrain
+  srvOwner = !!m.isOwner;
+  soloLoaded = null;                     // the next single-player start loads its own save again
   myTools = +m.tools || 0; myCoins = +m.coins || 0;
   plotList = m.plots || []; survey = {a:null, b:null};
   showLoading('JOINING ' + (m.worldName || 'THE WORLD') + '...'); loadWaiting = true; loadUntil = performance.now() + 15000;
@@ -5494,6 +5685,7 @@ function enterWorld(m){
   for(const L of m.locks || []) doorLocks.set(doorKeyOf(L.x, L.y, L.z), {ok: !!L.ok});
 }
 function onServerMessage(m){
+  if(m.type==='roster'){ if(!$('adminsrv').hidden) renderRoster(m.list); return; }
   if(m.type==='join'){ removeRemote(m.id); addRemote(m); renderAdmin(); }
   else if(m.type==='leave'){ if(spectate.id===m.id) stopSpectate(); removeRemote(m.id); renderAdmin(); }
   else if(m.type==='auth'){ handleAuth(m); }
@@ -5667,13 +5859,12 @@ $('chatin').addEventListener('keydown', e=>{
 /* ---------- saving ---------- */
 function savePlayer(){
   if(mpMode) return;
-  try{ localStorage.setItem('blockrealm_player_v1', JSON.stringify({x:player.x,y:player.y,z:player.z,yaw:player.yaw,pitch:player.pitch,t:worldTime})); }catch(e){}
+  soloPos = {x:player.x,y:player.y,z:player.z,yaw:player.yaw,pitch:player.pitch,t:worldTime};
+  scheduleSoloSave();
 }
 function loadPlayer(){
-  try{
-    const s=JSON.parse(localStorage.getItem('blockrealm_player_v1')||'null');
-    if(s){ Object.assign(player,{x:s.x,y:s.y,z:s.z,yaw:s.yaw,pitch:s.pitch}); worldTime=s.t||worldTime; return true; }
-  }catch(e){}
+  const s = soloPos;
+  if(s){ Object.assign(player,{x:s.x,y:s.y,z:s.z,yaw:s.yaw,pitch:s.pitch}); worldTime=s.t||worldTime; return true; }
   return false;
 }
 function saveAll(){ if(editsDirty){ saveEdits(); editsDirty=false; } savePlayer(); }
@@ -5686,6 +5877,7 @@ function menuState(){
   $('resume').hidden = !played;
   $('multi').hidden = played || SINGLE_ONLY;
   $('leave').hidden = !mpMode;
+  $('srvadmin').hidden = !(mpMode && (srvOwner || adminRole === 'creator'));   // the owner of a server, or the creator on a community server
   syncSettings();
 }
 /* ---------- the server rules: shown first; the checkbox unlocks after 5 seconds; remembered in this browser once agreed ---------- */
@@ -5951,8 +6143,454 @@ $('drawbtn').addEventListener('click',()=>{
   try{ localStorage.setItem('blockrealm_draw_v1', String(RD)); }catch(e){}
   syncSettings();
 });
-$('play').addEventListener('click',start);
-$('resume').addEventListener('click',start);
+$('play').addEventListener('click',showHub);
+
+/* ---------- the menus: button sounds, the cinematic background, and the play screens ---------- */
+// short synthesised clicks (no sound files); they follow the sound effects switch
+function uiTone(f, dur, type, vol, slide){
+  sfx.init();
+  const c = sfx.ctx; if(!c || !sfx.on || !sfx.master) return;
+  const o = c.createOscillator(), g = c.createGain(), t = c.currentTime;
+  o.type = type; o.frequency.setValueAtTime(f, t);
+  if(slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(sfx.master); o.start(t); o.stop(t + dur + 0.02);
+}
+const uiSound = {
+  hover(){ uiTone(1320, 0.045, 'triangle', 0.045); },
+  click(){ uiTone(560, 0.12, 'square', 0.06, 280); uiTone(1120, 0.05, 'triangle', 0.04); }
+};
+const menuButton = e => e.target && e.target.closest ? e.target.closest('#menu .btn, #menu .tab') : null;
+if(matchMedia('(hover: hover)').matches){                 // desktop only: a mouse moving onto a button
+  let lastHover = null;
+  document.addEventListener('pointerover', e => {
+    if(e.pointerType && e.pointerType !== 'mouse') return;
+    const b = menuButton(e);
+    if(!b || b.disabled || b === lastHover) return;
+    lastHover = b; uiSound.hover();
+  }, true);
+  document.addEventListener('pointerout', e => {
+    if(lastHover && !lastHover.contains(e.relatedTarget)) lastHover = null;
+  }, true);
+}
+document.addEventListener('click', e => { const b = menuButton(e); if(b && !b.disabled) uiSound.click(); }, true);
+
+// the cinematic background: a slowly turning block landscape under a dusk sky
+(function menuScene(){
+  const cv = $('menubg'); if(!cv || !cv.getContext) return;
+  const g = cv.getContext('2d');
+  const N = 26, cx = N/2, cz = N/2, cells = [];
+  for(let z = 0; z < N; z++) for(let x = 0; x < N; x++){
+    const hgt = 4 + 3*Math.sin(x*0.42)*Math.cos(z*0.37) + 2*Math.sin((x+z)*0.23) + (Math.sin(x*1.7 + z*0.9) > 0.6 ? 1 : 0);
+    cells.push({x, z, h: Math.max(1, Math.round(hgt))});
+  }
+  // block faces drawn pixel by pixel, in the game's colours: grass, dirt, stone
+  const TEXN = 16;
+  const rnd = (x, y, s) => { const n = Math.sin(x*127.1 + y*311.7 + s*74.7) * 43758.5453; return n - Math.floor(n); };
+  const texFor = (cols, dark, seed) => {
+    const c = document.createElement('canvas'); c.width = c.height = TEXN;
+    const x = c.getContext('2d');
+    for(let py = 0; py < TEXN; py++) for(let px = 0; px < TEXN; px++){
+      const n = rnd(px, py, seed), col = cols[n < 0.55 ? 0 : n < 0.85 ? 1 : 2], k = dark;
+      x.fillStyle = `rgb(${Math.round(col[0]*k)},${Math.round(col[1]*k)},${Math.round(col[2]*k)})`;
+      x.fillRect(px, py, 1, 1);
+    }
+    return c;
+  };
+  const KINDS = {
+    grass: [[96,164,62],[84,146,52],[116,184,78]],
+    dirt:  [[138,96,60],[120,82,48],[154,110,70]],
+    stone: [[128,132,142],[108,112,122],[150,154,164]]
+  };
+  const TOP = {}, SIDE = {};
+  for(const k of Object.keys(KINDS)){
+    const seed = k.length * 3.7;
+    TOP[k] = g.createPattern(texFor(KINDS[k], 1, seed), 'repeat');
+    SIDE[k] = g.createPattern(texFor(KINDS[k], 0.72, seed + 1), 'repeat');
+    for(const pt of [TOP[k], SIDE[k]]) { try{ pt.setTransform(new DOMMatrix().scale(2)); }catch(e){} }
+  }
+  const stars = Array.from({length: 140}, () => [Math.random(), Math.random()*0.45, Math.random()]);
+  let W = 1, H = 1, dpr = 1;
+  function size(){
+    dpr = Math.min(2, window.devicePixelRatio || 1); W = innerWidth; H = innerHeight;
+    cv.width = Math.round(W*dpr); cv.height = Math.round(H*dpr); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  size(); addEventListener('resize', size);
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function frame(now){
+    requestAnimationFrame(frame);
+    if($('menu').hidden) return;                          // playing: nothing to draw
+    const t = still ? 0 : now/1000, a = t*0.035;
+    const ca = Math.cos(a), sa = Math.sin(a);
+    const F = H*0.8, camH = 24, horizon = H*0.3, fx = F*Math.max(1, (W/H)*0.6);
+    const P = (px, pz, y) => {                             // a point in the block grid -> screen, with its depth
+      const rx = px*ca - pz*sa, rz = px*sa + pz*ca, d = rz + N*1.35;
+      return [W/2 + rx*fx/d, horizon + (camH - y)*F/d, d, px, pz];
+    };
+    const sky = g.createLinearGradient(0, 0, 0, H*0.62);
+    sky.addColorStop(0, '#070e22'); sky.addColorStop(0.55, '#1d3b68'); sky.addColorStop(1, '#e8a06b');
+    g.fillStyle = sky; g.fillRect(0, 0, W, H);
+    for(const s of stars){                                // a few stars that twinkle
+      g.globalAlpha = 0.35 + 0.35*Math.sin(t*1.3 + s[2]*9);
+      g.fillStyle = '#fff'; g.fillRect(s[0]*W, s[1]*H, 1.5, 1.5);
+    }
+    g.globalAlpha = 1;
+    const sun = g.createRadialGradient(W*0.74, H*0.36, 0, W*0.74, H*0.36, H*0.42);
+    sun.addColorStop(0, 'rgba(255,220,150,.55)'); sun.addColorStop(1, 'rgba(255,220,150,0)');
+    g.fillStyle = sun; g.fillRect(0, 0, W, H);
+    const quads = [];
+    for(const c of cells){
+      const pts = [];
+      for(const [dx, dz] of [[-.5,-.5],[.5,-.5],[.5,.5],[-.5,.5]]) pts.push(P(c.x + dx - cx, c.z + dz - cz, c.h));
+      quads.push({d: P(c.x - cx, c.z - cz, c.h)[2], pts, c});
+    }
+    quads.sort((p, q) => q.d - p.d);                      // far blocks first
+    for(const q of quads){
+      const {pts, c} = q;
+      const kind = c.h >= 8 ? 'stone' : c.h >= 6 ? 'dirt' : 'grass';
+      const sh = ((c.x*7 + c.z*13) % 5) * 0.03;          // a little light and dark between neighbours
+      const order = [0,1,2,3].sort((i, j) => pts[j][1] - pts[i][1]);
+      const i0 = order[0], i1 = order[1];                 // the two lowest corners on screen face the viewer
+      const g0 = P(pts[i0][3], pts[i0][4], 0), g1 = P(pts[i1][3], pts[i1][4], 0);
+      g.beginPath(); g.moveTo(pts[i0][0], pts[i0][1]); g.lineTo(pts[i1][0], pts[i1][1]);
+      g.lineTo(g1[0], g1[1]); g.lineTo(g0[0], g0[1]); g.closePath(); g.fillStyle = SIDE[kind]; g.fill();
+      g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for(let k = 1; k < 4; k++) g.lineTo(pts[k][0], pts[k][1]);
+      g.closePath(); g.fillStyle = TOP[kind]; g.fill(); g.fillStyle = `rgba(0,0,0,${sh})`; g.fill(); g.strokeStyle = 'rgba(0,0,0,.3)'; g.lineWidth = 1; g.stroke();
+    }
+    const fog = g.createLinearGradient(0, horizon, 0, horizon + H*0.5);   // the far land melts into the sky
+    fog.addColorStop(0, 'rgba(232,160,107,.35)'); fog.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = fog; g.fillRect(0, horizon, W, H);
+    const vig = g.createRadialGradient(W/2, H*0.45, Math.min(W, H)*0.3, W/2, H*0.45, Math.max(W, H)*0.75);
+    vig.addColorStop(0, 'rgba(5,8,18,0)'); vig.addColorStop(1, 'rgba(5,8,18,.8)');
+    g.fillStyle = vig; g.fillRect(0, 0, W, H);
+  }
+  requestAnimationFrame(frame);
+})();
+
+// the play screens: your worlds (only you), your servers (you are the admin), and the community servers
+const WORLDS_KEY = 'blockrealm_worlds_v1';
+function loadWorlds(){ try{ const a = JSON.parse(localStorage.getItem(WORLDS_KEY) || '[]'); return Array.isArray(a) ? a : []; }catch(e){ return []; } }
+function saveWorlds(a){ try{ localStorage.setItem(WORLDS_KEY, JSON.stringify(a)); }catch(e){} }
+function hideSubs(){ $('playbox').hidden = true; $('createbox').hidden = true; $('adminsrv').hidden = true; }
+function showHub(){
+  $('mainbtns').hidden = true; $('mpbox').hidden = true; $('settingsbox').hidden = true; $('howbox').hidden = true; $('cashscreen').hidden = true;
+  $('createbox').hidden = true; $('playbox').hidden = false;
+  renderHub();
+}
+function hubRow(name, sub, label, onClick, disabled){
+  const row = document.createElement('div'); row.className = 'hubrow';
+  const info = document.createElement('div'); info.className = 'hubname';
+  const b = document.createElement('b'); b.textContent = name;
+  const s = document.createElement('span'); s.textContent = sub;
+  info.append(b, s);
+  const btn = document.createElement('button'); btn.className = 'btn'; btn.type = 'button';
+  btn.textContent = label; btn.disabled = !!disabled;
+  if(onClick) btn.addEventListener('click', onClick);
+  row.append(info, btn); return row;
+}
+function hubEmpty(text){ const p = document.createElement('p'); p.className = 'hubempty'; p.textContent = text; return p; }
+function renderHub(){
+  refreshWorlds();
+  refreshServers();
+  showHubTab(hubTab);
+}
+function worldRow(w){
+  const row = hubRow(w.name, 'Offline, only you · seed ' + w.seed, 'PLAY', () => playSolo(w), false);
+  const pub = document.createElement('button'); pub.className = 'btn ghost'; pub.type = 'button'; pub.textContent = 'PUBLISH';
+  pub.addEventListener('click', () => publishSolo(w));
+  row.append(pub);
+  return row;
+}
+// turns a world into a public server: its blocks and seed are copied, and it shows under YOUR SERVERS straight away
+async function publishSolo(w){
+  if(!confirm('Make "' + w.name + '" a public server?\nIts blocks and seed are copied. Anyone can find it under PLAYER SERVERS and join.')) return;
+  if(activeSolo && activeSolo.id === w.id) await flushSoloSave();
+  let r;
+  try{ r = await apiCall('/api/servers', {action:'publish', worldId: w.id}); }
+  catch(e){ if(e.message !== 'expired') alert('Could not reach the server.'); return; }
+  if(r.error){ alert(r.error); return; }
+  showHubTab('mine');
+  refreshServers();
+}
+async function refreshWorlds(){
+  const wl = $('worldlist'); wl.replaceChildren();
+  wl.append(worldRow(LEGACY_WORLD));
+  let data;
+  try{ data = await apiCall('/api/solo/worlds'); }
+  catch(e){ if(e.message !== 'expired') listNote(wl, 'Could not reach the server.'); return; }
+  for(const w of data.worlds || []) wl.append(worldRow(w));
+}
+let createMulti = false;
+function syncCreate(){
+  $('cmulti').textContent = createMulti ? 'MULTIPLAYER SERVER' : 'PLAY ALONE';
+  $('cmulti').classList.toggle('sel', createMulti);
+  $('cmultihint').textContent = createMulti
+    ? 'You are the admin. Anyone can find it on the Play screen and join.'
+    : 'Only you play in this world.';
+  $('createGo').textContent = createMulti ? 'CREATE SERVER' : 'CREATE WORLD';
+}
+function openCreate(multi){
+  createMulti = !!multi;
+  $('playbox').hidden = true; $('createbox').hidden = false;
+  $('createtitle').textContent = createMulti ? 'NEW SERVER' : 'NEW WORLD';
+  $('cname').value = createMulti ? 'New Server' : 'New World';
+  $('createmsg').textContent = '';
+  $('cseed').value = '';
+  syncCreate(); $('cname').focus();
+}
+$('newworld').addEventListener('click', () => openCreate(false));
+$('newserver').addEventListener('click', () => openCreate(true));
+$('cmulti').addEventListener('click', () => { createMulti = !createMulti; syncCreate(); });
+$('createback').addEventListener('click', showHub);
+$('playback').addEventListener('click', showMain);
+$('createGo').addEventListener('click', async () => {
+  const name = ($('cname').value.trim()) || (createMulti ? 'New Server' : 'New World');
+  if(createMulti){
+    $('createmsg').textContent = 'Making your server...';
+    let r;
+    try{ r = await srvApi({action:'create', name, seed: $('cseed').value}); }
+    catch(e){ $('createmsg').textContent = 'Could not reach the server. Check that it is running.'; return; }
+    if(r.error){ $('createmsg').textContent = r.error; return; }
+    joinServer(r.id); return;
+  }
+  let entry;
+  try{ entry = await apiCall('/api/solo/worlds', {action:'create', name, seed: seedNum($('cseed').value)}); }
+  catch(e){ if(e.message !== 'expired') $('createmsg').textContent = 'Could not reach the server. Check that it is running.'; return; }
+  if(entry.error){ $('createmsg').textContent = entry.error; return; }
+  playSolo(entry);
+});
+$('joinmain').addEventListener('click', () => { showMP(); pickWorld('our'); });
+$('joinpublic').addEventListener('click', () => { showMP(); pickWorld('public'); });
+
+/* ---------- private servers: the list, making, joining, deleting, and the owner's admin panel ---------- */
+let srvOwner = false, srvTimer = null;
+function httpBase(){ return ($('mpurl').value.trim() || defaultWS()).replace(/^ws/, 'http').replace(/\/ws\/?$/, ''); }
+// every request to the server signs in with the account's token
+async function apiCall(path, body){
+  const opts = {headers: {Authorization: 'Bearer ' + authToken}};
+  if(body){ opts.method = 'POST'; opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const r = await fetch(httpBase() + path, opts);
+  const d = await r.json();
+  if(r.status === 401){ signOut(); throw new Error('expired'); }
+  return d;
+}
+function srvApi(body){ return apiCall('/api/servers', body || null); }
+function listNote(el, text){ const p = document.createElement('p'); p.className = 'hubempty'; p.textContent = text; el.append(p); }
+async function refreshServers(){
+  const mine = $('serverlist'), others = $('playerlist');
+  let data;
+  try{ data = await srvApi(null); }
+  catch(e){ mine.replaceChildren(); others.replaceChildren(); listNote(mine, 'Could not reach the server list. Check that the server is running.'); $('newserver').disabled = true; return; }
+  const list = data.servers || [], max = data.max || 3;
+  const yours = list.filter(s => s.mine), theirs = list.filter(s => !s.mine);
+  mine.replaceChildren(); others.replaceChildren();
+  if(!yours.length) listNote(mine, 'No servers yet. You can make up to ' + max + '.');
+  for(const s of yours) mine.append(serverRow(s, true));
+  if(!theirs.length) listNote(others, 'No player servers yet.');
+  for(const s of theirs) others.append(serverRow(s, false));
+  $('newserver').disabled = (data.mine || 0) >= max;
+}
+function serverRow(s, mine){
+  const sub = (mine ? 'Yours, you are the admin' : 'Player server') + ' · ' + s.online + ' online';
+  const row = hubRow(s.name, sub, 'JOIN', () => joinServer(s.id), false);
+  if(mine){
+    const del = document.createElement('button'); del.className = 'btn ghost holdbtn'; del.type = 'button'; del.textContent = 'HOLD TO DELETE';
+    armDelete(del, s); row.append(del);
+  }
+  return row;
+}
+// joining a server: it connects straight away, and the server sends back the seed and whether you are the admin
+function joinServer(id){ showMP(); mpWorld = id; connectMP(); }
+$('newserver').addEventListener('click', () => openCreate(true));
+
+// the owner's admin panel: the players here, with a kick and a timed ban for each
+function srvSend(o){ if(mp.ws && mp.ws.readyState === 1) mp.ws.send(JSON.stringify(o)); }
+function showSrvAdmin(){
+  hideSubs();
+  $('mainbtns').hidden = true; $('mpbox').hidden = true; $('settingsbox').hidden = true; $('howbox').hidden = true; $('cashscreen').hidden = true;
+  $('adminsrv').hidden = false;
+  srvSend({type:'roster'});
+  clearInterval(srvTimer); srvTimer = setInterval(() => srvSend({type:'roster'}), 2000);
+}
+function hideSrvAdmin(){ clearInterval(srvTimer); srvTimer = null; showMain(); }
+function renderRoster(list){
+  const el = $('srvroster'); el.replaceChildren();
+  if(!list.length){ listNote(el, 'Nobody else is here right now.'); return; }
+  for(const p of list){
+    const row = document.createElement('div'); row.className = 'hubrow';
+    const info = document.createElement('div'); info.className = 'hubname';
+    const b = document.createElement('b'); b.textContent = p.name;
+    info.append(b);
+    const kick = document.createElement('button'); kick.className = 'btn ghost'; kick.type = 'button'; kick.textContent = 'KICK';
+    kick.addEventListener('click', () => { srvSend({type:'kick', target: p.id}); setTimeout(() => srvSend({type:'roster'}), 400); });
+    const ban = document.createElement('button'); ban.className = 'btn'; ban.type = 'button'; ban.textContent = 'BAN';
+    ban.addEventListener('click', () => { srvSend({type:'ban', target: p.id, hours: +$('banhours').value}); setTimeout(() => srvSend({type:'roster'}), 400); });
+    row.append(info, kick, ban); el.append(row);
+  }
+}
+$('srvadmin').addEventListener('click', showSrvAdmin);
+$('srvadminback').addEventListener('click', hideSrvAdmin);
+
+/* ---------- the play screen's tabs, single-player worlds, and deleting a server ---------- */
+let hubTab = 'worlds';
+function showHubTab(name){
+  hubTab = name;
+  for(const pane of document.querySelectorAll('#playbox .hubpane')) pane.hidden = pane.dataset.hub !== name;
+  for(const t of document.querySelectorAll('#playbox .hubtabs .tab')) t.classList.toggle('on', t.dataset.hubtab === name);
+}
+for(const t of document.querySelectorAll('#playbox .hubtabs .tab')) t.addEventListener('click', () => showHubTab(t.dataset.hubtab));
+
+// the original single-player world keeps the save that was already in this browser
+const LEGACY_WORLD = { id: 'legacy', name: 'Original World', seed: 1337, legacy: true };
+let activeSolo = null, soloLoaded = null;
+// a seed typed in: a number is used as it is, other text is turned into a number, and an empty seed is random
+function seedNum(t){
+  t = String(t || '').trim();
+  if(/^-?\d{1,10}$/.test(t)) return Math.abs(+t) % 2147483647;
+  if(t){ let x = 2166136261; for(const c of t) x = Math.imul(x ^ c.charCodeAt(0), 16777619) >>> 0; return x % 2147483647; }
+  return 1 + Math.floor(Math.random() * 2147483645);
+}
+// the world being played: its blocks and position come from the server, for the signed-in account
+let soloTimer = null, soloPos = null;
+function switchSolo(w, data){
+  activeSolo = w;
+  edits = (data && data.edits) || {};
+  soloPos = (data && data.player) || null;
+  applyWorldSeed(w.seed || 1337);
+  for(const ch of chunks.values()) disposeChunk(ch);
+  chunks.clear();
+  editsDirty = false;
+  soloLoaded = w.id;
+  if(!loadPlayer()){ player.x = 8.5; player.z = 8.5; player.y = heightAt(8, 8) + 0.2; }   // where the player was, or the start
+}
+function scheduleSoloSave(){ if(!activeSolo || !authToken) return; clearTimeout(soloTimer); soloTimer = setTimeout(flushSoloSave, 1500); }
+function flushSoloSave(){
+  if(!activeSolo || !authToken || soloLoaded !== activeSolo.id || mpMode) return;
+  clearTimeout(soloTimer); soloTimer = null;
+  const body = JSON.stringify({world: activeSolo.id, edits, player: soloPos});
+  return fetch(httpBase() + '/api/solo/save', {method:'POST', headers:{'Content-Type':'application/json', Authorization:'Bearer ' + authToken}, body, keepalive: body.length < 60000}).catch(() => {});
+}
+async function playSolo(w){
+  let data;
+  try{ data = await apiCall('/api/solo/save?world=' + encodeURIComponent(w.id)); }
+  catch(e){ if(e.message !== 'expired') alert('Could not load this world. Check that the server is running.'); return; }
+  if(w.legacy && !Object.keys(data.edits || {}).length){      // the save this browser had before accounts existed
+    try{ const old = JSON.parse(localStorage.getItem('blockrealm_edits_v1') || 'null'); if(old) data.edits = old; }catch(e){}
+    try{ const oldp = JSON.parse(localStorage.getItem('blockrealm_player_v1') || 'null'); if(oldp && !data.player) data.player = oldp; }catch(e){}
+  }
+  switchSolo(w, data);
+  start();
+}
+
+// deleting a server: hold the button for two seconds, then three "are you sure" questions
+function askDelete(name){
+  return confirm('Delete "' + name + '"?\nThe world is removed from the server and cannot be brought back.')
+    && confirm('Are you sure? Everything built in "' + name + '" will be lost.')
+    && confirm('Really sure? This cannot be undone.');
+}
+function armDelete(btn, s){
+  const HOLD = 2000;
+  let t0 = 0, raf = 0;
+  const stop = () => { cancelAnimationFrame(raf); raf = 0; btn.style.setProperty('--p', 0); };
+  const tick = (now) => {
+    const k = Math.min(1, (now - t0) / HOLD);
+    btn.style.setProperty('--p', k);
+    if(k >= 1){ stop(); finish(); return; }
+    raf = requestAnimationFrame(tick);
+  };
+  const finish = async () => {
+    if(!askDelete(s.name)){ return; }
+    let r; try{ r = await srvApi({action:'delete', id: s.id}); }catch(e){ r = {error: 'Could not reach the server.'}; }
+    if(r.error) alert(r.error);
+    refreshServers();
+  };
+  btn.addEventListener('pointerdown', e => { if(e.button !== 0 && e.pointerType === 'mouse') return; t0 = performance.now(); raf = requestAnimationFrame(tick); });
+  for(const ev of ['pointerup','pointerleave','pointercancel']) btn.addEventListener(ev, stop);
+}
+
+/* ---------- accounts: the sign-in screen, staying signed in on this browser, and logging out ---------- */
+let authToken = localStorage.getItem('blockrealm_token') || '';
+let authUser = '';
+function showAuth(msg){
+  hideSubs();
+  $('mainbtns').hidden = true; $('mpbox').hidden = true; $('settingsbox').hidden = true; $('howbox').hidden = true; $('cashscreen').hidden = true;
+  $('adminsrv').hidden = true; $('board').hidden = true;
+  $('authbox').hidden = false;
+  $('authmsg').textContent = msg || '';
+}
+function signedIn(name){
+  authUser = name;
+  $('authbox').hidden = true;
+  $('whoami').textContent = 'Signed in as ' + name;
+  $('whoami').hidden = false;
+  $('mpname').value = name; $('mpname').hidden = true;
+  showMain();
+}
+function signOut(){
+  localStorage.removeItem('blockrealm_token');
+  authToken = ''; authUser = '';
+  location.reload();                                  // starts clean, at the sign-in screen
+}
+async function initAuth(){
+  if(authToken){
+    try{
+      const r = await fetch(httpBase() + '/api/account/me', {headers: {Authorization: 'Bearer ' + authToken}});
+      if(r.ok){ const d = await r.json(); signedIn(d.username); return; }
+    }catch(e){ showAuth('Could not reach the server. Check that it is running.'); return; }
+    localStorage.removeItem('blockrealm_token'); authToken = '';
+  }
+  showAuth();
+}
+async function authPost(path, body){
+  const r = await fetch(httpBase() + path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  return r.json();
+}
+function authDone(d){
+  localStorage.setItem('blockrealm_token', d.token);
+  authToken = d.token;
+  for(const id of ['lpass','cpass','cpass2','rcode','rpass']) $(id).value = '';
+  signedIn(d.username);
+}
+function authError(msg){ $('authmsg').textContent = msg; }
+for(const t of document.querySelectorAll('#authbox .tab')) t.addEventListener('click', () => {
+  for(const pane of document.querySelectorAll('#authbox [data-authpane]')) pane.hidden = pane.dataset.authpane !== t.dataset.auth;
+  for(const x of document.querySelectorAll('#authbox .tab')) x.classList.toggle('on', x === t);
+  $('authmsg').textContent = '';
+});
+$('loginbtn').addEventListener('click', async () => {
+  authError('Logging in...');
+  try{ const d = await authPost('/api/account/login', {username: $('lname').value, password: $('lpass').value});
+    if(d.error) return authError(d.error);
+    authDone(d);
+  }catch(e){ authError('Could not reach the server. Check that it is running.'); }
+});
+$('lpass').addEventListener('keydown', e => { if(e.key === 'Enter') $('loginbtn').click(); });
+$('createacc').addEventListener('click', async () => {
+  if($('cpass').value !== $('cpass2').value) return authError('The two passwords do not match.');
+  authError('Making your account...');
+  try{ const d = await authPost('/api/account/register', {username: $('cuser').value.trim(), password: $('cpass').value});
+    if(d.error) return authError(d.error);
+    authDone(d);
+  }catch(e){ authError('Could not reach the server. Check that it is running.'); }
+});
+$('resetbtn').addEventListener('click', async () => {
+  authError('Changing the password...');
+  try{ const d = await authPost('/api/account/reset', {username: $('rname').value.trim(), code: $('rcode').value, newPassword: $('rpass').value});
+    if(d.error) return authError(d.error);
+    authDone(d);
+  }catch(e){ authError('Could not reach the server. Check that it is running.'); }
+});
+$('logoutbtn').addEventListener('click', async () => {
+  try{ if(mp.ws) mp.ws.close(); }catch(e){}
+  await flushSoloSave();                              // the world is saved before the account is signed out
+  try{ await fetch(httpBase() + '/api/account/logout', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({token: authToken})}); }catch(e){}
+  signOut();
+});
+// a single-player world is saved when the page is closed or hidden
+addEventListener('pagehide', () => { if(!mpMode && activeSolo && soloLoaded === activeSolo.id){ savePlayer(); flushSoloSave(); } });
+initAuth();
+
+$('resume').addEventListener('click', () => { if(mpMode || (activeSolo && soloLoaded === activeSolo.id)) start(); else playSolo(activeSolo || LEGACY_WORLD); });
 $('adminbtn').addEventListener('click',()=>{ sfx.init(); openCode(); });
 $('stopspec').addEventListener('click', stopSpectate);
 $('mmic').addEventListener('click',()=>{ if(voice.on){ setMic(false); } else toggleMic(); });
@@ -6543,7 +7181,6 @@ function frame(now){
 let saveT=0, waterT=0;
 
 /* ---------- start-up ---------- */
-loadEdits();
 loadInv();
 buildHotbar();
 {

@@ -555,7 +555,7 @@ function roleForCode(code) {
 
 // each world's state: its block edits ("x,y,z" -> block id, 0 is air, so a broken block is stored as 0),
 // its cow (the last position the host sent, for players who join later), and its clock
-for (const w of Object.values(WORLDS)) {
+function initWorld(w) {
   w.passDigest = w.password ? codeDigest(w.password) : null;
   w.edits = new Map();
   w.owners = new Map();    // "x,y,z" -> hashed id of the player who placed the block there (land has no owner)
@@ -601,7 +601,308 @@ for (const w of Object.values(WORLDS)) {
     if (e.code === 'ENOENT') w.loaded = true;       // a new world starts empty
     else console.error(`${w.name}: could not read ${w.file}, it will not be saved over: ${e.message}`);
   }
+  if (!w.bans) w.bans = new Map();         // hashed player id -> the time (ms) the ban ends
 }
+for (const w of Object.values(WORLDS)) initWorld(w);
+
+// ---- private servers: anyone can make up to MAX_SERVERS_PER_PLAYER. Each one is its own world, with its own seed and save file ----
+const SERVERS_FILE = process.env.SERVERS_FILE || path.join(__dirname, 'servers.json');
+const SERVER_DIR = path.join(__dirname, 'worlds');
+const MAX_SERVERS_PER_PLAYER = 3;
+const BAN_MAX_HOURS = 24;
+const SERVER_LIST = new Map();            // id -> { id, name, owner (hashed id), seed, created, bans }
+
+// a seed typed by the owner: a number is used as it is, other text is turned into a number, and an empty seed is random
+function seedFrom(text) {
+  const t = String(text || '').trim();
+  if (/^-?\d{1,10}$/.test(t)) return Math.abs(Number(t)) % 2147483647;
+  if (t) return crypto.createHash('sha256').update(t).digest().readUInt32BE(0) % 2147483647;
+  return crypto.randomBytes(4).readUInt32BE(0) % 2147483647;
+}
+function addServerWorld(s) {
+  const w = { key: s.id, name: s.name, owner: s.owner, seed: s.seed, isServer: true,
+    file: path.join(SERVER_DIR, s.id + '.json'), password: null,
+    bans: new Map(Object.entries(s.bans || {}).map(([k, v]) => [k, Number(v)])) };
+  SERVER_LIST.set(s.id, s);
+  WORLDS[s.id] = w;
+  initWorld(w);
+  return w;
+}
+function loadServerList() {
+  fs.mkdirSync(SERVER_DIR, { recursive: true });
+  let list = [];
+  try { list = JSON.parse(fs.readFileSync(SERVERS_FILE, 'utf8')); }
+  catch (e) { if (e.code !== 'ENOENT') console.error('servers.json could not be read, no private servers loaded:', e.message); return; }
+  for (const s of (Array.isArray(list) ? list : [])) if (s && typeof s.id === 'string' && /^[0-9a-f]{12}$/.test(s.id)) addServerWorld(s);
+}
+let serverFileTimer = null;
+function saveServerList() {
+  if (serverFileTimer) return;            // several changes in a moment make one write
+  serverFileTimer = setTimeout(() => {
+    serverFileTimer = null;
+    const out = [], now = Date.now();
+    for (const s of SERVER_LIST.values()) {
+      const w = WORLDS[s.id], bans = {};
+      if (w && w.bans) for (const [k, v] of w.bans) if (v > now) bans[k] = v;
+      out.push({ id: s.id, name: s.name, owner: s.owner, seed: s.seed, created: s.created, bans });
+    }
+    fs.writeFile(SERVERS_FILE, JSON.stringify(out, null, 1), (err) => { if (err) console.error('could not save servers.json:', err.message); });
+  }, 500);
+}
+function serverCount(ownerHash) { let n = 0; for (const s of SERVER_LIST.values()) if (s.owner === ownerHash) n++; return n; }
+function createServer(rawPid, name, seedText, startEdits) {
+  if (typeof rawPid !== 'string' || !/^[A-Za-z0-9_-]{16,64}$/.test(rawPid)) return { error: 'Close the game and open it again, then make the server.' };
+  const owner = rawPid;                     // rawPid is the account's id, from its sign-in
+  if (serverCount(owner) >= MAX_SERVERS_PER_PLAYER) return { error: `You can have up to ${MAX_SERVERS_PER_PLAYER} servers. Delete one to make another.` };
+  const clean = String(name || '').replace(/[^\w \-.]/g, '').trim().slice(0, 24) || 'My Server';
+  const s = { id: crypto.randomBytes(6).toString('hex'), name: clean, owner, seed: seedFrom(seedText), created: Date.now(), bans: {} };
+  if (startEdits) {                       // a published world: its blocks are written before the server loads its save
+    fs.mkdirSync(SERVER_DIR, { recursive: true });
+    fs.writeFileSync(path.join(SERVER_DIR, s.id + '.json'), JSON.stringify(startEdits));
+  }
+  addServerWorld(s);
+  saveServerList();
+  return { id: s.id };
+}
+function deleteServer(rawPid, id) {
+  const s = SERVER_LIST.get(id), w = WORLDS[id];
+  if (!s || rawPid !== s.owner) return { error: 'Only the owner can delete this server.' };
+  for (const q of [...players.values()]) if (q.world === w && q.joined) { sendTo(q, { type: 'denied', msg: 'This server was deleted by its owner.' }); try { q.ws.close(); } catch (e) {} }
+  if (w.saveTimer) clearTimeout(w.saveTimer);
+  SERVER_LIST.delete(id); delete WORLDS[id];
+  fs.unlink(w.file, () => {});
+  saveServerList();
+  return { ok: true };
+}
+
+// the owner's admin commands: the roster, a kick, and a timed ban. Only the owner of this server may use them.
+function serverAdmin(p, w, m) {
+  // private servers: their owner. community servers: the game creator, who has the admin code
+  const allowed = w.isServer ? (!!w.owner && p.pid === w.owner) : p.role === 'creator';
+  if (!allowed) return;
+  if (m.type === 'roster') {
+    const list = [];
+    for (const [oid, o] of players) if (o.world === w && o.joined && o !== p) list.push({ id: oid, name: o.name });
+    return sendTo(p, { type: 'roster', list });
+  }
+  const t = players.get(Number(m.target));
+  if (!t || !t.joined || t.world !== w || t === p || !t.pid) return;
+  if (m.type === 'kick') {
+    sendTo(t, { type: 'denied', msg: 'The server owner removed you from this server.' });
+    try { t.ws.close(); } catch (e) {}
+    return;
+  }
+  if (m.type === 'ban') {
+    const hours = Math.max(1, Math.min(BAN_MAX_HOURS, Math.floor(Number(m.hours) || 1)));
+    w.bans.set(t.pid, Date.now() + hours * 3600000);
+    if (w.isServer) saveServerList(); else saveCommunityBans();
+    sendTo(t, { type: 'denied', msg: `The server owner banned you for ${hours} hour${hours === 1 ? '' : 's'}.` });
+    try { t.ws.close(); } catch (e) {}
+  }
+}
+
+// ---- accounts: names and passwords, sign-in sessions that last on a browser, the owner's override code, and saved worlds ----
+const ACCOUNTS_FILE = process.env.ACCOUNTS_FILE || path.join(__dirname, 'accounts.json');
+const SESSIONS_FILE = process.env.SESSIONS_FILE || path.join(__dirname, 'sessions.json');
+const SAVES_DIR = path.join(__dirname, 'saves');
+const SESSION_DAYS = 60;
+const MAX_WORLDS_PER_ACCOUNT = 10;
+function loadJson(file, fallback) {
+  try { const v = JSON.parse(fs.readFileSync(file, 'utf8')); return v && typeof v === 'object' ? v : fallback; }
+  catch (e) { if (e.code !== 'ENOENT') console.error(file, 'could not be read:', e.message); return fallback; }
+}
+let accounts = loadJson(ACCOUNTS_FILE, {});     // lowercase name -> { name, salt, hash, created, worlds: [{ id, name, seed, created }] }
+let sessions = loadJson(SESSIONS_FILE, {});     // token -> { user (lowercase name), created }
+const persistTimers = {};
+function persist(which) {
+  if (persistTimers[which]) return;
+  persistTimers[which] = setTimeout(() => {
+    persistTimers[which] = null;
+    const file = which === 'accounts' ? ACCOUNTS_FILE : SESSIONS_FILE;
+    fs.writeFile(file, JSON.stringify(which === 'accounts' ? accounts : sessions), (err) => { if (err) console.error('could not save', file, err.message); });
+  }, 500);
+}
+const accountPid = (user) => codeDigest('acct:' + user).toString('hex');   // the same id on any browser
+function userOf(token) {
+  if (typeof token !== 'string' || !Object.hasOwn(sessions, token)) return null;
+  const s = sessions[token];
+  if (!s || Date.now() - s.created > SESSION_DAYS * 86400000 || !Object.hasOwn(accounts, s.user)) return null;
+  return s.user;
+}
+function newSession(user) {
+  const token = crypto.randomBytes(24).toString('hex');
+  sessions[token] = { user, created: Date.now() };
+  persist('sessions');
+  return token;
+}
+function hashPassword(pw, salt) { return crypto.scryptSync(String(pw), salt, 64).toString('hex'); }
+function sameHash(a, b) { const x = Buffer.from(String(a), 'hex'), y = Buffer.from(String(b), 'hex'); return x.length === y.length && crypto.timingSafeEqual(x, y); }
+const USER_RE = /^[A-Za-z0-9_]{3,16}$/;
+const PASS_OK = (pw) => typeof pw === 'string' && pw.length >= 6 && pw.length <= 64;
+// wrong guesses are slowed down per address: 8 in a minute, then a minute's wait
+const authFails = new Map();
+function authLocked(req) { const t = authFails.get(req.socket.remoteAddress); return !!t && t.until > Date.now(); }
+function authFailed(req) {
+  const ip = req.socket.remoteAddress, t = authFails.get(ip) || { n: 0, until: 0 };
+  t.n += 1; if (t.n >= 8) { t.until = Date.now() + 60000; t.n = 0; }
+  authFails.set(ip, t);
+}
+function sendJson(res, code, body) { res.writeHead(code, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify(body)); }
+function readJson(req, limit, cb) {
+  const chunks = []; let size = 0, tooBig = false;
+  req.on('data', (c) => { size += c.length; if (size > limit) { tooBig = true; req.destroy(); return; } chunks.push(c); });
+  req.on('end', () => {
+    if (tooBig) return;
+    let b = null;
+    try { b = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch (e) { b = null; }
+    cb(b && typeof b === 'object' ? b : null);
+  });
+  req.on('error', () => {});
+}
+function accountPost(req, res, action, b) {
+  if (action === 'logout') {
+    const token = String(b.token || '');
+    if (Object.hasOwn(sessions, token)) { delete sessions[token]; persist('sessions'); }
+    return sendJson(res, 200, { ok: true });
+  }
+  if (authLocked(req)) return sendJson(res, 429, { error: 'Too many tries. Wait a minute and try again.' });
+  const name = String(b.username || '').trim(), key = name.toLowerCase();
+  if (action === 'register') {
+    if (!USER_RE.test(name) || key.startsWith('__')) return sendJson(res, 400, { error: 'Use 3 to 16 letters, numbers or _ for the name.' });
+    if (!PASS_OK(b.password)) return sendJson(res, 400, { error: 'The password needs 6 to 64 characters.' });
+    if (Object.hasOwn(accounts, key)) return sendJson(res, 409, { error: 'That name is taken. Pick another.' });
+    const salt = crypto.randomBytes(16).toString('hex');
+    accounts[key] = { name, salt, hash: hashPassword(b.password, salt), created: Date.now(), worlds: [] };
+    persist('accounts');
+    return sendJson(res, 200, { token: newSession(key), username: name });
+  }
+  if (action === 'login') {
+    const acc = Object.hasOwn(accounts, key) ? accounts[key] : null;
+    const ok = acc && sameHash(hashPassword(b.password, acc.salt), acc.hash);
+    if (!ok) { authFailed(req); return sendJson(res, 401, { error: 'That name or password is not right.' }); }
+    return sendJson(res, 200, { token: newSession(key), username: acc.name });
+  }
+  if (action === 'reset') {
+    // the owner's override: the game creator's code (the one from ADMIN CODE), typed on the account's own screen
+    if (roleForCode(String(b.code || '').trim()) !== 'creator') { authFailed(req); return sendJson(res, 403, { error: 'That override code is not right.' }); }
+    const acc = Object.hasOwn(accounts, key) ? accounts[key] : null;
+    if (!acc) return sendJson(res, 404, { error: 'No account has that name.' });
+    if (!PASS_OK(b.newPassword)) return sendJson(res, 400, { error: 'The new password needs 6 to 64 characters.' });
+    acc.salt = crypto.randomBytes(16).toString('hex');
+    acc.hash = hashPassword(b.newPassword, acc.salt);
+    for (const t of Object.keys(sessions)) if (sessions[t].user === key) delete sessions[t];   // signed-in browsers must log in again
+    persist('accounts');
+    return sendJson(res, 200, { token: newSession(key), username: acc.name });
+  }
+  return sendJson(res, 404, { error: 'not found' });
+}
+// the saved worlds of an account: the list, making one, and its blocks and position
+const SAFE_ID = /^[a-z0-9]{1,20}$/;
+function ownsWorld(user, id) { return id === 'legacy' || (SAFE_ID.test(id) && accounts[user].worlds.some(w => w.id === id)); }
+function saveFileOf(user, id) { return path.join(SAVES_DIR, user, id + '.json'); }
+function soloApi(req, res, rest, token) {
+  const user = userOf(token);
+  if (!user) return sendJson(res, 401, { error: 'Log in first.' });
+  const acc = accounts[user];
+  if (rest === 'worlds' && req.method === 'GET') return sendJson(res, 200, { worlds: acc.worlds });
+  if (rest === 'worlds' && req.method === 'POST') return readJson(req, 4096, (b) => {
+    if (!b || b.action !== 'create') return sendJson(res, 400, { error: 'bad request' });
+    if (acc.worlds.length >= MAX_WORLDS_PER_ACCOUNT) return sendJson(res, 400, { error: `You can have up to ${MAX_WORLDS_PER_ACCOUNT} worlds.` });
+    const name = String(b.name || '').replace(/[^\w \-.]/g, '').trim().slice(0, 24) || 'New World';
+    const seed = Number.isInteger(b.seed) && b.seed >= 0 ? b.seed % 2147483647 : crypto.randomBytes(4).readUInt32BE(0) % 2147483647;
+    const entry = { id: crypto.randomBytes(5).toString('hex'), name, seed, created: Date.now() };
+    acc.worlds.push(entry); persist('accounts');
+    return sendJson(res, 200, entry);
+  });
+  if (rest === 'save' && req.method === 'GET') {
+    const id = new URL(req.url, 'http://localhost').searchParams.get('world') || '';
+    if (!ownsWorld(user, id)) return sendJson(res, 404, { error: 'no such world' });
+    const data = loadJson(saveFileOf(user, id), null);
+    return sendJson(res, 200, data || { edits: {}, player: null });
+  }
+  if (rest === 'save' && req.method === 'POST') return readJson(req, 12 * 1024 * 1024, (b) => {
+    if (!b || !ownsWorld(user, String(b.world || '')) || !b.edits || typeof b.edits !== 'object') return sendJson(res, 400, { error: 'bad request' });
+    const file = saveFileOf(user, String(b.world));
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFile(file, JSON.stringify({ edits: b.edits, player: b.player || null }), (err) => { if (err) console.error('could not save', file, err.message); });
+    return sendJson(res, 200, { ok: true });
+  });
+  return sendJson(res, 404, { error: 'not found' });
+}
+// a single-player world, published as a public server: its seed and its blocks, in the server's own format
+const SOLO_CS = 16;                     // the chunk width the browser saves blocks in
+function soloEditsToServer(editsByChunk) {
+  const out = [];
+  for (const ck of Object.keys(editsByChunk || {})) {
+    const [cx, cz] = ck.split(',').map(Number);
+    const chunk = editsByChunk[ck];
+    if (!Number.isInteger(cx) || !Number.isInteger(cz) || !chunk || typeof chunk !== 'object') continue;
+    for (const idx of Object.keys(chunk)) {
+      const i = Number(idx), v = chunk[idx];
+      const lx = i % SOLO_CS, lz = Math.floor(i / SOLO_CS) % SOLO_CS, wy = Math.floor(i / (SOLO_CS * SOLO_CS));
+      if (!Number.isInteger(i) || typeof v !== 'number' || v === 260 || v === 261 || wy < 0 || wy >= CH) continue;
+      out.push([`${cx * SOLO_CS + lx},${wy},${cz * SOLO_CS + lz}`, v]);
+    }
+  }
+  return out;
+}
+function publishWorld(owner, user, worldId) {
+  if (!ownsWorld(user, worldId)) return { error: 'That world is not yours.' };
+  const world = worldId === 'legacy' ? { name: 'Original World', seed: 1337 } : accounts[user].worlds.find(w => w.id === worldId);
+  const save = loadJson(saveFileOf(user, worldId), null) || { edits: {} };
+  return createServer(owner, world.name, String(world.seed), soloEditsToServer(save.edits));
+}
+
+// the private server list and making / deleting a server
+function serversApi(req, res, token) {
+  const user = userOf(token);
+  if (req.method === 'GET') {
+    const me = user ? accountPid(user) : null;
+    const servers = [...SERVER_LIST.values()].map(s => {
+      const w = WORLDS[s.id];
+      const online = [...players.values()].filter(q => q.world === w && q.joined).length;
+      return { id: s.id, name: s.name, online, mine: !!me && s.owner === me };
+    });
+    return sendJson(res, 200, { servers, max: MAX_SERVERS_PER_PLAYER, mine: me ? serverCount(me) : 0 });
+  }
+  if (req.method !== 'POST') return sendJson(res, 405, { error: 'use GET or POST' });
+  if (!user) return sendJson(res, 401, { error: 'Log in first.' });
+  readJson(req, 4096, (b) => {
+    if (!b) return sendJson(res, 400, { error: 'bad request' });
+    if (b.action === 'create') return sendJson(res, 200, createServer(accountPid(user), b.name, b.seed));
+    if (b.action === 'delete') return sendJson(res, 200, deleteServer(accountPid(user), String(b.id || '')));
+    if (b.action === 'publish') return sendJson(res, 200, publishWorld(accountPid(user), user, String(b.worldId || '')));
+    return sendJson(res, 400, { error: 'unknown action' });
+  });
+}
+// every /api/ address goes here
+function apiRouter(req, res, url) {
+  const token = (req.headers.authorization || '').replace(/^Bearer /, '');
+  if (url === '/api/servers') return serversApi(req, res, token);
+  if (url === '/api/account/me' && req.method === 'GET') {
+    const u = userOf(token);
+    return u ? sendJson(res, 200, { username: accounts[u].name }) : sendJson(res, 401, { error: 'Log in first.' });
+  }
+  if (url.startsWith('/api/account/') && req.method === 'POST') return readJson(req, 4096, (b) => accountPost(req, res, url.slice(13), b || {}));
+  if (url.startsWith('/api/solo/')) return soloApi(req, res, url.slice(10), token);
+  return sendJson(res, 404, { error: 'not found' });
+}
+
+// bans on the community servers are kept in community-bans.json, so they last through a restart
+const COMMUNITY_BANS_FILE = path.join(__dirname, 'community-bans.json');
+function loadCommunityBans() {
+  try {
+    const data = JSON.parse(fs.readFileSync(COMMUNITY_BANS_FILE, 'utf8'));
+    for (const id of ['our', 'public']) for (const [k, v] of Object.entries((data && data[id]) || {})) WORLDS[id].bans.set(k, Number(v));
+  } catch (e) { if (e.code !== 'ENOENT') console.error('community-bans.json could not be read:', e.message); }
+}
+function saveCommunityBans() {
+  const out = {}, now = Date.now();
+  for (const id of ['our', 'public']) { out[id] = {}; for (const [k, v] of WORLDS[id].bans) if (v > now) out[id][k] = v; }
+  fs.writeFile(COMMUNITY_BANS_FILE, JSON.stringify(out, null, 1), (err) => { if (err) console.error('could not save community-bans.json:', err.message); });
+}
+loadCommunityBans();
+loadServerList();                       // the private servers saved last time come back with their seeds and bans
 
 function worldTime(w) { return w.clock.t + (Date.now() - w.clock.at) / 1000; }
 function setWorldTime(w, t) { w.clock = { t, at: Date.now() }; }
@@ -668,6 +969,7 @@ const requestHandler = (req, res) => {
     if (req.method !== 'POST') { res.writeHead(405, { 'Content-Type': 'text/plain' }); return res.end('use POST'); }
     return handleUpload(req, res, new URL(req.url, 'http://localhost').searchParams.get('token') || '');
   }
+  if (url.startsWith('/api/')) return apiRouter(req, res, url);
   if (url === '/' || url === '/index.html') {
     fs.readFile(PAGE, (err, data) => {
       if (err) { res.writeHead(500, { 'Content-Type': 'text/plain' }); return res.end('game page missing'); }
@@ -779,7 +1081,7 @@ function allow(p) {
 function clientAddress(ws) { return (ws._socket && ws._socket.remoteAddress) || 'unknown'; }
 function deny(p, msg) { sendTo(p, { type: 'denied', msg }); try { p.ws.close(); } catch (e) {} }
 
-// joining: the player picks a world; a world with a password (none now) would check it here, with wrong guesses slowed down per address
+// joining: the player picks a world; a world with a password would check it here, with wrong guesses slowed down per address
 function hello(p, id, m) {
   const w = typeof m.world === 'string' && Object.hasOwn(WORLDS, m.world) ? WORLDS[m.world] : null;
   if (!w) return deny(p, 'Choose a world to join.');
@@ -796,15 +1098,20 @@ function hello(p, id, m) {
     }
     pwTries.delete(ip);
   }
-  p.world = w; p.joined = true; p.pid = pidFor(m.pid);
-  p.name = cleanName(m.name);
+  const user = userOf(m.token);
+  if (!user) return deny(p, 'Log in first.');
+  const apid = accountPid(user);
+  const banUntil = w.bans ? (w.bans.get(apid) || 0) : 0;
+  if (banUntil > Date.now()) return deny(p, 'You are banned from this server for ' + Math.ceil((banUntil - Date.now()) / 60000) + ' more minutes.');
+  p.world = w; p.joined = true; p.pid = apid;
+  p.name = cleanName(user);                 // players are known by their account name
   const list = [];
   for (const [oid, o] of players) if (oid !== id && o.joined && o.world === w) list.push({ id: oid, name: o.name, color: o.color, x: o.x, y: o.y, z: o.z, yaw: o.yaw, sleeping: o.sleeping, hidden: o.hidden, role: o.role });
   const all = [];
   // each block also says who it belongs to for this player: 1 = yours, 0 = another player's, null = nobody's (land or older saves)
   for (const [k, v] of w.edits) { const [x, y, z] = k.split(',').map(Number); const o = w.owners.get(k); all.push([x, y, z, v, o === undefined ? null : (o === p.pid ? 1 : 0)]); }
   checkObjectives(w, p);                                 // pays any objective already met (for example a plot claimed before this update)
-  sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, edits: all, players: list, time: worldTime(w), mob: w.mob, tvs: tvList(w), sources: tvSources(w), locks: lockList(w, p), coins: w.coins.get(p.pid) || 0, tools: w.tools.get(p.pid) || 0, plots: plotsMsg(w, p).list, districts: openList(w) });
+  sendTo(p, { type: 'welcome', id, world: w.key, worldName: w.name, seed: w.seed || 1337, isOwner: !!(w.owner && p.pid === w.owner), edits: all, players: list, time: worldTime(w), mob: w.mob, tvs: tvList(w), sources: tvSources(w), locks: lockList(w, p), coins: w.coins.get(p.pid) || 0, tools: w.tools.get(p.pid) || 0, plots: plotsMsg(w, p).list, districts: openList(w) });
   // mail that was waiting for this player's name is handed over once, after they have joined, and removed from the mailbox
   const waiting = w.mail.get((p.name || '').toLowerCase());
   if (waiting) { w.mail.delete((p.name || '').toLowerCase()); scheduleSave(w); sendTo(p, { type: 'mail', list: waiting }); }
@@ -866,6 +1173,7 @@ wss.on('connection', (ws) => {
       return;
     }
 
+    if (m.type === 'roster' || m.type === 'kick' || m.type === 'ban') return serverAdmin(p, w, m);
     if (m.type === 'admin') {
       // player commands: only a game creator may use them, and only on another player in the same world
       if (p.role !== 'creator') return;
