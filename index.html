@@ -277,6 +277,41 @@
   .econ-row{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;width:100%;box-sizing:border-box;padding:8px 10px;background:#11151f;border:2px solid #3a4560;font-size:13px}
   .econ-row > span{flex:1 1 150px;min-width:0;overflow-wrap:anywhere}
   .econ-row .btn{width:auto;padding:6px 12px;font-size:12px}
+
+  /* ---- menus: blocky dusk look ---- */
+  #menu{background:linear-gradient(#17284d 0%,#2f5285 55%,#7fa9d2 100%);font-family:'Trebuchet MS',Verdana,system-ui,sans-serif;color:#f3efe2}
+  #menu::after{content:'';position:absolute;left:0;right:0;bottom:0;height:104px;pointer-events:none;z-index:0;
+    background:linear-gradient(#6cc24a 0 16px,#3f8a2c 16px 22px,#8a5a33 22px 62px,#5e3d22 62px 70px,#4a2f1a 70px)}
+  #menu .card{position:relative;z-index:1;gap:14px;width:min(360px,100%);padding:26px 24px 24px;background:#1b2231;border:4px solid #0b0f18;border-radius:0;box-shadow:inset 0 0 0 3px #323c55,8px 8px 0 #0b0f18}
+  #menu h1{font-family:'Arial Black',Impact,sans-serif;font-size:clamp(26px,7vw,38px);letter-spacing:.03em;color:#ffd54a;text-shadow:3px 3px 0 #7a4f00}
+  #menu .tagline{font-size:13px;color:#b8c5dc;letter-spacing:0;margin:0}
+  #menu h2{font-family:inherit;font-size:20px;font-weight:800;letter-spacing:.02em;color:#ffd54a;text-shadow:2px 2px 0 #7a4f00;margin:0}
+  #menu p{color:#c4cfe3;font-size:13px}
+  #menu .help,#menu .hint{color:#b8c5dc;font-size:12px}
+  .menublocks{display:flex;gap:5px;justify-content:center;margin:2px 0 4px}
+  .menublocks i{width:24px;height:24px;border:3px solid #0b0f18;box-shadow:inset -5px -5px 0 rgba(0,0,0,.28),inset 3px 3px 0 rgba(255,255,255,.18)}
+  .mb-grass{background:#6cc24a}.mb-dirt{background:#8a5a33}.mb-stone{background:#8d96a3}.mb-gold{background:#ffd54a}.mb-wood{background:#b07a43}
+  #menu .sect{font-family:inherit;font-size:12px;font-weight:700;letter-spacing:.04em;color:#9fd27f;text-align:left;align-self:stretch;border-bottom:2px solid #0b0f18;padding:0 0 4px;margin:10px 0 2px}
+  #menu .btn{font-family:inherit;font-weight:700;font-size:15px;letter-spacing:.03em;width:100%;max-width:280px;padding:12px 14px;background:#4d8f36;color:#f7ffe9;border:3px solid #0b0f18;border-radius:0;box-shadow:inset 0 -5px 0 #2d5a22,inset 0 3px 0 #7bc454;text-shadow:0 2px 0 #1f3d17;cursor:pointer;transition:background .12s}
+  #menu .btn:hover{background:#5aa23f;box-shadow:inset 0 -5px 0 #2d5a22,inset 0 3px 0 #8fd565}
+  #menu .btn:active{transform:translateY(2px);box-shadow:inset 0 -3px 0 #2d5a22,inset 0 3px 0 #7bc454}
+  #menu .btn.ghost{background:#2a3247;color:#dbe3f2;box-shadow:inset 0 -5px 0 #161c2b,inset 0 3px 0 #3c4663;text-shadow:none}
+  #menu .btn.ghost:hover{background:#343d57}
+  #menu .btn.cashbtn{background:#d9a21b;color:#2a1c00;box-shadow:inset 0 -5px 0 #8a5a00,inset 0 3px 0 #ffe27a;text-shadow:none}
+  #menu .btn.cashbtn:hover{background:#eab430}
+  #menu .btn.sel{background:#ffd54a;color:#2a1c00;box-shadow:inset 0 -5px 0 #a57400,inset 0 3px 0 #fff0a6;text-shadow:none}
+  #menu .btn:focus-visible,#menu .tab:focus-visible{outline:3px solid #ffd54a;outline-offset:3px}
+  #menu #fsbtn{width:auto;max-width:none;font-size:12px;padding:8px 12px}
+  #menu #offerlist .btn,#menu #givebox .btn{width:auto;max-width:none;flex:0 0 auto;padding:6px 8px;font-size:12px}
+  #menu #mpbox{width:280px}
+  #menu #mpbox .worldpick .btn{flex:1;width:auto;max-width:none;font-size:12px;padding:10px 4px}
+  #menu input,#menu select{font-family:inherit;font-size:14px;width:100%;box-sizing:border-box;padding:10px 12px;background:#0d1320;color:#f3efe2;border:3px solid #0b0f18;box-shadow:inset 0 0 0 2px #2a3550;border-radius:0}
+  #menu input:focus,#menu select:focus{outline:none;box-shadow:inset 0 0 0 2px #ffd54a}
+  #menu input::placeholder{color:#6f7b95}
+  #menu .tab{font-family:inherit;font-size:12px;font-weight:700;background:#2a3247;color:#c9d4ea;border:3px solid #0b0f18;border-radius:0;box-shadow:inset 0 -3px 0 #161c2b}
+  #menu .tab.on{background:#ffd54a;color:#2a1c00;box-shadow:inset 0 -3px 0 #a57400}
+  #menu .bcol{background:#141a28;border:3px solid #0b0f18}
+  #menu .bcol h4{font-family:inherit;color:#ffd54a;letter-spacing:.02em}
 </style>
 </head>
 <body>
@@ -338,6 +373,7 @@
   <div class="card">
     <h1>BLOCK REALM</h1>
     <p class="tagline">Build it. Share it. Sleep through the night.</p>
+    <div class="menublocks" aria-hidden="true"><i class="mb-grass"></i><i class="mb-dirt"></i><i class="mb-stone"></i><i class="mb-gold"></i><i class="mb-wood"></i></div>
     <div id="board" hidden>
       <h3 class="sect">LEADERBOARD: LIVE PLAYERS</h3>
       <div class="bcols">
@@ -436,9 +472,8 @@
       <p class="hint">Choose a world</p>
       <div class="worldpick">
         <button class="btn" id="worldpublic" type="button">PUBLIC WORLD</button>
-        <button class="btn" id="worldour" type="button">OUR WORLD</button>
+        <button class="btn" id="worldour" type="button">MAIN WORLD</button>
       </div>
-      <input id="mppass" type="password" maxlength="32" placeholder="OUR WORLD password" aria-label="OUR WORLD password" autocomplete="off" hidden>
       <button class="btn" id="mpgo">CONNECT</button>
       <button class="btn ghost" id="mpback">BACK</button>
       <p id="mpstatus" role="status"></p>
@@ -5355,13 +5390,12 @@ function showSettings(){
   $('mainbtns').hidden=true; $('mpbox').hidden=true; $('settingsbox').hidden=false; $('howbox').hidden=true; $('cashscreen').hidden=true;
   syncSettings();
 }
-// the world to join: PUBLIC WORLD anybody can join, or OUR WORLD, which needs its password (never saved)
+// the world to join: PUBLIC WORLD or MAIN WORLD, both open to anybody
 let mpWorld = 'public';
 function pickWorld(w){
   mpWorld = w;
   $('worldpublic').classList.toggle('sel', w === 'public');
   $('worldour').classList.toggle('sel', w === 'our');
-  $('mppass').hidden = w !== 'our';
 }
 $('worldpublic').addEventListener('click', () => pickWorld('public'));
 $('worldour').addEventListener('click', () => pickWorld('our'));
@@ -5406,8 +5440,7 @@ function connectMP(){
   const url = $('mpurl').value.trim() || defaultWS();
   mpBase = url.replace(/^ws/, 'http').replace(/\/ws\/?$/, '');   // the same server's web address, for the videos shared from it
   const name = ($('mpname').value.trim().replace(/[^\w \-.]/g,'').slice(0,16)) || 'Builder';
-  const world = mpWorld, password = world === 'our' ? $('mppass').value : '';
-  if(world === 'our' && !password){ mpStatus('Type the OUR WORLD password first.'); return; }
+  const world = mpWorld, password = '';
   try{ sessionStorage.setItem('blockrealm_mp', JSON.stringify({url,name,world})); }catch(e){}
   let denied = '';                                  // the server's reason, if it refuses us
   let ws;

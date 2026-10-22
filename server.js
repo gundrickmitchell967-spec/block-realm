@@ -2,7 +2,7 @@
 // Block Realm multiplayer server.
 // Serves the game page and a WebSocket at /ws. The server keeps two worlds. Each has its own block edits,
 // players, cow and time of day, and players in one world never see players in the other:
-//   OUR WORLD    - locked with a password (OUR_WORLD_PASSWORD, default 8645). Saved in WORLD_FILE (world.json).
+//   MAIN WORLD   - anybody can join, no password. Saved in WORLD_FILE (world.json).
 //   PUBLIC WORLD - anybody can join. Saved in PUBLIC_WORLD_FILE (world-public.json).
 // Terrain is generated in each browser from the same seed, so the server only stores changes.
 
@@ -27,12 +27,12 @@ const HACK_MS = (Number(process.env.HACK_SECONDS) || 30) * 1000;   // how long a
 const SHOP_PRICES = { hacktool: { name: 'Hacker Tool', price: 10000 } };   // the shop's items and prices (the client shows the same prices)
 const VOICE_RELAY_RANGE = 48;   // voice connections can only be set up between players this close (see VOICE_RANGE in index.html)
 
-// the two worlds. OUR WORLD keeps the world that was already saved in world.json; its password is checked here
+// the two worlds. MAIN WORLD keeps the world that was already saved in world.json (its key stays 'our' so the save still loads)
 const WORLDS = {
   our: {
-    key: 'our', name: 'OUR WORLD',
+    key: 'our', name: 'MAIN WORLD',
     file: process.env.WORLD_FILE || path.join(__dirname, 'world.json'),
-    password: process.env.OUR_WORLD_PASSWORD || '8645',
+    password: null,
   },
   public: {
     key: 'public', name: 'PUBLIC WORLD',
@@ -779,7 +779,7 @@ function allow(p) {
 function clientAddress(ws) { return (ws._socket && ws._socket.remoteAddress) || 'unknown'; }
 function deny(p, msg) { sendTo(p, { type: 'denied', msg }); try { p.ws.close(); } catch (e) {} }
 
-// joining: the player picks a world; OUR WORLD needs its password, and wrong guesses are slowed down per address
+// joining: the player picks a world; a world with a password (none now) would check it here, with wrong guesses slowed down per address
 function hello(p, id, m) {
   const w = typeof m.world === 'string' && Object.hasOwn(WORLDS, m.world) ? WORLDS[m.world] : null;
   if (!w) return deny(p, 'Choose a world to join.');
