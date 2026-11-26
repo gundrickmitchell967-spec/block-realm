@@ -1,0 +1,11 @@
+# Secrets and local files — never commit these
+.env
+.env.*
+*.local
+service-role*
+secrets/
+
+# System files
+.DS_Store
+Thumbs.db
+node_modules/

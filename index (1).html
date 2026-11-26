@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0d12" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="HOMELINK" />
+  <meta name="description" content="HOMELINK — a private family hub for messaging, chores and shared resources." />
+  <title>HOMELINK</title>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ================= LOGIN ================= -->
+  <section id="login-screen" aria-label="Sign in">
+    <div class="login-card">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9 21v-6h6v6"/>
+        </svg>
+      </div>
+      <h1 class="login-title">HOMELINK</h1>
+      <p class="login-sub">Your private family hub</p>
+
+      <div class="family-picker" id="family-picker" aria-label="Family members"></div>
+
+      <form id="login-form" novalidate autocomplete="on">
+        <div class="field">
+          <label for="login-username">Name or username</label>
+          <input class="input" id="login-username" name="username" type="text"
+                 autocomplete="username" placeholder="e.g. Alex" required />
+        </div>
+        <div class="field">
+          <label for="login-password">Password</label>
+          <div style="position:relative">
+            <input class="input" id="login-password" name="password" type="password"
+                   autocomplete="current-password" placeholder="••••••••" required
+                   style="padding-right:52px" />
+            <button type="button" id="toggle-password" aria-label="Show password"
+                    style="position:absolute;right:8px;top:50%;transform:translateY(-50%);width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:var(--text-dim)">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="row-between">
+          <label class="check">
+            <input type="checkbox" id="remember-me" checked />
+            <span>Keep me signed in</span>
+          </label>
+          <button type="button" class="link-btn" id="forgot-btn"
+                  onclick="document.getElementById('login-error').textContent='Ask an administrator to reset your password.'">Forgot password?</button>
+        </div>
+
+        <p class="login-error" id="login-error" role="alert" aria-live="polite"></p>
+
+        <button class="btn-primary" id="login-submit" type="submit">Sign in</button>
+      </form>
+
+      <div class="dev-note">
+        <strong>Development preview.</strong> Pick a family member and enter any password to explore the app.
+        Real secure sign-in will be connected through the backend before launch.
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= APP SHELL ================= -->
+  <div id="app-shell" class="screen-root hidden" style="flex:1;display:flex;flex-direction:column;min-height:0;">
+
+    <!-- Top bar -->
+    <header class="topbar">
+      <div style="min-width:0">
+        <div class="eyebrow" id="topbar-eyebrow">Family</div>
+        <h1 id="topbar-title">Home</h1>
+      </div>
+      <div class="topbar-actions">
+        <button class="icon-btn" id="fullscreen-btn" type="button" aria-label="Enter fullscreen" aria-pressed="false"></button>
+        <button class="icon-btn" id="topbar-avatar-btn" type="button" aria-label="Open settings" style="padding:0;overflow:hidden;border-radius:50%;width:42px;height:42px">
+          <span id="topbar-avatar" style="display:block;width:100%;height:100%"></span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Views -->
+    <main class="view-container" id="view-container">
+
+      <!-- HOME -->
+      <section class="view active" data-view="home" id="view-home">
+        <div class="hero" id="home-hero"></div>
+        <div class="grid-2" id="home-stats"></div>
+        <div class="section-title">Quick access</div>
+        <div class="quick-grid" id="home-quick"></div>
+        <div class="section-title">Today's chores</div>
+        <div id="home-chores"></div>
+      </section>
+
+      <!-- MESSAGES -->
+      <section class="view" data-view="messages" id="view-messages">
+        <div class="segmented" id="msg-segmented">
+          <button type="button" data-msg="group" class="active">Family Group</button>
+          <button type="button" data-msg="private">Private</button>
+        </div>
+
+        <div id="msg-group">
+          <div class="chat-wrap">
+            <div class="bubbles" id="group-bubbles"></div>
+            <form class="composer" id="group-form" autocomplete="off" style="margin-top:10px">
+              <input id="group-input" type="text" placeholder="Message the family…" aria-label="Message the family" maxlength="500" />
+              <button class="send-btn" type="submit" aria-label="Send">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <div id="msg-private" class="hidden">
+          <div id="dm-list" class="list"></div>
+
+          <div id="dm-chat" class="hidden">
+            <div class="dm-header" id="dm-header"></div>
+            <div class="chat-wrap">
+              <div class="bubbles" id="dm-bubbles"></div>
+              <form class="composer" id="dm-form" autocomplete="off" style="margin-top:10px">
+                <input id="dm-input" type="text" placeholder="Private message…" aria-label="Private message" maxlength="500" />
+                <button class="send-btn" type="submit" aria-label="Send private message">
+                  <svg class="icon" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CONTACTS -->
+      <section class="view" data-view="contacts" id="view-contacts">
+        <div class="search">
+          <svg class="icon" viewBox="0 0 24 24" style="width:18px;height:18px"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+          <input id="contacts-search" type="search" placeholder="Search family" aria-label="Search family members" />
+        </div>
+        <div class="preview-note" id="contacts-count" style="text-align:left;padding:0 4px 10px"></div>
+        <div id="contacts-list"></div>
+      </section>
+
+      <!-- RESOURCES -->
+      <section class="view" data-view="resources" id="view-resources">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <strong style="font-size:1rem">Chore progress</strong>
+            <span id="chore-progress-label" style="font-size:.85rem;color:var(--text-dim)"></span>
+          </div>
+          <div class="progress"><span id="chore-progress-bar"></span></div>
+        </div>
+
+        <div class="section-title">My chores</div>
+        <div id="chores-mine"></div>
+
+        <div class="section-title">Family chores</div>
+        <div id="chores-others"></div>
+
+        <div class="admin-note">
+          <svg class="icon" viewBox="0 0 24 24" style="width:18px;height:18px;margin-top:1px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+          <span>Only the family administrator can add, edit or remove chores. Check off your own chores as you complete them.</span>
+        </div>
+
+        <div class="section-title">More resources</div>
+        <div class="res-grid">
+          <button class="res-card" type="button" onclick="document.getElementById('toast').textContent='Family calendar is coming in a future update';document.getElementById('toast').classList.add('show');setTimeout(()=>document.getElementById('toast').classList.remove('show'),2200)">
+            <div class="ico"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
+            <div class="title">Calendar</div>
+            <div class="sub">Shared family schedule</div>
+            <span class="soon">Coming soon</span>
+          </button>
+          <button class="res-card" type="button" onclick="document.getElementById('toast').textContent='Shared notes are coming in a future update';document.getElementById('toast').classList.add('show');setTimeout(()=>document.getElementById('toast').classList.remove('show'),2200)">
+            <div class="ico"><svg class="icon" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/></svg></div>
+            <div class="title">Family notes</div>
+            <div class="sub">Recipes and important info</div>
+            <span class="soon">Coming soon</span>
+          </button>
+          <button class="res-card" type="button" onclick="document.getElementById('toast').textContent='Shopping list is coming in a future update';document.getElementById('toast').classList.add('show');setTimeout(()=>document.getElementById('toast').classList.remove('show'),2200)">
+            <div class="ico"><svg class="icon" viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg></div>
+            <div class="title">Shopping list</div>
+            <div class="sub">Shared with everyone</div>
+            <span class="soon">Coming soon</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="view" data-view="settings" id="view-settings">
+        <div class="card" id="settings-profile" style="padding:0;overflow:hidden"></div>
+
+        <div class="section-title">Appearance</div>
+        <div id="settings-appearance"></div>
+
+        <div class="section-title">Preferences</div>
+        <div id="settings-prefs"></div>
+
+        <div class="section-title">Account</div>
+        <div id="settings-account"></div>
+
+        <div class="danger-zone">
+          <button class="btn-ghost btn-danger" id="logout-btn" type="button" style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px">
+            <svg class="icon" viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg>
+            Sign out
+          </button>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Bottom navigation -->
+    <nav class="bottom-nav" id="bottom-nav" aria-label="Main navigation">
+      <button class="nav-item active" data-tab="home" type="button" aria-current="page">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>
+        <span>Home</span>
+      </button>
+      <button class="nav-item" data-tab="messages" type="button">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>
+        <span>Messages</span>
+      </button>
+      <button class="nav-item" data-tab="contacts" type="button">
+        <svg class="icon" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M21.5 20a6.5 6.5 0 0 0-4-6"/></svg>
+        <span>Contacts</span>
+      </button>
+      <button class="nav-item" data-tab="resources" type="button">
+        <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/></svg>
+        <span>Resources</span>
+      </button>
+      <button class="nav-item" data-tab="settings" type="button">
+        <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        <span>Settings</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- Bottom sheet & toast -->
+  <div class="sheet-backdrop" id="sheet-backdrop"></div>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <div class="grabber"></div>
+    <h3 id="sheet-title"></h3>
+    <div id="sheet-body"></div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/preferences.js"></script>
+<script src="js/services.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
